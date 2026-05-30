@@ -26,6 +26,7 @@ import builderProfilesRouter from "./builder-profiles";
 import smartAllocationRouter from "./smart-allocation";
 import suppliersRouter from "./suppliers";
 import profitabilityRouter from "./profitability";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(builderProfilesRouter);
 router.use(smartAllocationRouter);
 router.use(suppliersRouter);
 router.use(profitabilityRouter);
+router.use(notificationsRouter);
 
 export default router;

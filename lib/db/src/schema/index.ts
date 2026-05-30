@@ -24,3 +24,4 @@ export * from "./builder-profiles";
 export * from "./smart-allocation";
 export * from "./suppliers";
 export * from "./profitability";
+export * from "./notifications";

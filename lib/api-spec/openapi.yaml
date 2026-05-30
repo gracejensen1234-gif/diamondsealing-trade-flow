@@ -2022,6 +2022,178 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MonthlyAward" }
 
+  # ─── NOTIFICATIONS ─────────────────────────────────────────────────────────
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for a subcontractor
+      parameters:
+        - in: query
+          name: subcontractorId
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: unreadOnly
+          schema: { type: boolean }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubNotification"
+    post:
+      operationId: createNotification
+      tags: [notifications]
+      summary: Create a notification (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubNotification"
+
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadCount
+      tags: [notifications]
+      summary: Get unread notification count for a subcontractor
+      parameters:
+        - in: query
+          name: subcontractorId
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read for a subcontractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subcontractorId]
+              properties:
+                subcontractorId: { type: integer }
+      responses:
+        "200":
+          description: Marked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubNotification"
+
+  /notifications/{id}:
+    delete:
+      operationId: deleteNotification
+      tags: [notifications]
+      summary: Delete a notification
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /push-subscriptions/vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [notifications]
+      summary: Get the VAPID public key for browser push subscription
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publicKey: { type: string }
+
+  /push-subscriptions:
+    post:
+      operationId: registerPushSubscription
+      tags: [notifications]
+      summary: Register a browser push subscription for a subcontractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushSubscriptionBody"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+    delete:
+      operationId: unregisterPushSubscription
+      tags: [notifications]
+      summary: Unregister a push subscription by endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string }
+      responses:
+        "204":
+          description: Unregistered
+
 components:
   schemas:
     HealthStatus:
@@ -4033,3 +4205,48 @@ components:
         callbackCount: { type: integer }
         productConsumedValue: { type: number }
         calculatedAt: { type: string, format: date-time }
+
+    # ─── Notifications ─────────────────────────────────────────────────────
+    SubNotification:
+      type: object
+      required: [id, subcontractorId, type, title, body, priority, isRead, createdAt]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        type:
+          type: string
+          enum: [new_job, job_changed, forgotten_action, missing_photos, missing_metres, missing_stock, stock_pickup_ready, upcoming_job, clock_on_reminder, break_reminder, weekly_performance, bonus_update, safety_reminder, audit_fix_request, general]
+        title: { type: string }
+        body: { type: string }
+        priority: { type: string, enum: [urgent, high, normal, low] }
+        isRead: { type: boolean }
+        actionUrl: { type: ["string", "null"] }
+        linkedEntityType: { type: ["string", "null"] }
+        linkedEntityId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: ["string", "null"], format: date-time }
+
+    CreateNotificationBody:
+      type: object
+      required: [subcontractorId, type, title, body]
+      properties:
+        subcontractorId: { type: integer }
+        type:
+          type: string
+          enum: [new_job, job_changed, forgotten_action, missing_photos, missing_metres, missing_stock, stock_pickup_ready, upcoming_job, clock_on_reminder, break_reminder, weekly_performance, bonus_update, safety_reminder, audit_fix_request, general]
+        title: { type: string }
+        body: { type: string }
+        priority: { type: string, enum: [urgent, high, normal, low] }
+        actionUrl: { type: string }
+        linkedEntityType: { type: string }
+        linkedEntityId: { type: integer }
+
+    RegisterPushSubscriptionBody:
+      type: object
+      required: [subcontractorId, endpoint, p256dh, auth]
+      properties:
+        subcontractorId: { type: integer }
+        endpoint: { type: string }
+        p256dh: { type: string }
+        auth: { type: string }
+        userAgent: { type: string }

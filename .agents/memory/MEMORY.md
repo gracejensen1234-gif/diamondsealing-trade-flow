@@ -2,3 +2,4 @@
 - [Diamond Sealing schema codegen](diamond-sealing-codegen.md) — Always update OpenAPI spec first, then run codegen before writing routes or pages
 - [Backend route paths](route-paths.md) — several new routes use non-obvious paths; always grep the route file before writing frontend fetch URLs
 - [Radix SelectItem empty string](radix-select.md) — shadcn/ui Select does not allow value="" on SelectItem; use a sentinel like "none" and filter it out before submitting
+- [API server import paths](api-server-imports.md) — db import is @workspace/db; logger is ./lib/logger from src/; lib/ files use ./logger (same dir)

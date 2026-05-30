@@ -2467,3 +2467,129 @@ export const GetCurrentAwardResponse = zod.object({
 })
 
 
+/**
+ * @summary List notifications for a subcontractor
+ */
+export const listNotificationsQueryLimitDefault = 100;
+
+export const ListNotificationsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number(),
+  "unreadOnly": zod.coerce.boolean().optional(),
+  "limit": zod.coerce.number().default(listNotificationsQueryLimitDefault)
+})
+
+export const ListNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "type": zod.enum(['new_job', 'job_changed', 'forgotten_action', 'missing_photos', 'missing_metres', 'missing_stock', 'stock_pickup_ready', 'upcoming_job', 'clock_on_reminder', 'break_reminder', 'weekly_performance', 'bonus_update', 'safety_reminder', 'audit_fix_request', 'general']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "priority": zod.enum(['urgent', 'high', 'normal', 'low']),
+  "isRead": zod.boolean(),
+  "actionUrl": zod.string().nullish(),
+  "linkedEntityType": zod.string().nullish(),
+  "linkedEntityId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullish()
+})
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
+
+
+/**
+ * @summary Create a notification (admin)
+ */
+export const CreateNotificationBody = zod.object({
+  "subcontractorId": zod.number(),
+  "type": zod.enum(['new_job', 'job_changed', 'forgotten_action', 'missing_photos', 'missing_metres', 'missing_stock', 'stock_pickup_ready', 'upcoming_job', 'clock_on_reminder', 'break_reminder', 'weekly_performance', 'bonus_update', 'safety_reminder', 'audit_fix_request', 'general']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "priority": zod.enum(['urgent', 'high', 'normal', 'low']).optional(),
+  "actionUrl": zod.string().optional(),
+  "linkedEntityType": zod.string().optional(),
+  "linkedEntityId": zod.number().optional()
+})
+
+
+/**
+ * @summary Get unread notification count for a subcontractor
+ */
+export const GetUnreadCountQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number()
+})
+
+export const GetUnreadCountResponse = zod.object({
+  "count": zod.number().optional()
+})
+
+
+/**
+ * @summary Mark all notifications as read for a subcontractor
+ */
+export const MarkAllNotificationsReadBody = zod.object({
+  "subcontractorId": zod.number()
+})
+
+export const MarkAllNotificationsReadResponse = zod.object({
+  "updated": zod.number().optional()
+})
+
+
+/**
+ * @summary Mark a single notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkNotificationReadResponse = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "type": zod.enum(['new_job', 'job_changed', 'forgotten_action', 'missing_photos', 'missing_metres', 'missing_stock', 'stock_pickup_ready', 'upcoming_job', 'clock_on_reminder', 'break_reminder', 'weekly_performance', 'bonus_update', 'safety_reminder', 'audit_fix_request', 'general']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "priority": zod.enum(['urgent', 'high', 'normal', 'low']),
+  "isRead": zod.boolean(),
+  "actionUrl": zod.string().nullish(),
+  "linkedEntityType": zod.string().nullish(),
+  "linkedEntityId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Delete a notification
+ */
+export const DeleteNotificationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Get the VAPID public key for browser push subscription
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  "publicKey": zod.string().optional()
+})
+
+
+/**
+ * @summary Register a browser push subscription for a subcontractor
+ */
+export const RegisterPushSubscriptionBody = zod.object({
+  "subcontractorId": zod.number(),
+  "endpoint": zod.string(),
+  "p256dh": zod.string(),
+  "auth": zod.string(),
+  "userAgent": zod.string().optional()
+})
+
+
+/**
+ * @summary Unregister a push subscription by endpoint
+ */
+export const UnregisterPushSubscriptionBody = zod.object({
+  "endpoint": zod.string()
+})
+
+

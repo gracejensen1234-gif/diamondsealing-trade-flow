@@ -1942,6 +1942,106 @@ export interface ProfitabilityScore {
   calculatedAt?: string;
 }
 
+export type SubNotificationType = typeof SubNotificationType[keyof typeof SubNotificationType];
+
+
+export const SubNotificationType = {
+  new_job: 'new_job',
+  job_changed: 'job_changed',
+  forgotten_action: 'forgotten_action',
+  missing_photos: 'missing_photos',
+  missing_metres: 'missing_metres',
+  missing_stock: 'missing_stock',
+  stock_pickup_ready: 'stock_pickup_ready',
+  upcoming_job: 'upcoming_job',
+  clock_on_reminder: 'clock_on_reminder',
+  break_reminder: 'break_reminder',
+  weekly_performance: 'weekly_performance',
+  bonus_update: 'bonus_update',
+  safety_reminder: 'safety_reminder',
+  audit_fix_request: 'audit_fix_request',
+  general: 'general',
+} as const;
+
+export type SubNotificationPriority = typeof SubNotificationPriority[keyof typeof SubNotificationPriority];
+
+
+export const SubNotificationPriority = {
+  urgent: 'urgent',
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
+} as const;
+
+export interface SubNotification {
+  id: number;
+  subcontractorId: number;
+  type: SubNotificationType;
+  title: string;
+  body: string;
+  priority: SubNotificationPriority;
+  isRead: boolean;
+  /** @nullable */
+  actionUrl?: string | null;
+  /** @nullable */
+  linkedEntityType?: string | null;
+  /** @nullable */
+  linkedEntityId?: number | null;
+  createdAt: string;
+  /** @nullable */
+  readAt?: string | null;
+}
+
+export type CreateNotificationBodyType = typeof CreateNotificationBodyType[keyof typeof CreateNotificationBodyType];
+
+
+export const CreateNotificationBodyType = {
+  new_job: 'new_job',
+  job_changed: 'job_changed',
+  forgotten_action: 'forgotten_action',
+  missing_photos: 'missing_photos',
+  missing_metres: 'missing_metres',
+  missing_stock: 'missing_stock',
+  stock_pickup_ready: 'stock_pickup_ready',
+  upcoming_job: 'upcoming_job',
+  clock_on_reminder: 'clock_on_reminder',
+  break_reminder: 'break_reminder',
+  weekly_performance: 'weekly_performance',
+  bonus_update: 'bonus_update',
+  safety_reminder: 'safety_reminder',
+  audit_fix_request: 'audit_fix_request',
+  general: 'general',
+} as const;
+
+export type CreateNotificationBodyPriority = typeof CreateNotificationBodyPriority[keyof typeof CreateNotificationBodyPriority];
+
+
+export const CreateNotificationBodyPriority = {
+  urgent: 'urgent',
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
+} as const;
+
+export interface CreateNotificationBody {
+  subcontractorId: number;
+  type: CreateNotificationBodyType;
+  title: string;
+  body: string;
+  priority?: CreateNotificationBodyPriority;
+  actionUrl?: string;
+  linkedEntityType?: string;
+  linkedEntityId?: number;
+}
+
+export interface RegisterPushSubscriptionBody {
+  subcontractorId: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string;
+}
+
 export type ListCustomersParams = {
 search?: string;
 };
@@ -2153,5 +2253,39 @@ month?: string;
 
 export type CalculateMonthlyRankingsBody = {
   month: string;
+};
+
+export type ListNotificationsParams = {
+subcontractorId: number;
+unreadOnly?: boolean;
+limit?: number;
+};
+
+export type GetUnreadCountParams = {
+subcontractorId: number;
+};
+
+export type GetUnreadCount200 = {
+  count?: number;
+};
+
+export type MarkAllNotificationsReadBody = {
+  subcontractorId: number;
+};
+
+export type MarkAllNotificationsRead200 = {
+  updated?: number;
+};
+
+export type GetVapidPublicKey200 = {
+  publicKey?: string;
+};
+
+export type RegisterPushSubscription201 = {
+  id?: number;
+};
+
+export type UnregisterPushSubscriptionBody = {
+  endpoint: string;
 };
 

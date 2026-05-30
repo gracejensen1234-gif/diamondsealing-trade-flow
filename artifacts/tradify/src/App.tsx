@@ -42,6 +42,7 @@ import Allocation from "@/pages/allocation";
 import WeeklyPlanner from "@/pages/weekly-planner";
 import Suppliers from "@/pages/suppliers";
 import Profitability from "@/pages/profitability";
+import NotificationCentre from "@/pages/notifications";
 
 const queryClient = new QueryClient();
 
@@ -94,6 +95,9 @@ function Router() {
         {/* Inventory & Suppliers */}
         <Route path="/inventory" component={Inventory} />
         <Route path="/suppliers" component={Suppliers} />
+
+        {/* Notifications */}
+        <Route path="/notifications" component={NotificationCentre} />
 
         <Route component={NotFound} />
       </Switch>
