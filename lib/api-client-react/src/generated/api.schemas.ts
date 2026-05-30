@@ -868,6 +868,641 @@ export interface TimesheetEntry {
   totalMetres?: number;
 }
 
+export type ProductivityAnalyticsSubcontractorsItemDailyBreakdownItem = {
+  date?: string;
+  metres?: number;
+  workMinutes?: number;
+  metresPerHour?: number;
+  jobsCompleted?: number;
+};
+
+export type ProductivityAnalyticsSubcontractorsItem = {
+  subcontractorId?: number;
+  subcontractorName?: string;
+  totalMetres?: number;
+  totalWorkMinutes?: number;
+  avgMetresPerHour?: number;
+  avgMetresPerDay?: number;
+  daysWorked?: number;
+  jobsCompleted?: number;
+  dailyBreakdown?: ProductivityAnalyticsSubcontractorsItemDailyBreakdownItem[];
+};
+
+export type ProductivityAnalyticsWeeklyAverages = {
+  avgMetresPerHour?: number;
+  avgMetresPerDay?: number;
+  totalMetres?: number;
+};
+
+export interface ProductivityAnalytics {
+  subcontractors?: ProductivityAnalyticsSubcontractorsItem[];
+  weeklyAverages?: ProductivityAnalyticsWeeklyAverages;
+}
+
+export type FridaySummaryTopDay = {
+  date?: string;
+  metres?: number;
+  metresPerHour?: number;
+} | null;
+
+export interface FridaySummary {
+  subcontractorId?: number;
+  subcontractorName?: string;
+  weekStart?: string;
+  weekEnd?: string;
+  totalMetres?: number;
+  totalWorkHours?: number;
+  avgMetresPerHour?: number;
+  avgMetresPerDay?: number;
+  daysWorked?: number;
+  jobsCompleted?: number;
+  bonusEarned?: number;
+  /** @nullable */
+  bonusRuleName?: string | null;
+  /** @nullable */
+  auditScore?: number | null;
+  topDay?: FridaySummaryTopDay;
+  message?: string;
+}
+
+export interface LeaderboardEntry {
+  rank?: number;
+  subcontractorId?: number;
+  subcontractorName?: string;
+  totalScore?: number;
+  totalMetres?: number;
+  avgMetresPerHour?: number;
+  auditScore?: number;
+  daysWorked?: number;
+  /** @nullable */
+  badge?: string | null;
+}
+
+export type BonusRuleBonusType = typeof BonusRuleBonusType[keyof typeof BonusRuleBonusType];
+
+
+export const BonusRuleBonusType = {
+  flat: 'flat',
+  per_metre_over: 'per_metre_over',
+  percentage: 'percentage',
+} as const;
+
+export interface BonusRule {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  targetMetresPerDay?: number | null;
+  /** @nullable */
+  targetMetresPerWeek?: number | null;
+  /** @nullable */
+  targetMetresPerHour?: number | null;
+  bonusAmount: number;
+  bonusType: BonusRuleBonusType;
+  /** @nullable */
+  minAuditScore?: number | null;
+  active: boolean;
+  createdAt?: string;
+}
+
+export type CreateBonusRuleBodyBonusType = typeof CreateBonusRuleBodyBonusType[keyof typeof CreateBonusRuleBodyBonusType];
+
+
+export const CreateBonusRuleBodyBonusType = {
+  flat: 'flat',
+  per_metre_over: 'per_metre_over',
+  percentage: 'percentage',
+} as const;
+
+export interface CreateBonusRuleBody {
+  name: string;
+  description?: string;
+  targetMetresPerDay?: number;
+  targetMetresPerWeek?: number;
+  targetMetresPerHour?: number;
+  bonusAmount: number;
+  bonusType: CreateBonusRuleBodyBonusType;
+  minAuditScore?: number;
+  active?: boolean;
+}
+
+export type UpdateBonusRuleBodyBonusType = typeof UpdateBonusRuleBodyBonusType[keyof typeof UpdateBonusRuleBodyBonusType];
+
+
+export const UpdateBonusRuleBodyBonusType = {
+  flat: 'flat',
+  per_metre_over: 'per_metre_over',
+  percentage: 'percentage',
+} as const;
+
+export interface UpdateBonusRuleBody {
+  name?: string;
+  description?: string;
+  targetMetresPerDay?: number;
+  targetMetresPerWeek?: number;
+  targetMetresPerHour?: number;
+  bonusAmount?: number;
+  bonusType?: UpdateBonusRuleBodyBonusType;
+  minAuditScore?: number;
+  active?: boolean;
+}
+
+export type BonusCalculationStatus = typeof BonusCalculationStatus[keyof typeof BonusCalculationStatus];
+
+
+export const BonusCalculationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  paid: 'paid',
+  rejected: 'rejected',
+} as const;
+
+export interface BonusCalculation {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  weekStart: string;
+  totalMetres?: number;
+  totalWorkMinutes?: number;
+  /** @nullable */
+  avgMetresPerHour?: number | null;
+  /** @nullable */
+  avgMetresPerDay?: number | null;
+  /** @nullable */
+  auditScore?: number | null;
+  /** @nullable */
+  bonusRuleId?: number | null;
+  /** @nullable */
+  bonusRuleName?: string | null;
+  bonusAmount?: number;
+  bonusEarned?: boolean;
+  status: BonusCalculationStatus;
+  /** @nullable */
+  adminNotes?: string | null;
+  calculatedAt?: string;
+}
+
+export type DocketStatus = typeof DocketStatus[keyof typeof DocketStatus];
+
+
+export const DocketStatus = {
+  draft: 'draft',
+  sub_signed: 'sub_signed',
+  builder_signed: 'builder_signed',
+  complete: 'complete',
+} as const;
+
+export interface Docket {
+  id: number;
+  /** @nullable */
+  jobAssignmentId?: number | null;
+  subcontractorId: number;
+  docketNumber: string;
+  /** @nullable */
+  jobTitle?: string | null;
+  /** @nullable */
+  jobAddress?: string | null;
+  /** @nullable */
+  builderName?: string | null;
+  /** @nullable */
+  builderSignature?: string | null;
+  /** @nullable */
+  subcontractorSignature?: string | null;
+  photosBefore?: string[];
+  photosAfter?: string[];
+  /** @nullable */
+  workDescription?: string | null;
+  /** @nullable */
+  metresCompleted?: string | null;
+  coloursUsed?: string[];
+  builderSigned?: boolean;
+  subcontractorSigned?: boolean;
+  /** @nullable */
+  notes?: string | null;
+  status: DocketStatus;
+  createdAt?: string;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export interface CreateDocketBody {
+  subcontractorId: number;
+  jobAssignmentId: number;
+  builderName?: string;
+  jobTitle?: string;
+  jobAddress?: string;
+  workDescription?: string;
+  metresCompleted?: string;
+  coloursUsed?: string[];
+  photosBefore?: string[];
+  photosAfter?: string[];
+  notes?: string;
+}
+
+export type UpdateDocketBodyStatus = typeof UpdateDocketBodyStatus[keyof typeof UpdateDocketBodyStatus];
+
+
+export const UpdateDocketBodyStatus = {
+  draft: 'draft',
+  sub_signed: 'sub_signed',
+  builder_signed: 'builder_signed',
+  complete: 'complete',
+} as const;
+
+export interface UpdateDocketBody {
+  builderSignature?: string;
+  subcontractorSignature?: string;
+  photosBefore?: string[];
+  photosAfter?: string[];
+  workDescription?: string;
+  metresCompleted?: string;
+  coloursUsed?: string[];
+  notes?: string;
+  status?: UpdateDocketBodyStatus;
+  builderName?: string;
+}
+
+export interface SubInventoryItem {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  stockItemId: number;
+  stockItemName?: string;
+  /** @nullable */
+  colour?: string | null;
+  unit?: string;
+  currentQuantity: number;
+  /** @nullable */
+  lastIssuedAt?: string | null;
+  updatedAt?: string;
+}
+
+export type InventoryTransactionTransactionType = typeof InventoryTransactionTransactionType[keyof typeof InventoryTransactionTransactionType];
+
+
+export const InventoryTransactionTransactionType = {
+  issued: 'issued',
+  used_on_job: 'used_on_job',
+  returned: 'returned',
+  adjustment: 'adjustment',
+  restock: 'restock',
+} as const;
+
+export interface InventoryTransaction {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  stockItemId: number;
+  stockItemName?: string;
+  /** @nullable */
+  colour?: string | null;
+  unit?: string;
+  transactionType: InventoryTransactionTransactionType;
+  quantity: number;
+  /** @nullable */
+  jobAssignmentId?: number | null;
+  /** @nullable */
+  referenceNote?: string | null;
+  /** @nullable */
+  recordedBy?: string | null;
+  createdAt?: string;
+}
+
+export type CreateInventoryTransactionBodyTransactionType = typeof CreateInventoryTransactionBodyTransactionType[keyof typeof CreateInventoryTransactionBodyTransactionType];
+
+
+export const CreateInventoryTransactionBodyTransactionType = {
+  issued: 'issued',
+  used_on_job: 'used_on_job',
+  returned: 'returned',
+  adjustment: 'adjustment',
+  restock: 'restock',
+} as const;
+
+export interface CreateInventoryTransactionBody {
+  subcontractorId: number;
+  stockItemId: number;
+  transactionType: CreateInventoryTransactionBodyTransactionType;
+  quantity: number;
+  jobAssignmentId?: number;
+  referenceNote?: string;
+  recordedBy?: string;
+}
+
+export type RestockRequestStatus = typeof RestockRequestStatus[keyof typeof RestockRequestStatus];
+
+
+export const RestockRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  fulfilled: 'fulfilled',
+  rejected: 'rejected',
+} as const;
+
+export type RestockRequestUrgency = typeof RestockRequestUrgency[keyof typeof RestockRequestUrgency];
+
+
+export const RestockRequestUrgency = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+} as const;
+
+export interface RestockRequest {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  stockItemId: number;
+  stockItemName?: string;
+  /** @nullable */
+  colour?: string | null;
+  unit?: string;
+  quantityRequested: number;
+  /** @nullable */
+  quantityFulfilled?: number | null;
+  status: RestockRequestStatus;
+  /** @nullable */
+  subNotes?: string | null;
+  /** @nullable */
+  adminNotes?: string | null;
+  urgency?: RestockRequestUrgency;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CreateRestockRequestBodyUrgency = typeof CreateRestockRequestBodyUrgency[keyof typeof CreateRestockRequestBodyUrgency];
+
+
+export const CreateRestockRequestBodyUrgency = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+} as const;
+
+export interface CreateRestockRequestBody {
+  subcontractorId: number;
+  stockItemId: number;
+  quantityRequested: number;
+  subNotes?: string;
+  urgency?: CreateRestockRequestBodyUrgency;
+}
+
+export type UpdateRestockRequestBodyStatus = typeof UpdateRestockRequestBodyStatus[keyof typeof UpdateRestockRequestBodyStatus];
+
+
+export const UpdateRestockRequestBodyStatus = {
+  approved: 'approved',
+  fulfilled: 'fulfilled',
+  rejected: 'rejected',
+} as const;
+
+export interface UpdateRestockRequestBody {
+  status?: UpdateRestockRequestBodyStatus;
+  quantityFulfilled?: number;
+  adminNotes?: string;
+}
+
+export interface RunAuditBody {
+  jobReportId?: number;
+  subcontractorId?: number;
+  date?: string;
+}
+
+export type AuditFlagSeverity = typeof AuditFlagSeverity[keyof typeof AuditFlagSeverity];
+
+
+export const AuditFlagSeverity = {
+  info: 'info',
+  warning: 'warning',
+  critical: 'critical',
+} as const;
+
+export type AuditFlagEvidence = { [key: string]: unknown };
+
+export type AuditFlagStatus = typeof AuditFlagStatus[keyof typeof AuditFlagStatus];
+
+
+export const AuditFlagStatus = {
+  pending: 'pending',
+  reviewed: 'reviewed',
+  approved: 'approved',
+  dismissed: 'dismissed',
+  fix_requested: 'fix_requested',
+  callback_created: 'callback_created',
+} as const;
+
+export interface AuditFlag {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  /** @nullable */
+  jobReportId?: number | null;
+  /** @nullable */
+  jobAssignmentId?: number | null;
+  flagType: string;
+  severity: AuditFlagSeverity;
+  title: string;
+  description: string;
+  evidence?: AuditFlagEvidence;
+  /** @nullable */
+  auditScore?: number | null;
+  status: AuditFlagStatus;
+  /** @nullable */
+  adminNotes?: string | null;
+  /** @nullable */
+  workerFeedback?: string | null;
+  showToWorker?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type UpdateAuditFlagBodyStatus = typeof UpdateAuditFlagBodyStatus[keyof typeof UpdateAuditFlagBodyStatus];
+
+
+export const UpdateAuditFlagBodyStatus = {
+  reviewed: 'reviewed',
+  approved: 'approved',
+  dismissed: 'dismissed',
+  fix_requested: 'fix_requested',
+  callback_created: 'callback_created',
+} as const;
+
+export interface UpdateAuditFlagBody {
+  status?: UpdateAuditFlagBodyStatus;
+  adminNotes?: string;
+  workerFeedback?: string;
+  showToWorker?: boolean;
+}
+
+export type AuditScorePeriodType = typeof AuditScorePeriodType[keyof typeof AuditScorePeriodType];
+
+
+export const AuditScorePeriodType = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export interface AuditScore {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  periodType: AuditScorePeriodType;
+  periodStart: string;
+  overallScore: number;
+  /** @nullable */
+  photoComplianceScore?: number | null;
+  /** @nullable */
+  punctualityScore?: number | null;
+  /** @nullable */
+  productivityScore?: number | null;
+  /** @nullable */
+  documentationScore?: number | null;
+  /** @nullable */
+  stockAccuracyScore?: number | null;
+  /** @nullable */
+  safetyScore?: number | null;
+  /** @nullable */
+  callbackRate?: number | null;
+  flagCount?: number;
+  criticalFlagCount?: number;
+  adminOverride?: boolean;
+  /** @nullable */
+  adminOverrideScore?: number | null;
+  /** @nullable */
+  adminNotes?: string | null;
+  calculatedAt?: string;
+}
+
+export interface MonthlyRanking {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  month: string;
+  /** @nullable */
+  rank?: number | null;
+  totalScore: number;
+  metresScore?: number;
+  metresPerHourScore?: number;
+  auditScore?: number;
+  punctualityScore?: number;
+  photoComplianceScore?: number;
+  callbackScore?: number;
+  attendanceScore?: number;
+  totalMetres?: number;
+  avgMetresPerHour?: number;
+  daysWorked?: number;
+  jobsCompleted?: number;
+  callbackCount?: number;
+  lateArrivals?: number;
+  missingPhotoJobs?: number;
+  auditFlagCount?: number;
+}
+
+export interface ScoringWeights {
+  id?: number;
+  metresWeight?: number;
+  metresPerHourWeight?: number;
+  auditWeight?: number;
+  punctualityWeight?: number;
+  photoComplianceWeight?: number;
+  callbackWeight?: number;
+  attendanceWeight?: number;
+}
+
+export interface UpdateScoringWeightsBody {
+  metresWeight?: number;
+  metresPerHourWeight?: number;
+  auditWeight?: number;
+  punctualityWeight?: number;
+  photoComplianceWeight?: number;
+  callbackWeight?: number;
+  attendanceWeight?: number;
+}
+
+export type MonthlyAwardAwardType = typeof MonthlyAwardAwardType[keyof typeof MonthlyAwardAwardType];
+
+
+export const MonthlyAwardAwardType = {
+  weekend_away: 'weekend_away',
+  tv: 'tv',
+  experience: 'experience',
+  voucher: 'voucher',
+  cash: 'cash',
+  custom: 'custom',
+} as const;
+
+export interface MonthlyAward {
+  id: number;
+  month: string;
+  winnerId: number;
+  winnerName?: string;
+  /** @nullable */
+  winnerPhoto?: string | null;
+  awardType: MonthlyAwardAwardType;
+  awardTitle: string;
+  /** @nullable */
+  awardDescription?: string | null;
+  /** @nullable */
+  awardValue?: number | null;
+  reasonText: string;
+  /** @nullable */
+  totalScore?: number | null;
+  adminApproved?: boolean;
+  publishedToStaff?: boolean;
+  /** @nullable */
+  publishedAt?: string | null;
+  createdAt?: string;
+}
+
+export type CreateMonthlyAwardBodyAwardType = typeof CreateMonthlyAwardBodyAwardType[keyof typeof CreateMonthlyAwardBodyAwardType];
+
+
+export const CreateMonthlyAwardBodyAwardType = {
+  weekend_away: 'weekend_away',
+  tv: 'tv',
+  experience: 'experience',
+  voucher: 'voucher',
+  cash: 'cash',
+  custom: 'custom',
+} as const;
+
+export interface CreateMonthlyAwardBody {
+  month: string;
+  winnerId: number;
+  awardType: CreateMonthlyAwardBodyAwardType;
+  awardTitle: string;
+  awardDescription?: string;
+  awardValue?: number;
+  winnerPhoto?: string;
+  reasonText: string;
+  totalScore?: number;
+}
+
+export type UpdateMonthlyAwardBodyAwardType = typeof UpdateMonthlyAwardBodyAwardType[keyof typeof UpdateMonthlyAwardBodyAwardType];
+
+
+export const UpdateMonthlyAwardBodyAwardType = {
+  weekend_away: 'weekend_away',
+  tv: 'tv',
+  experience: 'experience',
+  voucher: 'voucher',
+  cash: 'cash',
+  custom: 'custom',
+} as const;
+
+export interface UpdateMonthlyAwardBody {
+  awardType?: UpdateMonthlyAwardBodyAwardType;
+  awardTitle?: string;
+  awardDescription?: string;
+  awardValue?: number;
+  winnerPhoto?: string;
+  reasonText?: string;
+  adminApproved?: boolean;
+  publishedToStaff?: boolean;
+}
+
 export type ListCustomersParams = {
 search?: string;
 };
@@ -970,5 +1605,114 @@ export const ListWeeklyInvoicesStatus = {
 export type GetAdminTimesheetsParams = {
 weekStart?: string;
 subcontractorId?: number;
+};
+
+export type GetProductivityAnalyticsParams = {
+startDate?: string;
+endDate?: string;
+subcontractorId?: number;
+};
+
+export type GetFridaySummaryParams = {
+subcontractorId: number;
+};
+
+export type ListBonusCalculationsParams = {
+weekStart?: string;
+subcontractorId?: number;
+status?: ListBonusCalculationsStatus;
+};
+
+export type ListBonusCalculationsStatus = typeof ListBonusCalculationsStatus[keyof typeof ListBonusCalculationsStatus];
+
+
+export const ListBonusCalculationsStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  paid: 'paid',
+  rejected: 'rejected',
+} as const;
+
+export type CalculateBonusesBody = {
+  weekStart: string;
+};
+
+export type UpdateBonusCalculationBodyStatus = typeof UpdateBonusCalculationBodyStatus[keyof typeof UpdateBonusCalculationBodyStatus];
+
+
+export const UpdateBonusCalculationBodyStatus = {
+  approved: 'approved',
+  paid: 'paid',
+  rejected: 'rejected',
+} as const;
+
+export type UpdateBonusCalculationBody = {
+  status?: UpdateBonusCalculationBodyStatus;
+  adminNotes?: string;
+};
+
+export type ListDocketsParams = {
+subcontractorId?: number;
+jobAssignmentId?: number;
+};
+
+export type ListSubInventoryParams = {
+subcontractorId?: number;
+};
+
+export type ListInventoryTransactionsParams = {
+subcontractorId?: number;
+stockItemId?: number;
+transactionType?: string;
+};
+
+export type ListRestockRequestsParams = {
+subcontractorId?: number;
+status?: string;
+};
+
+export type ListAuditFlagsParams = {
+subcontractorId?: number;
+status?: string;
+severity?: string;
+startDate?: string;
+};
+
+export type ListAuditScoresParams = {
+subcontractorId?: number;
+periodType?: ListAuditScoresPeriodType;
+periodStart?: string;
+};
+
+export type ListAuditScoresPeriodType = typeof ListAuditScoresPeriodType[keyof typeof ListAuditScoresPeriodType];
+
+
+export const ListAuditScoresPeriodType = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export type CalculateAuditScoresBodyPeriodType = typeof CalculateAuditScoresBodyPeriodType[keyof typeof CalculateAuditScoresBodyPeriodType];
+
+
+export const CalculateAuditScoresBodyPeriodType = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export type CalculateAuditScoresBody = {
+  periodType: CalculateAuditScoresBodyPeriodType;
+  periodStart: string;
+  subcontractorId?: number;
+};
+
+export type ListMonthlyRankingsParams = {
+month?: string;
+};
+
+export type CalculateMonthlyRankingsBody = {
+  month: string;
 };
 

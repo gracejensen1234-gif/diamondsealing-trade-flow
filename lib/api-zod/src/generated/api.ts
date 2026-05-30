@@ -1630,3 +1630,840 @@ export const GetAdminTimesheetsResponseItem = zod.object({
 export const GetAdminTimesheetsResponse = zod.array(GetAdminTimesheetsResponseItem)
 
 
+/**
+ * @summary Get productivity analytics for all subcontractors
+ */
+export const GetProductivityAnalyticsQueryParams = zod.object({
+  "startDate": zod.date().optional(),
+  "endDate": zod.date().optional(),
+  "subcontractorId": zod.coerce.number().optional()
+})
+
+export const GetProductivityAnalyticsResponse = zod.object({
+  "subcontractors": zod.array(zod.object({
+  "subcontractorId": zod.number().optional(),
+  "subcontractorName": zod.string().optional(),
+  "totalMetres": zod.number().optional(),
+  "totalWorkMinutes": zod.number().optional(),
+  "avgMetresPerHour": zod.number().optional(),
+  "avgMetresPerDay": zod.number().optional(),
+  "daysWorked": zod.number().optional(),
+  "jobsCompleted": zod.number().optional(),
+  "dailyBreakdown": zod.array(zod.object({
+  "date": zod.string().optional(),
+  "metres": zod.number().optional(),
+  "workMinutes": zod.number().optional(),
+  "metresPerHour": zod.number().optional(),
+  "jobsCompleted": zod.number().optional()
+})).optional()
+})).optional(),
+  "weeklyAverages": zod.object({
+  "avgMetresPerHour": zod.number().optional(),
+  "avgMetresPerDay": zod.number().optional(),
+  "totalMetres": zod.number().optional()
+}).optional()
+})
+
+
+/**
+ * @summary Get weekly Friday summary for a subcontractor
+ */
+export const GetFridaySummaryQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number()
+})
+
+export const GetFridaySummaryResponse = zod.object({
+  "subcontractorId": zod.number().optional(),
+  "subcontractorName": zod.string().optional(),
+  "weekStart": zod.string().optional(),
+  "weekEnd": zod.string().optional(),
+  "totalMetres": zod.number().optional(),
+  "totalWorkHours": zod.number().optional(),
+  "avgMetresPerHour": zod.number().optional(),
+  "avgMetresPerDay": zod.number().optional(),
+  "daysWorked": zod.number().optional(),
+  "jobsCompleted": zod.number().optional(),
+  "bonusEarned": zod.number().optional(),
+  "bonusRuleName": zod.string().nullish(),
+  "auditScore": zod.number().nullish(),
+  "topDay": zod.object({
+  "date": zod.string().optional(),
+  "metres": zod.number().optional(),
+  "metresPerHour": zod.number().optional()
+}).nullish(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Get current month leaderboard
+ */
+export const GetLeaderboardResponseItem = zod.object({
+  "rank": zod.number().optional(),
+  "subcontractorId": zod.number().optional(),
+  "subcontractorName": zod.string().optional(),
+  "totalScore": zod.number().optional(),
+  "totalMetres": zod.number().optional(),
+  "avgMetresPerHour": zod.number().optional(),
+  "auditScore": zod.number().optional(),
+  "daysWorked": zod.number().optional(),
+  "badge": zod.string().nullish()
+})
+export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
+
+
+/**
+ * @summary List bonus rules
+ */
+export const ListBonusRulesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "targetMetresPerDay": zod.number().nullish(),
+  "targetMetresPerWeek": zod.number().nullish(),
+  "targetMetresPerHour": zod.number().nullish(),
+  "bonusAmount": zod.number(),
+  "bonusType": zod.enum(['flat', 'per_metre_over', 'percentage']),
+  "minAuditScore": zod.number().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListBonusRulesResponse = zod.array(ListBonusRulesResponseItem)
+
+
+export const CreateBonusRuleBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "targetMetresPerDay": zod.number().optional(),
+  "targetMetresPerWeek": zod.number().optional(),
+  "targetMetresPerHour": zod.number().optional(),
+  "bonusAmount": zod.number(),
+  "bonusType": zod.enum(['flat', 'per_metre_over', 'percentage']),
+  "minAuditScore": zod.number().optional(),
+  "active": zod.boolean().optional()
+})
+
+
+export const UpdateBonusRuleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateBonusRuleBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "targetMetresPerDay": zod.number().optional(),
+  "targetMetresPerWeek": zod.number().optional(),
+  "targetMetresPerHour": zod.number().optional(),
+  "bonusAmount": zod.number().optional(),
+  "bonusType": zod.enum(['flat', 'per_metre_over', 'percentage']).optional(),
+  "minAuditScore": zod.number().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateBonusRuleResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "targetMetresPerDay": zod.number().nullish(),
+  "targetMetresPerWeek": zod.number().nullish(),
+  "targetMetresPerHour": zod.number().nullish(),
+  "bonusAmount": zod.number(),
+  "bonusType": zod.enum(['flat', 'per_metre_over', 'percentage']),
+  "minAuditScore": zod.number().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+export const DeleteBonusRuleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List bonus calculations
+ */
+export const ListBonusCalculationsQueryParams = zod.object({
+  "weekStart": zod.date().optional(),
+  "subcontractorId": zod.coerce.number().optional(),
+  "status": zod.enum(['pending', 'approved', 'paid', 'rejected']).optional()
+})
+
+export const ListBonusCalculationsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "weekStart": zod.string(),
+  "totalMetres": zod.number().optional(),
+  "totalWorkMinutes": zod.number().optional(),
+  "avgMetresPerHour": zod.number().nullish(),
+  "avgMetresPerDay": zod.number().nullish(),
+  "auditScore": zod.number().nullish(),
+  "bonusRuleId": zod.number().nullish(),
+  "bonusRuleName": zod.string().nullish(),
+  "bonusAmount": zod.number().optional(),
+  "bonusEarned": zod.boolean().optional(),
+  "status": zod.enum(['pending', 'approved', 'paid', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "calculatedAt": zod.coerce.date().optional()
+})
+export const ListBonusCalculationsResponse = zod.array(ListBonusCalculationsResponseItem)
+
+
+/**
+ * @summary Trigger weekly bonus calculation
+ */
+export const CalculateBonusesBody = zod.object({
+  "weekStart": zod.coerce.date()
+})
+
+export const CalculateBonusesResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "weekStart": zod.string(),
+  "totalMetres": zod.number().optional(),
+  "totalWorkMinutes": zod.number().optional(),
+  "avgMetresPerHour": zod.number().nullish(),
+  "avgMetresPerDay": zod.number().nullish(),
+  "auditScore": zod.number().nullish(),
+  "bonusRuleId": zod.number().nullish(),
+  "bonusRuleName": zod.string().nullish(),
+  "bonusAmount": zod.number().optional(),
+  "bonusEarned": zod.boolean().optional(),
+  "status": zod.enum(['pending', 'approved', 'paid', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "calculatedAt": zod.coerce.date().optional()
+})
+export const CalculateBonusesResponse = zod.array(CalculateBonusesResponseItem)
+
+
+export const UpdateBonusCalculationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateBonusCalculationBody = zod.object({
+  "status": zod.enum(['approved', 'paid', 'rejected']).optional(),
+  "adminNotes": zod.string().optional()
+})
+
+export const UpdateBonusCalculationResponse = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "weekStart": zod.string(),
+  "totalMetres": zod.number().optional(),
+  "totalWorkMinutes": zod.number().optional(),
+  "avgMetresPerHour": zod.number().nullish(),
+  "avgMetresPerDay": zod.number().nullish(),
+  "auditScore": zod.number().nullish(),
+  "bonusRuleId": zod.number().nullish(),
+  "bonusRuleName": zod.string().nullish(),
+  "bonusAmount": zod.number().optional(),
+  "bonusEarned": zod.boolean().optional(),
+  "status": zod.enum(['pending', 'approved', 'paid', 'rejected']),
+  "adminNotes": zod.string().nullish(),
+  "calculatedAt": zod.coerce.date().optional()
+})
+
+
+export const ListDocketsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "jobAssignmentId": zod.coerce.number().optional()
+})
+
+export const ListDocketsResponseItem = zod.object({
+  "id": zod.number(),
+  "jobAssignmentId": zod.number().nullish(),
+  "subcontractorId": zod.number(),
+  "docketNumber": zod.string(),
+  "jobTitle": zod.string().nullish(),
+  "jobAddress": zod.string().nullish(),
+  "builderName": zod.string().nullish(),
+  "builderSignature": zod.string().nullish(),
+  "subcontractorSignature": zod.string().nullish(),
+  "photosBefore": zod.array(zod.string()).optional(),
+  "photosAfter": zod.array(zod.string()).optional(),
+  "workDescription": zod.string().nullish(),
+  "metresCompleted": zod.string().nullish(),
+  "coloursUsed": zod.array(zod.string()).optional(),
+  "builderSigned": zod.boolean().optional(),
+  "subcontractorSigned": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['draft', 'sub_signed', 'builder_signed', 'complete']),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.string().nullish()
+})
+export const ListDocketsResponse = zod.array(ListDocketsResponseItem)
+
+
+export const CreateDocketBody = zod.object({
+  "subcontractorId": zod.number(),
+  "jobAssignmentId": zod.number(),
+  "builderName": zod.string().optional(),
+  "jobTitle": zod.string().optional(),
+  "jobAddress": zod.string().optional(),
+  "workDescription": zod.string().optional(),
+  "metresCompleted": zod.string().optional(),
+  "coloursUsed": zod.array(zod.string()).optional(),
+  "photosBefore": zod.array(zod.string()).optional(),
+  "photosAfter": zod.array(zod.string()).optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetDocketParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDocketResponse = zod.object({
+  "id": zod.number(),
+  "jobAssignmentId": zod.number().nullish(),
+  "subcontractorId": zod.number(),
+  "docketNumber": zod.string(),
+  "jobTitle": zod.string().nullish(),
+  "jobAddress": zod.string().nullish(),
+  "builderName": zod.string().nullish(),
+  "builderSignature": zod.string().nullish(),
+  "subcontractorSignature": zod.string().nullish(),
+  "photosBefore": zod.array(zod.string()).optional(),
+  "photosAfter": zod.array(zod.string()).optional(),
+  "workDescription": zod.string().nullish(),
+  "metresCompleted": zod.string().nullish(),
+  "coloursUsed": zod.array(zod.string()).optional(),
+  "builderSigned": zod.boolean().optional(),
+  "subcontractorSigned": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['draft', 'sub_signed', 'builder_signed', 'complete']),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.string().nullish()
+})
+
+
+export const UpdateDocketParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateDocketBody = zod.object({
+  "builderSignature": zod.string().optional(),
+  "subcontractorSignature": zod.string().optional(),
+  "photosBefore": zod.array(zod.string()).optional(),
+  "photosAfter": zod.array(zod.string()).optional(),
+  "workDescription": zod.string().optional(),
+  "metresCompleted": zod.string().optional(),
+  "coloursUsed": zod.array(zod.string()).optional(),
+  "notes": zod.string().optional(),
+  "status": zod.enum(['draft', 'sub_signed', 'builder_signed', 'complete']).optional(),
+  "builderName": zod.string().optional()
+})
+
+export const UpdateDocketResponse = zod.object({
+  "id": zod.number(),
+  "jobAssignmentId": zod.number().nullish(),
+  "subcontractorId": zod.number(),
+  "docketNumber": zod.string(),
+  "jobTitle": zod.string().nullish(),
+  "jobAddress": zod.string().nullish(),
+  "builderName": zod.string().nullish(),
+  "builderSignature": zod.string().nullish(),
+  "subcontractorSignature": zod.string().nullish(),
+  "photosBefore": zod.array(zod.string()).optional(),
+  "photosAfter": zod.array(zod.string()).optional(),
+  "workDescription": zod.string().nullish(),
+  "metresCompleted": zod.string().nullish(),
+  "coloursUsed": zod.array(zod.string()).optional(),
+  "builderSigned": zod.boolean().optional(),
+  "subcontractorSigned": zod.boolean().optional(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['draft', 'sub_signed', 'builder_signed', 'complete']),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get all sub inventory (admin overview)
+ */
+export const ListSubInventoryQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional()
+})
+
+export const ListSubInventoryResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "stockItemId": zod.number(),
+  "stockItemName": zod.string().optional(),
+  "colour": zod.string().nullish(),
+  "unit": zod.string().optional(),
+  "currentQuantity": zod.number(),
+  "lastIssuedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const ListSubInventoryResponse = zod.array(ListSubInventoryResponseItem)
+
+
+/**
+ * @summary Get a subcontractor's full inventory
+ */
+export const GetSubInventoryParams = zod.object({
+  "subcontractorId": zod.coerce.number()
+})
+
+export const GetSubInventoryResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "stockItemId": zod.number(),
+  "stockItemName": zod.string().optional(),
+  "colour": zod.string().nullish(),
+  "unit": zod.string().optional(),
+  "currentQuantity": zod.number(),
+  "lastIssuedAt": zod.coerce.date().nullish(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const GetSubInventoryResponse = zod.array(GetSubInventoryResponseItem)
+
+
+export const ListInventoryTransactionsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "stockItemId": zod.coerce.number().optional(),
+  "transactionType": zod.coerce.string().optional()
+})
+
+export const ListInventoryTransactionsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "stockItemId": zod.number(),
+  "stockItemName": zod.string().optional(),
+  "colour": zod.string().nullish(),
+  "unit": zod.string().optional(),
+  "transactionType": zod.enum(['issued', 'used_on_job', 'returned', 'adjustment', 'restock']),
+  "quantity": zod.number(),
+  "jobAssignmentId": zod.number().nullish(),
+  "referenceNote": zod.string().nullish(),
+  "recordedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListInventoryTransactionsResponse = zod.array(ListInventoryTransactionsResponseItem)
+
+
+export const CreateInventoryTransactionBody = zod.object({
+  "subcontractorId": zod.number(),
+  "stockItemId": zod.number(),
+  "transactionType": zod.enum(['issued', 'used_on_job', 'returned', 'adjustment', 'restock']),
+  "quantity": zod.number(),
+  "jobAssignmentId": zod.number().optional(),
+  "referenceNote": zod.string().optional(),
+  "recordedBy": zod.string().optional()
+})
+
+
+export const ListRestockRequestsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListRestockRequestsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "stockItemId": zod.number(),
+  "stockItemName": zod.string().optional(),
+  "colour": zod.string().nullish(),
+  "unit": zod.string().optional(),
+  "quantityRequested": zod.number(),
+  "quantityFulfilled": zod.number().nullish(),
+  "status": zod.enum(['pending', 'approved', 'fulfilled', 'rejected']),
+  "subNotes": zod.string().nullish(),
+  "adminNotes": zod.string().nullish(),
+  "urgency": zod.enum(['low', 'normal', 'high']).optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const ListRestockRequestsResponse = zod.array(ListRestockRequestsResponseItem)
+
+
+export const CreateRestockRequestBody = zod.object({
+  "subcontractorId": zod.number(),
+  "stockItemId": zod.number(),
+  "quantityRequested": zod.number(),
+  "subNotes": zod.string().optional(),
+  "urgency": zod.enum(['low', 'normal', 'high']).optional()
+})
+
+
+export const UpdateRestockRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateRestockRequestBody = zod.object({
+  "status": zod.enum(['approved', 'fulfilled', 'rejected']).optional(),
+  "quantityFulfilled": zod.number().optional(),
+  "adminNotes": zod.string().optional()
+})
+
+export const UpdateRestockRequestResponse = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "stockItemId": zod.number(),
+  "stockItemName": zod.string().optional(),
+  "colour": zod.string().nullish(),
+  "unit": zod.string().optional(),
+  "quantityRequested": zod.number(),
+  "quantityFulfilled": zod.number().nullish(),
+  "status": zod.enum(['pending', 'approved', 'fulfilled', 'rejected']),
+  "subNotes": zod.string().nullish(),
+  "adminNotes": zod.string().nullish(),
+  "urgency": zod.enum(['low', 'normal', 'high']).optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Trigger AI audit for a job report or subcontractor
+ */
+export const RunAuditBody = zod.object({
+  "jobReportId": zod.number().optional(),
+  "subcontractorId": zod.number().optional(),
+  "date": zod.coerce.date().optional()
+})
+
+export const RunAuditResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "jobReportId": zod.number().nullish(),
+  "jobAssignmentId": zod.number().nullish(),
+  "flagType": zod.string(),
+  "severity": zod.enum(['info', 'warning', 'critical']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "evidence": zod.object({
+
+}).passthrough().optional(),
+  "auditScore": zod.number().nullish(),
+  "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
+  "adminNotes": zod.string().nullish(),
+  "workerFeedback": zod.string().nullish(),
+  "showToWorker": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const RunAuditResponse = zod.array(RunAuditResponseItem)
+
+
+export const ListAuditFlagsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional(),
+  "severity": zod.coerce.string().optional(),
+  "startDate": zod.date().optional()
+})
+
+export const ListAuditFlagsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "jobReportId": zod.number().nullish(),
+  "jobAssignmentId": zod.number().nullish(),
+  "flagType": zod.string(),
+  "severity": zod.enum(['info', 'warning', 'critical']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "evidence": zod.object({
+
+}).passthrough().optional(),
+  "auditScore": zod.number().nullish(),
+  "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
+  "adminNotes": zod.string().nullish(),
+  "workerFeedback": zod.string().nullish(),
+  "showToWorker": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+export const ListAuditFlagsResponse = zod.array(ListAuditFlagsResponseItem)
+
+
+export const UpdateAuditFlagParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAuditFlagBody = zod.object({
+  "status": zod.enum(['reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']).optional(),
+  "adminNotes": zod.string().optional(),
+  "workerFeedback": zod.string().optional(),
+  "showToWorker": zod.boolean().optional()
+})
+
+export const UpdateAuditFlagResponse = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "jobReportId": zod.number().nullish(),
+  "jobAssignmentId": zod.number().nullish(),
+  "flagType": zod.string(),
+  "severity": zod.enum(['info', 'warning', 'critical']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "evidence": zod.object({
+
+}).passthrough().optional(),
+  "auditScore": zod.number().nullish(),
+  "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
+  "adminNotes": zod.string().nullish(),
+  "workerFeedback": zod.string().nullish(),
+  "showToWorker": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+export const ListAuditScoresQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "periodType": zod.enum(['daily', 'weekly', 'monthly']).optional(),
+  "periodStart": zod.date().optional()
+})
+
+export const ListAuditScoresResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "periodType": zod.enum(['daily', 'weekly', 'monthly']),
+  "periodStart": zod.string(),
+  "overallScore": zod.number(),
+  "photoComplianceScore": zod.number().nullish(),
+  "punctualityScore": zod.number().nullish(),
+  "productivityScore": zod.number().nullish(),
+  "documentationScore": zod.number().nullish(),
+  "stockAccuracyScore": zod.number().nullish(),
+  "safetyScore": zod.number().nullish(),
+  "callbackRate": zod.number().nullish(),
+  "flagCount": zod.number().optional(),
+  "criticalFlagCount": zod.number().optional(),
+  "adminOverride": zod.boolean().optional(),
+  "adminOverrideScore": zod.number().nullish(),
+  "adminNotes": zod.string().nullish(),
+  "calculatedAt": zod.coerce.date().optional()
+})
+export const ListAuditScoresResponse = zod.array(ListAuditScoresResponseItem)
+
+
+/**
+ * @summary Calculate audit scores for a period
+ */
+export const CalculateAuditScoresBody = zod.object({
+  "periodType": zod.enum(['daily', 'weekly', 'monthly']),
+  "periodStart": zod.coerce.date(),
+  "subcontractorId": zod.number().optional()
+})
+
+export const CalculateAuditScoresResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "periodType": zod.enum(['daily', 'weekly', 'monthly']),
+  "periodStart": zod.string(),
+  "overallScore": zod.number(),
+  "photoComplianceScore": zod.number().nullish(),
+  "punctualityScore": zod.number().nullish(),
+  "productivityScore": zod.number().nullish(),
+  "documentationScore": zod.number().nullish(),
+  "stockAccuracyScore": zod.number().nullish(),
+  "safetyScore": zod.number().nullish(),
+  "callbackRate": zod.number().nullish(),
+  "flagCount": zod.number().optional(),
+  "criticalFlagCount": zod.number().optional(),
+  "adminOverride": zod.boolean().optional(),
+  "adminOverrideScore": zod.number().nullish(),
+  "adminNotes": zod.string().nullish(),
+  "calculatedAt": zod.coerce.date().optional()
+})
+export const CalculateAuditScoresResponse = zod.array(CalculateAuditScoresResponseItem)
+
+
+export const ListMonthlyRankingsQueryParams = zod.object({
+  "month": zod.coerce.string().optional()
+})
+
+export const ListMonthlyRankingsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "month": zod.string(),
+  "rank": zod.number().nullish(),
+  "totalScore": zod.number(),
+  "metresScore": zod.number().optional(),
+  "metresPerHourScore": zod.number().optional(),
+  "auditScore": zod.number().optional(),
+  "punctualityScore": zod.number().optional(),
+  "photoComplianceScore": zod.number().optional(),
+  "callbackScore": zod.number().optional(),
+  "attendanceScore": zod.number().optional(),
+  "totalMetres": zod.number().optional(),
+  "avgMetresPerHour": zod.number().optional(),
+  "daysWorked": zod.number().optional(),
+  "jobsCompleted": zod.number().optional(),
+  "callbackCount": zod.number().optional(),
+  "lateArrivals": zod.number().optional(),
+  "missingPhotoJobs": zod.number().optional(),
+  "auditFlagCount": zod.number().optional()
+})
+export const ListMonthlyRankingsResponse = zod.array(ListMonthlyRankingsResponseItem)
+
+
+export const CalculateMonthlyRankingsBody = zod.object({
+  "month": zod.string()
+})
+
+export const CalculateMonthlyRankingsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().optional(),
+  "month": zod.string(),
+  "rank": zod.number().nullish(),
+  "totalScore": zod.number(),
+  "metresScore": zod.number().optional(),
+  "metresPerHourScore": zod.number().optional(),
+  "auditScore": zod.number().optional(),
+  "punctualityScore": zod.number().optional(),
+  "photoComplianceScore": zod.number().optional(),
+  "callbackScore": zod.number().optional(),
+  "attendanceScore": zod.number().optional(),
+  "totalMetres": zod.number().optional(),
+  "avgMetresPerHour": zod.number().optional(),
+  "daysWorked": zod.number().optional(),
+  "jobsCompleted": zod.number().optional(),
+  "callbackCount": zod.number().optional(),
+  "lateArrivals": zod.number().optional(),
+  "missingPhotoJobs": zod.number().optional(),
+  "auditFlagCount": zod.number().optional()
+})
+export const CalculateMonthlyRankingsResponse = zod.array(CalculateMonthlyRankingsResponseItem)
+
+
+export const GetScoringWeightsResponse = zod.object({
+  "id": zod.number().optional(),
+  "metresWeight": zod.number().optional(),
+  "metresPerHourWeight": zod.number().optional(),
+  "auditWeight": zod.number().optional(),
+  "punctualityWeight": zod.number().optional(),
+  "photoComplianceWeight": zod.number().optional(),
+  "callbackWeight": zod.number().optional(),
+  "attendanceWeight": zod.number().optional()
+})
+
+
+export const UpdateScoringWeightsBody = zod.object({
+  "metresWeight": zod.number().optional(),
+  "metresPerHourWeight": zod.number().optional(),
+  "auditWeight": zod.number().optional(),
+  "punctualityWeight": zod.number().optional(),
+  "photoComplianceWeight": zod.number().optional(),
+  "callbackWeight": zod.number().optional(),
+  "attendanceWeight": zod.number().optional()
+})
+
+export const UpdateScoringWeightsResponse = zod.object({
+  "id": zod.number().optional(),
+  "metresWeight": zod.number().optional(),
+  "metresPerHourWeight": zod.number().optional(),
+  "auditWeight": zod.number().optional(),
+  "punctualityWeight": zod.number().optional(),
+  "photoComplianceWeight": zod.number().optional(),
+  "callbackWeight": zod.number().optional(),
+  "attendanceWeight": zod.number().optional()
+})
+
+
+export const ListMonthlyAwardsResponseItem = zod.object({
+  "id": zod.number(),
+  "month": zod.string(),
+  "winnerId": zod.number(),
+  "winnerName": zod.string().optional(),
+  "winnerPhoto": zod.string().nullish(),
+  "awardType": zod.enum(['weekend_away', 'tv', 'experience', 'voucher', 'cash', 'custom']),
+  "awardTitle": zod.string(),
+  "awardDescription": zod.string().nullish(),
+  "awardValue": zod.number().nullish(),
+  "reasonText": zod.string(),
+  "totalScore": zod.number().nullish(),
+  "adminApproved": zod.boolean().optional(),
+  "publishedToStaff": zod.boolean().optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListMonthlyAwardsResponse = zod.array(ListMonthlyAwardsResponseItem)
+
+
+export const CreateMonthlyAwardBody = zod.object({
+  "month": zod.string(),
+  "winnerId": zod.number(),
+  "awardType": zod.enum(['weekend_away', 'tv', 'experience', 'voucher', 'cash', 'custom']),
+  "awardTitle": zod.string(),
+  "awardDescription": zod.string().optional(),
+  "awardValue": zod.number().optional(),
+  "winnerPhoto": zod.string().optional(),
+  "reasonText": zod.string(),
+  "totalScore": zod.number().optional()
+})
+
+
+export const UpdateMonthlyAwardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateMonthlyAwardBody = zod.object({
+  "awardType": zod.enum(['weekend_away', 'tv', 'experience', 'voucher', 'cash', 'custom']).optional(),
+  "awardTitle": zod.string().optional(),
+  "awardDescription": zod.string().optional(),
+  "awardValue": zod.number().optional(),
+  "winnerPhoto": zod.string().optional(),
+  "reasonText": zod.string().optional(),
+  "adminApproved": zod.boolean().optional(),
+  "publishedToStaff": zod.boolean().optional()
+})
+
+export const UpdateMonthlyAwardResponse = zod.object({
+  "id": zod.number(),
+  "month": zod.string(),
+  "winnerId": zod.number(),
+  "winnerName": zod.string().optional(),
+  "winnerPhoto": zod.string().nullish(),
+  "awardType": zod.enum(['weekend_away', 'tv', 'experience', 'voucher', 'cash', 'custom']),
+  "awardTitle": zod.string(),
+  "awardDescription": zod.string().nullish(),
+  "awardValue": zod.number().nullish(),
+  "reasonText": zod.string(),
+  "totalScore": zod.number().nullish(),
+  "adminApproved": zod.boolean().optional(),
+  "publishedToStaff": zod.boolean().optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Get the current published award visible to all staff
+ */
+export const GetCurrentAwardResponse = zod.object({
+  "id": zod.number(),
+  "month": zod.string(),
+  "winnerId": zod.number(),
+  "winnerName": zod.string().optional(),
+  "winnerPhoto": zod.string().nullish(),
+  "awardType": zod.enum(['weekend_away', 'tv', 'experience', 'voucher', 'cash', 'custom']),
+  "awardTitle": zod.string(),
+  "awardDescription": zod.string().nullish(),
+  "awardValue": zod.number().nullish(),
+  "reasonText": zod.string(),
+  "totalScore": zod.number().nullish(),
+  "adminApproved": zod.boolean().optional(),
+  "publishedToStaff": zod.boolean().optional(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+

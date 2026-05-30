@@ -23,6 +23,12 @@ tags:
   - name: xero
   - name: weeklyInvoices
   - name: admin
+  - name: analytics
+  - name: bonuses
+  - name: dockets
+  - name: inventory
+  - name: aiAudit
+  - name: awards
 
 paths:
   /healthz:
@@ -1389,6 +1395,633 @@ paths:
                 items:
                   $ref: "#/components/schemas/TimesheetEntry"
 
+  # ─── Analytics ────────────────────────────────────────────────────────────
+  /analytics/productivity:
+    get:
+      operationId: getProductivityAnalytics
+      tags: [analytics]
+      summary: Get productivity analytics for all subcontractors
+      parameters:
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date }
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Productivity analytics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductivityAnalytics" }
+
+  /analytics/productivity/friday-summary:
+    get:
+      operationId: getFridaySummary
+      tags: [analytics]
+      summary: Get weekly Friday summary for a subcontractor
+      parameters:
+        - name: subcontractorId
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Friday weekly summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FridaySummary" }
+
+  /analytics/leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [analytics]
+      summary: Get current month leaderboard
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LeaderboardEntry" }
+
+  # ─── Bonus Rules ──────────────────────────────────────────────────────────
+  /bonus-rules:
+    get:
+      operationId: listBonusRules
+      tags: [bonuses]
+      summary: List bonus rules
+      responses:
+        "200":
+          description: List of bonus rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BonusRule" }
+    post:
+      operationId: createBonusRule
+      tags: [bonuses]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBonusRuleBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BonusRule" }
+
+  /bonus-rules/{id}:
+    patch:
+      operationId: updateBonusRule
+      tags: [bonuses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBonusRuleBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BonusRule" }
+    delete:
+      operationId: deleteBonusRule
+      tags: [bonuses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /bonus-calculations:
+    get:
+      operationId: listBonusCalculations
+      tags: [bonuses]
+      summary: List bonus calculations
+      parameters:
+        - name: weekStart
+          in: query
+          schema: { type: string, format: date }
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, paid, rejected] }
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BonusCalculation" }
+
+  /bonus-calculations/calculate:
+    post:
+      operationId: calculateBonuses
+      tags: [bonuses]
+      summary: Trigger weekly bonus calculation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weekStart]
+              properties:
+                weekStart: { type: string, format: date }
+      responses:
+        "200":
+          description: Calculated bonuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BonusCalculation" }
+
+  /bonus-calculations/{id}:
+    patch:
+      operationId: updateBonusCalculation
+      tags: [bonuses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [approved, paid, rejected] }
+                adminNotes: { type: string }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BonusCalculation" }
+
+  # ─── Dockets ───────────────────────────────────────────────────────────────
+  /dockets:
+    get:
+      operationId: listDockets
+      tags: [dockets]
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: jobAssignmentId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of dockets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Docket" }
+    post:
+      operationId: createDocket
+      tags: [dockets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDocketBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Docket" }
+
+  /dockets/{id}:
+    get:
+      operationId: getDocket
+      tags: [dockets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Docket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Docket" }
+    patch:
+      operationId: updateDocket
+      tags: [dockets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDocketBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Docket" }
+
+  # ─── Subcontractor Inventory ───────────────────────────────────────────────
+  /sub-inventory:
+    get:
+      operationId: listSubInventory
+      tags: [inventory]
+      summary: Get all sub inventory (admin overview)
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sub inventory list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SubInventoryItem" }
+
+  /sub-inventory/{subcontractorId}:
+    get:
+      operationId: getSubInventory
+      tags: [inventory]
+      summary: Get a subcontractor's full inventory
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Inventory for this subcontractor
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SubInventoryItem" }
+
+  /inventory-transactions:
+    get:
+      operationId: listInventoryTransactions
+      tags: [inventory]
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: stockItemId
+          in: query
+          schema: { type: integer }
+        - name: transactionType
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InventoryTransaction" }
+    post:
+      operationId: createInventoryTransaction
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInventoryTransactionBody" }
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryTransaction" }
+
+  /restock-requests:
+    get:
+      operationId: listRestockRequests
+      tags: [inventory]
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Restock requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RestockRequest" }
+    post:
+      operationId: createRestockRequest
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRestockRequestBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestockRequest" }
+
+  /restock-requests/{id}:
+    patch:
+      operationId: updateRestockRequest
+      tags: [inventory]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRestockRequestBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RestockRequest" }
+
+  # ─── AI Audit ──────────────────────────────────────────────────────────────
+  /audit/run:
+    post:
+      operationId: runAudit
+      tags: [aiAudit]
+      summary: Trigger AI audit for a job report or subcontractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunAuditBody" }
+      responses:
+        "200":
+          description: Audit flags generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditFlag" }
+
+  /audit/flags:
+    get:
+      operationId: listAuditFlags
+      tags: [aiAudit]
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: severity
+          in: query
+          schema: { type: string }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Audit flags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditFlag" }
+
+  /audit/flags/{id}:
+    patch:
+      operationId: updateAuditFlag
+      tags: [aiAudit]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAuditFlagBody" }
+      responses:
+        "200":
+          description: Updated flag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditFlag" }
+
+  /audit/scores:
+    get:
+      operationId: listAuditScores
+      tags: [aiAudit]
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema: { type: integer }
+        - name: periodType
+          in: query
+          schema: { type: string, enum: [daily, weekly, monthly] }
+        - name: periodStart
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Audit scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditScore" }
+
+  /audit/scores/calculate:
+    post:
+      operationId: calculateAuditScores
+      tags: [aiAudit]
+      summary: Calculate audit scores for a period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [periodType, periodStart]
+              properties:
+                periodType: { type: string, enum: [daily, weekly, monthly] }
+                periodStart: { type: string, format: date }
+                subcontractorId: { type: integer }
+      responses:
+        "200":
+          description: Calculated scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditScore" }
+
+  # ─── Monthly Awards & Rankings ────────────────────────────────────────────
+  /monthly-rankings:
+    get:
+      operationId: listMonthlyRankings
+      tags: [awards]
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Monthly rankings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MonthlyRanking" }
+
+  /monthly-rankings/calculate:
+    post:
+      operationId: calculateMonthlyRankings
+      tags: [awards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [month]
+              properties:
+                month: { type: string }
+      responses:
+        "200":
+          description: Calculated rankings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MonthlyRanking" }
+
+  /scoring-weights:
+    get:
+      operationId: getScoringWeights
+      tags: [awards]
+      responses:
+        "200":
+          description: Current scoring weights
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScoringWeights" }
+    patch:
+      operationId: updateScoringWeights
+      tags: [awards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateScoringWeightsBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScoringWeights" }
+
+  /monthly-awards:
+    get:
+      operationId: listMonthlyAwards
+      tags: [awards]
+      responses:
+        "200":
+          description: Monthly awards
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MonthlyAward" }
+    post:
+      operationId: createMonthlyAward
+      tags: [awards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMonthlyAwardBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyAward" }
+
+  /monthly-awards/{id}:
+    patch:
+      operationId: updateMonthlyAward
+      tags: [awards]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMonthlyAwardBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyAward" }
+
+  /monthly-awards/current:
+    get:
+      operationId: getCurrentAward
+      tags: [awards]
+      summary: Get the current published award visible to all staff
+      responses:
+        "200":
+          description: Current award
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MonthlyAward" }
+
 components:
   schemas:
     HealthStatus:
@@ -2576,3 +3209,455 @@ components:
           type: integer
         totalMetres:
           type: number
+
+    # ─── Analytics Schemas ──────────────────────────────────────────────────
+    ProductivityAnalytics:
+      type: object
+      properties:
+        subcontractors:
+          type: array
+          items:
+            type: object
+            properties:
+              subcontractorId: { type: integer }
+              subcontractorName: { type: string }
+              totalMetres: { type: number }
+              totalWorkMinutes: { type: integer }
+              avgMetresPerHour: { type: number }
+              avgMetresPerDay: { type: number }
+              daysWorked: { type: integer }
+              jobsCompleted: { type: integer }
+              dailyBreakdown:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date: { type: string }
+                    metres: { type: number }
+                    workMinutes: { type: integer }
+                    metresPerHour: { type: number }
+                    jobsCompleted: { type: integer }
+        weeklyAverages:
+          type: object
+          properties:
+            avgMetresPerHour: { type: number }
+            avgMetresPerDay: { type: number }
+            totalMetres: { type: number }
+
+    FridaySummary:
+      type: object
+      properties:
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        totalMetres: { type: number }
+        totalWorkHours: { type: number }
+        avgMetresPerHour: { type: number }
+        avgMetresPerDay: { type: number }
+        daysWorked: { type: integer }
+        jobsCompleted: { type: integer }
+        bonusEarned: { type: number }
+        bonusRuleName: { type: ["string", "null"] }
+        auditScore: { type: ["number", "null"] }
+        topDay:
+          type: object
+          nullable: true
+          properties:
+            date: { type: string }
+            metres: { type: number }
+            metresPerHour: { type: number }
+        message: { type: string }
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        totalScore: { type: number }
+        totalMetres: { type: number }
+        avgMetresPerHour: { type: number }
+        auditScore: { type: number }
+        daysWorked: { type: integer }
+        badge: { type: ["string", "null"] }
+
+    # ─── Bonus Schemas ──────────────────────────────────────────────────────
+    BonusRule:
+      type: object
+      required: [id, name, bonusAmount, bonusType, active]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        targetMetresPerDay: { type: ["number", "null"] }
+        targetMetresPerWeek: { type: ["number", "null"] }
+        targetMetresPerHour: { type: ["number", "null"] }
+        bonusAmount: { type: number }
+        bonusType: { type: string, enum: [flat, per_metre_over, percentage] }
+        minAuditScore: { type: ["number", "null"] }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CreateBonusRuleBody:
+      type: object
+      required: [name, bonusAmount, bonusType]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        targetMetresPerDay: { type: number }
+        targetMetresPerWeek: { type: number }
+        targetMetresPerHour: { type: number }
+        bonusAmount: { type: number }
+        bonusType: { type: string, enum: [flat, per_metre_over, percentage] }
+        minAuditScore: { type: number }
+        active: { type: boolean }
+
+    UpdateBonusRuleBody:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        targetMetresPerDay: { type: number }
+        targetMetresPerWeek: { type: number }
+        targetMetresPerHour: { type: number }
+        bonusAmount: { type: number }
+        bonusType: { type: string, enum: [flat, per_metre_over, percentage] }
+        minAuditScore: { type: number }
+        active: { type: boolean }
+
+    BonusCalculation:
+      type: object
+      required: [id, subcontractorId, weekStart, status]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        weekStart: { type: string }
+        totalMetres: { type: number }
+        totalWorkMinutes: { type: integer }
+        avgMetresPerHour: { type: ["number", "null"] }
+        avgMetresPerDay: { type: ["number", "null"] }
+        auditScore: { type: ["number", "null"] }
+        bonusRuleId: { type: ["integer", "null"] }
+        bonusRuleName: { type: ["string", "null"] }
+        bonusAmount: { type: number }
+        bonusEarned: { type: boolean }
+        status: { type: string, enum: [pending, approved, paid, rejected] }
+        adminNotes: { type: ["string", "null"] }
+        calculatedAt: { type: string, format: date-time }
+
+    # ─── Docket Schemas ──────────────────────────────────────────────────────
+    Docket:
+      type: object
+      required: [id, subcontractorId, docketNumber, status]
+      properties:
+        id: { type: integer }
+        jobAssignmentId: { type: ["integer", "null"] }
+        subcontractorId: { type: integer }
+        docketNumber: { type: string }
+        jobTitle: { type: ["string", "null"] }
+        jobAddress: { type: ["string", "null"] }
+        builderName: { type: ["string", "null"] }
+        builderSignature: { type: ["string", "null"] }
+        subcontractorSignature: { type: ["string", "null"] }
+        photosBefore:
+          type: array
+          items: { type: string }
+        photosAfter:
+          type: array
+          items: { type: string }
+        workDescription: { type: ["string", "null"] }
+        metresCompleted: { type: ["string", "null"] }
+        coloursUsed:
+          type: array
+          items: { type: string }
+        builderSigned: { type: boolean }
+        subcontractorSigned: { type: boolean }
+        notes: { type: ["string", "null"] }
+        status: { type: string, enum: [draft, sub_signed, builder_signed, complete] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"] }
+
+    CreateDocketBody:
+      type: object
+      required: [subcontractorId, jobAssignmentId]
+      properties:
+        subcontractorId: { type: integer }
+        jobAssignmentId: { type: integer }
+        builderName: { type: string }
+        jobTitle: { type: string }
+        jobAddress: { type: string }
+        workDescription: { type: string }
+        metresCompleted: { type: string }
+        coloursUsed:
+          type: array
+          items: { type: string }
+        photosBefore:
+          type: array
+          items: { type: string }
+        photosAfter:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+
+    UpdateDocketBody:
+      type: object
+      properties:
+        builderSignature: { type: string }
+        subcontractorSignature: { type: string }
+        photosBefore:
+          type: array
+          items: { type: string }
+        photosAfter:
+          type: array
+          items: { type: string }
+        workDescription: { type: string }
+        metresCompleted: { type: string }
+        coloursUsed:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [draft, sub_signed, builder_signed, complete] }
+        builderName: { type: string }
+
+    # ─── Inventory Schemas ──────────────────────────────────────────────────
+    SubInventoryItem:
+      type: object
+      required: [id, subcontractorId, stockItemId, currentQuantity]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        stockItemId: { type: integer }
+        stockItemName: { type: string }
+        colour: { type: ["string", "null"] }
+        unit: { type: string }
+        currentQuantity: { type: number }
+        lastIssuedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    InventoryTransaction:
+      type: object
+      required: [id, subcontractorId, stockItemId, transactionType, quantity]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        stockItemId: { type: integer }
+        stockItemName: { type: string }
+        colour: { type: ["string", "null"] }
+        unit: { type: string }
+        transactionType: { type: string, enum: [issued, used_on_job, returned, adjustment, restock] }
+        quantity: { type: number }
+        jobAssignmentId: { type: ["integer", "null"] }
+        referenceNote: { type: ["string", "null"] }
+        recordedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    CreateInventoryTransactionBody:
+      type: object
+      required: [subcontractorId, stockItemId, transactionType, quantity]
+      properties:
+        subcontractorId: { type: integer }
+        stockItemId: { type: integer }
+        transactionType: { type: string, enum: [issued, used_on_job, returned, adjustment, restock] }
+        quantity: { type: number }
+        jobAssignmentId: { type: integer }
+        referenceNote: { type: string }
+        recordedBy: { type: string }
+
+    RestockRequest:
+      type: object
+      required: [id, subcontractorId, stockItemId, quantityRequested, status]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        stockItemId: { type: integer }
+        stockItemName: { type: string }
+        colour: { type: ["string", "null"] }
+        unit: { type: string }
+        quantityRequested: { type: number }
+        quantityFulfilled: { type: ["number", "null"] }
+        status: { type: string, enum: [pending, approved, fulfilled, rejected] }
+        subNotes: { type: ["string", "null"] }
+        adminNotes: { type: ["string", "null"] }
+        urgency: { type: string, enum: [low, normal, high] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateRestockRequestBody:
+      type: object
+      required: [subcontractorId, stockItemId, quantityRequested]
+      properties:
+        subcontractorId: { type: integer }
+        stockItemId: { type: integer }
+        quantityRequested: { type: number }
+        subNotes: { type: string }
+        urgency: { type: string, enum: [low, normal, high] }
+
+    UpdateRestockRequestBody:
+      type: object
+      properties:
+        status: { type: string, enum: [approved, fulfilled, rejected] }
+        quantityFulfilled: { type: number }
+        adminNotes: { type: string }
+
+    # ─── Audit Schemas ──────────────────────────────────────────────────────
+    RunAuditBody:
+      type: object
+      properties:
+        jobReportId: { type: integer }
+        subcontractorId: { type: integer }
+        date: { type: string, format: date }
+
+    AuditFlag:
+      type: object
+      required: [id, subcontractorId, flagType, severity, title, description, status]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        jobReportId: { type: ["integer", "null"] }
+        jobAssignmentId: { type: ["integer", "null"] }
+        flagType: { type: string }
+        severity: { type: string, enum: [info, warning, critical] }
+        title: { type: string }
+        description: { type: string }
+        evidence: { type: object }
+        auditScore: { type: ["number", "null"] }
+        status: { type: string, enum: [pending, reviewed, approved, dismissed, fix_requested, callback_created] }
+        adminNotes: { type: ["string", "null"] }
+        workerFeedback: { type: ["string", "null"] }
+        showToWorker: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    UpdateAuditFlagBody:
+      type: object
+      properties:
+        status: { type: string, enum: [reviewed, approved, dismissed, fix_requested, callback_created] }
+        adminNotes: { type: string }
+        workerFeedback: { type: string }
+        showToWorker: { type: boolean }
+
+    AuditScore:
+      type: object
+      required: [id, subcontractorId, periodType, periodStart, overallScore]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        periodType: { type: string, enum: [daily, weekly, monthly] }
+        periodStart: { type: string }
+        overallScore: { type: number }
+        photoComplianceScore: { type: ["number", "null"] }
+        punctualityScore: { type: ["number", "null"] }
+        productivityScore: { type: ["number", "null"] }
+        documentationScore: { type: ["number", "null"] }
+        stockAccuracyScore: { type: ["number", "null"] }
+        safetyScore: { type: ["number", "null"] }
+        callbackRate: { type: ["number", "null"] }
+        flagCount: { type: integer }
+        criticalFlagCount: { type: integer }
+        adminOverride: { type: boolean }
+        adminOverrideScore: { type: ["number", "null"] }
+        adminNotes: { type: ["string", "null"] }
+        calculatedAt: { type: string, format: date-time }
+
+    # ─── Awards & Rankings Schemas ──────────────────────────────────────────
+    MonthlyRanking:
+      type: object
+      required: [id, subcontractorId, month, totalScore]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        month: { type: string }
+        rank: { type: ["integer", "null"] }
+        totalScore: { type: number }
+        metresScore: { type: number }
+        metresPerHourScore: { type: number }
+        auditScore: { type: number }
+        punctualityScore: { type: number }
+        photoComplianceScore: { type: number }
+        callbackScore: { type: number }
+        attendanceScore: { type: number }
+        totalMetres: { type: number }
+        avgMetresPerHour: { type: number }
+        daysWorked: { type: integer }
+        jobsCompleted: { type: integer }
+        callbackCount: { type: integer }
+        lateArrivals: { type: integer }
+        missingPhotoJobs: { type: integer }
+        auditFlagCount: { type: integer }
+
+    ScoringWeights:
+      type: object
+      properties:
+        id: { type: integer }
+        metresWeight: { type: number }
+        metresPerHourWeight: { type: number }
+        auditWeight: { type: number }
+        punctualityWeight: { type: number }
+        photoComplianceWeight: { type: number }
+        callbackWeight: { type: number }
+        attendanceWeight: { type: number }
+
+    UpdateScoringWeightsBody:
+      type: object
+      properties:
+        metresWeight: { type: number }
+        metresPerHourWeight: { type: number }
+        auditWeight: { type: number }
+        punctualityWeight: { type: number }
+        photoComplianceWeight: { type: number }
+        callbackWeight: { type: number }
+        attendanceWeight: { type: number }
+
+    MonthlyAward:
+      type: object
+      required: [id, month, winnerId, awardType, awardTitle, reasonText]
+      properties:
+        id: { type: integer }
+        month: { type: string }
+        winnerId: { type: integer }
+        winnerName: { type: string }
+        winnerPhoto: { type: ["string", "null"] }
+        awardType: { type: string, enum: [weekend_away, tv, experience, voucher, cash, custom] }
+        awardTitle: { type: string }
+        awardDescription: { type: ["string", "null"] }
+        awardValue: { type: ["number", "null"] }
+        reasonText: { type: string }
+        totalScore: { type: ["number", "null"] }
+        adminApproved: { type: boolean }
+        publishedToStaff: { type: boolean }
+        publishedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    CreateMonthlyAwardBody:
+      type: object
+      required: [month, winnerId, awardType, awardTitle, reasonText]
+      properties:
+        month: { type: string }
+        winnerId: { type: integer }
+        awardType: { type: string, enum: [weekend_away, tv, experience, voucher, cash, custom] }
+        awardTitle: { type: string }
+        awardDescription: { type: string }
+        awardValue: { type: number }
+        winnerPhoto: { type: string }
+        reasonText: { type: string }
+        totalScore: { type: number }
+
+    UpdateMonthlyAwardBody:
+      type: object
+      properties:
+        awardType: { type: string, enum: [weekend_away, tv, experience, voucher, cash, custom] }
+        awardTitle: { type: string }
+        awardDescription: { type: string }
+        awardValue: { type: number }
+        winnerPhoto: { type: string }
+        reasonText: { type: string }
+        adminApproved: { type: boolean }
+        publishedToStaff: { type: boolean }
