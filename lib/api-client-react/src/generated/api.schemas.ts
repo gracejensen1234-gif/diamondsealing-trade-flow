@@ -1942,6 +1942,98 @@ export interface ProfitabilityScore {
   calculatedAt?: string;
 }
 
+export type LocationVerificationEventType = typeof LocationVerificationEventType[keyof typeof LocationVerificationEventType];
+
+
+export const LocationVerificationEventType = {
+  clock_on: 'clock_on',
+  clock_off: 'clock_off',
+  job_arrived: 'job_arrived',
+  job_departed: 'job_departed',
+} as const;
+
+export type LocationVerificationStatus = typeof LocationVerificationStatus[keyof typeof LocationVerificationStatus];
+
+
+export const LocationVerificationStatus = {
+  verified: 'verified',
+  outside_range: 'outside_range',
+  skipped: 'skipped',
+  location_error: 'location_error',
+  no_job_address: 'no_job_address',
+  geocode_failed: 'geocode_failed',
+  captured: 'captured',
+} as const;
+
+export interface LocationVerification {
+  id: number;
+  subcontractorId: number;
+  /** @nullable */
+  subcontractorName?: string | null;
+  /** @nullable */
+  workSessionId?: number | null;
+  /** @nullable */
+  jobAssignmentId?: number | null;
+  eventType: LocationVerificationEventType;
+  /** @nullable */
+  reportedLat?: number | null;
+  /** @nullable */
+  reportedLng?: number | null;
+  /** @nullable */
+  reportedAccuracyMetres?: number | null;
+  /** @nullable */
+  jobAddress?: string | null;
+  /** @nullable */
+  jobAddressLat?: number | null;
+  /** @nullable */
+  jobAddressLng?: number | null;
+  /** @nullable */
+  distanceMetres?: number | null;
+  allowedDistanceMetres?: number;
+  /** @nullable */
+  withinBounds?: boolean | null;
+  status: LocationVerificationStatus;
+  workerConsented: boolean;
+  adminReviewed: boolean;
+  /** @nullable */
+  adminNotes?: string | null;
+  createdAt: string;
+}
+
+export type CreateLocationVerificationBodyEventType = typeof CreateLocationVerificationBodyEventType[keyof typeof CreateLocationVerificationBodyEventType];
+
+
+export const CreateLocationVerificationBodyEventType = {
+  clock_on: 'clock_on',
+  clock_off: 'clock_off',
+  job_arrived: 'job_arrived',
+  job_departed: 'job_departed',
+} as const;
+
+/**
+ * Only set this when the worker skipped or the browser errored. Otherwise omit and let the server calculate.
+ */
+export type CreateLocationVerificationBodyStatus = typeof CreateLocationVerificationBodyStatus[keyof typeof CreateLocationVerificationBodyStatus];
+
+
+export const CreateLocationVerificationBodyStatus = {
+  skipped: 'skipped',
+  location_error: 'location_error',
+} as const;
+
+export interface CreateLocationVerificationBody {
+  subcontractorId: number;
+  workSessionId?: number;
+  jobAssignmentId?: number;
+  eventType: CreateLocationVerificationBodyEventType;
+  reportedLat?: number;
+  reportedLng?: number;
+  reportedAccuracyMetres?: number;
+  workerConsented?: boolean;
+  /** Only set this when the worker skipped or the browser errored. Otherwise omit and let the server calculate. */
+  status?: CreateLocationVerificationBodyStatus;
+}
+
 export type SubNotificationType = typeof SubNotificationType[keyof typeof SubNotificationType];
 
 
@@ -2109,6 +2201,19 @@ export type ListWorkSessionsParams = {
 subcontractorId?: number;
 date?: string;
 weekStart?: string;
+};
+
+export type ListLocationVerificationsParams = {
+subcontractorId?: number;
+date?: string;
+/**
+ * Only return outside_range, skipped, or error records
+ */
+flagsOnly?: boolean;
+};
+
+export type ReviewLocationVerificationBody = {
+  adminNotes?: string;
 };
 
 export type ListDispatchParams = {

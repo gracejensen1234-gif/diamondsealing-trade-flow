@@ -907,12 +907,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkSession"
 
-  # ─── GPS ──────────────────────────────────────────────────────
+  # ─── GPS (legacy continuous tracking — superseded by location-verifications) ─
   /gps/location:
     post:
       operationId: pushGpsLocation
       tags: [gps]
-      summary: Push a GPS location point
+      summary: Push a GPS location point (legacy)
       requestBody:
         required: true
         content:
@@ -926,6 +926,85 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GpsLocation"
+
+  # ─── Location Verifications ────────────────────────────────────────────────
+  /location-verifications:
+    post:
+      operationId: createLocationVerification
+      tags: [location]
+      summary: Record a point-in-time location verification event
+      description: |
+        Called at clock-on, mark-arrived, mark-departed, and clock-off.
+        Worker must consent before location is requested. If they skip or the
+        browser errors, the status field reflects that and no coordinates are stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationVerificationBody"
+      responses:
+        "201":
+          description: Verification recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationVerification"
+    get:
+      operationId: listLocationVerifications
+      tags: [location]
+      summary: List location verification records (admin)
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: flagsOnly
+          in: query
+          description: Only return outside_range, skipped, or error records
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of verification records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationVerification"
+
+  /location-verifications/{id}/review:
+    patch:
+      operationId: reviewLocationVerification
+      tags: [location]
+      summary: Mark a verification as admin-reviewed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                adminNotes:
+                  type: string
+      responses:
+        "200":
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationVerification"
 
   # ─── DISPATCH ─────────────────────────────────────────────────
   /dispatch:
@@ -4205,6 +4284,55 @@ components:
         callbackCount: { type: integer }
         productConsumedValue: { type: number }
         calculatedAt: { type: string, format: date-time }
+
+    # ─── Location Verifications ────────────────────────────────────────────
+    LocationVerification:
+      type: object
+      required: [id, subcontractorId, eventType, status, workerConsented, adminReviewed, createdAt]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: ["string", "null"] }
+        workSessionId: { type: ["integer", "null"] }
+        jobAssignmentId: { type: ["integer", "null"] }
+        eventType:
+          type: string
+          enum: [clock_on, clock_off, job_arrived, job_departed]
+        reportedLat: { type: ["number", "null"] }
+        reportedLng: { type: ["number", "null"] }
+        reportedAccuracyMetres: { type: ["number", "null"] }
+        jobAddress: { type: ["string", "null"] }
+        jobAddressLat: { type: ["number", "null"] }
+        jobAddressLng: { type: ["number", "null"] }
+        distanceMetres: { type: ["number", "null"] }
+        allowedDistanceMetres: { type: integer }
+        withinBounds: { type: ["boolean", "null"] }
+        status:
+          type: string
+          enum: [verified, outside_range, skipped, location_error, no_job_address, geocode_failed, captured]
+        workerConsented: { type: boolean }
+        adminReviewed: { type: boolean }
+        adminNotes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    CreateLocationVerificationBody:
+      type: object
+      required: [subcontractorId, eventType]
+      properties:
+        subcontractorId: { type: integer }
+        workSessionId: { type: integer }
+        jobAssignmentId: { type: integer }
+        eventType:
+          type: string
+          enum: [clock_on, clock_off, job_arrived, job_departed]
+        reportedLat: { type: number }
+        reportedLng: { type: number }
+        reportedAccuracyMetres: { type: number }
+        workerConsented: { type: boolean }
+        status:
+          type: string
+          enum: [skipped, location_error]
+          description: Only set this when the worker skipped or the browser errored. Otherwise omit and let the server calculate.
 
     # ─── Notifications ─────────────────────────────────────────────────────
     SubNotification:

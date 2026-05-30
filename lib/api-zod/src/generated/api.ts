@@ -1075,7 +1075,7 @@ export const UpdateWorkSessionResponse = zod.object({
 
 
 /**
- * @summary Push a GPS location point
+ * @summary Push a GPS location point (legacy)
  */
 export const PushGpsLocationBody = zod.object({
   "subcontractorId": zod.number(),
@@ -1083,6 +1083,95 @@ export const PushGpsLocationBody = zod.object({
   "latitude": zod.number(),
   "longitude": zod.number(),
   "accuracy": zod.number().optional()
+})
+
+
+/**
+ * Called at clock-on, mark-arrived, mark-departed, and clock-off.
+Worker must consent before location is requested. If they skip or the
+browser errors, the status field reflects that and no coordinates are stored.
+
+ * @summary Record a point-in-time location verification event
+ */
+export const CreateLocationVerificationBody = zod.object({
+  "subcontractorId": zod.number(),
+  "workSessionId": zod.number().optional(),
+  "jobAssignmentId": zod.number().optional(),
+  "eventType": zod.enum(['clock_on', 'clock_off', 'job_arrived', 'job_departed']),
+  "reportedLat": zod.number().optional(),
+  "reportedLng": zod.number().optional(),
+  "reportedAccuracyMetres": zod.number().optional(),
+  "workerConsented": zod.boolean().optional(),
+  "status": zod.enum(['skipped', 'location_error']).optional().describe('Only set this when the worker skipped or the browser errored. Otherwise omit and let the server calculate.')
+})
+
+
+/**
+ * @summary List location verification records (admin)
+ */
+export const ListLocationVerificationsQueryParams = zod.object({
+  "subcontractorId": zod.coerce.number().optional(),
+  "date": zod.date().optional(),
+  "flagsOnly": zod.coerce.boolean().optional().describe('Only return outside_range, skipped, or error records')
+})
+
+export const ListLocationVerificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().nullish(),
+  "workSessionId": zod.number().nullish(),
+  "jobAssignmentId": zod.number().nullish(),
+  "eventType": zod.enum(['clock_on', 'clock_off', 'job_arrived', 'job_departed']),
+  "reportedLat": zod.number().nullish(),
+  "reportedLng": zod.number().nullish(),
+  "reportedAccuracyMetres": zod.number().nullish(),
+  "jobAddress": zod.string().nullish(),
+  "jobAddressLat": zod.number().nullish(),
+  "jobAddressLng": zod.number().nullish(),
+  "distanceMetres": zod.number().nullish(),
+  "allowedDistanceMetres": zod.number().optional(),
+  "withinBounds": zod.boolean().nullish(),
+  "status": zod.enum(['verified', 'outside_range', 'skipped', 'location_error', 'no_job_address', 'geocode_failed', 'captured']),
+  "workerConsented": zod.boolean(),
+  "adminReviewed": zod.boolean(),
+  "adminNotes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLocationVerificationsResponse = zod.array(ListLocationVerificationsResponseItem)
+
+
+/**
+ * @summary Mark a verification as admin-reviewed
+ */
+export const ReviewLocationVerificationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReviewLocationVerificationBody = zod.object({
+  "adminNotes": zod.string().optional()
+})
+
+export const ReviewLocationVerificationResponse = zod.object({
+  "id": zod.number(),
+  "subcontractorId": zod.number(),
+  "subcontractorName": zod.string().nullish(),
+  "workSessionId": zod.number().nullish(),
+  "jobAssignmentId": zod.number().nullish(),
+  "eventType": zod.enum(['clock_on', 'clock_off', 'job_arrived', 'job_departed']),
+  "reportedLat": zod.number().nullish(),
+  "reportedLng": zod.number().nullish(),
+  "reportedAccuracyMetres": zod.number().nullish(),
+  "jobAddress": zod.string().nullish(),
+  "jobAddressLat": zod.number().nullish(),
+  "jobAddressLng": zod.number().nullish(),
+  "distanceMetres": zod.number().nullish(),
+  "allowedDistanceMetres": zod.number().optional(),
+  "withinBounds": zod.boolean().nullish(),
+  "status": zod.enum(['verified', 'outside_range', 'skipped', 'location_error', 'no_job_address', 'geocode_failed', 'captured']),
+  "workerConsented": zod.boolean(),
+  "adminReviewed": zod.boolean(),
+  "adminNotes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 

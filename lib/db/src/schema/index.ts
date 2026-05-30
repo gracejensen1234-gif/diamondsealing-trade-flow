@@ -25,3 +25,4 @@ export * from "./smart-allocation";
 export * from "./suppliers";
 export * from "./profitability";
 export * from "./notifications";
+export * from "./location-verifications";

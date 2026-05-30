@@ -27,6 +27,7 @@ import smartAllocationRouter from "./smart-allocation";
 import suppliersRouter from "./suppliers";
 import profitabilityRouter from "./profitability";
 import notificationsRouter from "./notifications";
+import locationVerificationsRouter from "./location-verifications";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(smartAllocationRouter);
 router.use(suppliersRouter);
 router.use(profitabilityRouter);
 router.use(notificationsRouter);
+router.use(locationVerificationsRouter);
 
 export default router;

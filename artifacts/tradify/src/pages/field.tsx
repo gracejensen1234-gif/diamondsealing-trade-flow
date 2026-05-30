@@ -18,13 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
-  Bell, BellOff, X, ChevronRight,
+  Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
 } from "lucide-react";
 
 // ─── Push notification helpers ───────────────────────────────────────────────
@@ -60,7 +59,7 @@ async function subscribeToPush(subcontractorId: number, vapidPublicKey: string) 
 
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource,
     });
 
     const json = sub.toJSON();
@@ -81,6 +80,38 @@ async function subscribeToPush(subcontractorId: number, vapidPublicKey: string) 
   }
 }
 
+// ─── Location verification ────────────────────────────────────────────────────
+
+type LocationPrompt = {
+  eventLabel: string;
+  jobAddress?: string;
+  onAllow: () => void;
+  onSkip: () => void;
+};
+
+async function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
+  if (!navigator.geolocation) return null;
+  return new Promise((resolve) =>
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos.coords),
+      () => resolve(null),
+      { timeout: 10000, enableHighAccuracy: true },
+    )
+  );
+}
+
+async function postLocationVerification(payload: Record<string, unknown>) {
+  try {
+    const res = await fetch("/api/location-verifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) return (await res.json()) as { status: string; distanceMetres?: number | null; withinBounds?: boolean | null };
+  } catch {}
+  return null;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function FieldView() {
@@ -93,12 +124,11 @@ export default function FieldView() {
     return saved ? parseInt(saved) : undefined;
   });
 
-  const [gpsEnabled, setGpsEnabled] = useState(true);
-  const [gpsDisabledOnBreak, setGpsDisabledOnBreak] = useState(true);
   const [dismissedBanner, setDismissedBanner] = useState<number[]>([]);
+  const [locationPrompt, setLocationPrompt] = useState<LocationPrompt | null>(null);
 
   // Push notification state
-  const [pushStatus, setPushStatus] = useState<"unknown" | "granted" | "denied" | "unsupported">("unknown");
+  const [pushStatus, setPushStatus] = useState<"unknown" | "granted" | "denied" | "unsupported" | "default">("unknown");
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [vapidKey, setVapidKey] = useState<string | null>(null);
@@ -120,7 +150,6 @@ export default function FieldView() {
     const perm = Notification.permission;
     setPushStatus(perm as "granted" | "denied" | "unknown");
 
-    // Fetch VAPID key
     fetch("/api/push-subscriptions/vapid-public-key")
       .then((r) => r.json())
       .then((d) => {
@@ -129,14 +158,12 @@ export default function FieldView() {
       })
       .catch(() => {});
 
-    // Check if already subscribed
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setPushSubscribed(!!sub))
       .catch(() => {});
   }, []);
 
-  // Show push prompt when sub is selected
   useEffect(() => {
     if (subId && pushStatus === "default") setShowPushPrompt(true);
   }, [subId, pushStatus]);
@@ -156,6 +183,71 @@ export default function FieldView() {
     }
   }, [subId, vapidKey, toast]);
 
+  // ─── Location verification helper ────────────────────────────────────────
+  const requestLocationVerification = useCallback(
+    (
+      eventType: string,
+      eventLabel: string,
+      opts: { jobAssignmentId?: number; jobAddress?: string; workSessionId?: number },
+    ) =>
+      new Promise<void>((resolve) => {
+        setLocationPrompt({
+          eventLabel,
+          jobAddress: opts.jobAddress,
+          onSkip: async () => {
+            setLocationPrompt(null);
+            await postLocationVerification({
+              subcontractorId: subId,
+              eventType,
+              jobAssignmentId: opts.jobAssignmentId ?? null,
+              workSessionId: opts.workSessionId ?? null,
+              status: "skipped",
+              workerConsented: false,
+            });
+            resolve();
+          },
+          onAllow: async () => {
+            setLocationPrompt(null);
+            const coords = await getBrowserLocation();
+            if (!coords) {
+              await postLocationVerification({
+                subcontractorId: subId,
+                eventType,
+                jobAssignmentId: opts.jobAssignmentId ?? null,
+                workSessionId: opts.workSessionId ?? null,
+                status: "location_error",
+                workerConsented: true,
+              });
+              toast({ title: "Location unavailable", description: "Could not get your location. Event recorded.", variant: "destructive" });
+              resolve();
+              return;
+            }
+            const result = await postLocationVerification({
+              subcontractorId: subId,
+              eventType,
+              jobAssignmentId: opts.jobAssignmentId ?? null,
+              workSessionId: opts.workSessionId ?? null,
+              reportedLat: coords.latitude,
+              reportedLng: coords.longitude,
+              reportedAccuracyMetres: coords.accuracy,
+              workerConsented: true,
+            });
+            if (result?.status === "verified") {
+              toast({ title: "✓ Location confirmed", description: `You are at the job address (${result.distanceMetres ?? 0}m away).` });
+            } else if (result?.status === "outside_range") {
+              toast({
+                title: "⚠ Location check — far from job",
+                description: `You appear to be ${result.distanceMetres ?? "?"}m from the job address. Admin has been flagged.`,
+                variant: "destructive",
+              });
+            }
+            resolve();
+          },
+        });
+      }),
+    [subId, toast],
+  );
+
   const { data: subs, isLoading: loadingSubs } = useListSubcontractors();
 
   const { data: session, isLoading: loadingSession } = useGetTodaySession(
@@ -168,7 +260,6 @@ export default function FieldView() {
     { query: { enabled: !!subId, queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) } }
   );
 
-  // Unread notification count
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["unread-count", subId],
     queryFn: () => {
@@ -179,7 +270,6 @@ export default function FieldView() {
     refetchInterval: 20000,
   });
 
-  // Urgent notifications
   const { data: urgentNotifications } = useQuery<any[]>({
     queryKey: ["urgent-notifications", subId],
     queryFn: () => {
@@ -220,7 +310,7 @@ export default function FieldView() {
   const startBreak = useStartBreak({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Break started — GPS paused" });
+        toast({ title: "Break started" });
         if (subId) queryClient.invalidateQueries({ queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }) });
       },
     },
@@ -253,6 +343,39 @@ export default function FieldView() {
     },
   });
 
+  // ─── Action handlers with location verification ───────────────────────────
+  const handleClockOn = useCallback(async () => {
+    if (!subId) return;
+    await requestLocationVerification("clock_on", "clock-on", {});
+    clockOn.mutate({ data: { subcontractorId: subId } });
+  }, [subId, requestLocationVerification, clockOn]);
+
+  const handleClockOff = useCallback(async () => {
+    if (!subId) return;
+    await requestLocationVerification("clock_off", "clock-off", {
+      workSessionId: session?.id,
+    });
+    clockOff.mutate({ data: { subcontractorId: subId } });
+  }, [subId, session?.id, requestLocationVerification, clockOff]);
+
+  const handleMarkArrived = useCallback(async (assignmentId: number, jobAddress?: string) => {
+    await requestLocationVerification("job_arrived", "marking arrived", {
+      jobAssignmentId: assignmentId,
+      jobAddress,
+      workSessionId: session?.id,
+    });
+    markArrived.mutate({ id: assignmentId });
+  }, [requestLocationVerification, session?.id, markArrived]);
+
+  const handleMarkDeparted = useCallback(async (assignmentId: number, jobAddress?: string) => {
+    await requestLocationVerification("job_departed", "marking departed", {
+      jobAssignmentId: assignmentId,
+      jobAddress,
+      workSessionId: session?.id,
+    });
+    markDeparted.mutate({ id: assignmentId });
+  }, [requestLocationVerification, session?.id, markDeparted]);
+
   const today = new Date().toISOString().split("T")[0];
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
   const isOnBreak = session?.status === "on_break";
@@ -267,7 +390,6 @@ export default function FieldView() {
           <Button variant="ghost" size="icon" onClick={() => refetchDispatch()}>
             <RotateCcw className="h-5 w-5" />
           </Button>
-          {/* Notification bell */}
           <Button
             variant="ghost"
             size="icon"
@@ -284,6 +406,46 @@ export default function FieldView() {
           </Button>
         </div>
       </div>
+
+      {/* Location consent prompt */}
+      {locationPrompt && (
+        <Card className="border-blue-300 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-700 shadow-md">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Navigation className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                  Location check — {locationPrompt.eventLabel}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Your location will activate briefly to confirm you are at the job address.
+                  {locationPrompt.jobAddress && (
+                    <span className="block mt-0.5 font-medium">{locationPrompt.jobAddress}</span>
+                  )}
+                  <span className="block mt-1 opacity-80">This is not continuous tracking.</span>
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={locationPrompt.onAllow}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Allow
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={locationPrompt.onSkip}
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Skip
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Push notification permission prompt */}
       {showPushPrompt && subId && pushStatus !== "granted" && pushStatus !== "unsupported" && (
@@ -364,7 +526,7 @@ export default function FieldView() {
         </div>
       )}
 
-      {/* Identity card */}
+      {/* Identity + clock card */}
       <Card>
         <CardContent className="p-4 space-y-4">
           <div className="space-y-2">
@@ -389,27 +551,12 @@ export default function FieldView() {
 
           {subId && (
             <div className="space-y-4 pt-4 border-t">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>GPS tracking</Label>
-                  <p className="text-xs text-muted-foreground">{gpsEnabled ? "ON" : "OFF"}</p>
-                </div>
-                <Switch checked={gpsEnabled} onCheckedChange={setGpsEnabled} disabled={isClockedOn} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto-pause on break</Label>
-                  <p className="text-xs text-muted-foreground">{gpsDisabledOnBreak ? "YES" : "NO"}</p>
-                </div>
-                <Switch checked={gpsDisabledOnBreak} onCheckedChange={setGpsDisabledOnBreak} disabled={isClockedOn} />
-              </div>
-
               {!isClockedOn ? (
                 <Button
                   className="w-full h-16 text-lg"
                   size="lg"
-                  onClick={() => clockOn.mutate({ data: { subcontractorId: subId, gpsEnabled, gpsDisabledOnBreak } })}
-                  disabled={clockOn.isPending}
+                  onClick={handleClockOn}
+                  disabled={clockOn.isPending || !!locationPrompt}
                 >
                   <Play className="mr-2 h-6 w-6" /> CLOCK ON
                 </Button>
@@ -437,8 +584,8 @@ export default function FieldView() {
                   <Button
                     variant="destructive"
                     className="h-14"
-                    onClick={() => clockOff.mutate({ data: { subcontractorId: subId } })}
-                    disabled={clockOff.isPending}
+                    onClick={handleClockOff}
+                    disabled={clockOff.isPending || !!locationPrompt}
                   >
                     <Square className="mr-2 h-5 w-5" /> CLOCK OFF
                   </Button>
@@ -536,8 +683,8 @@ export default function FieldView() {
                     {assignment.status === "pending" && (
                       <Button
                         className="w-full"
-                        onClick={() => markArrived.mutate({ id: assignment.id })}
-                        disabled={markArrived.isPending}
+                        onClick={() => handleMarkArrived(assignment.id, assignment.jobAddress ?? undefined)}
+                        disabled={markArrived.isPending || !!locationPrompt}
                       >
                         Mark Arrived
                       </Button>
@@ -551,8 +698,8 @@ export default function FieldView() {
                         )}
                         <Button
                           className="flex-1"
-                          onClick={() => markDeparted.mutate({ id: assignment.id })}
-                          disabled={markDeparted.isPending}
+                          onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
+                          disabled={markDeparted.isPending || !!locationPrompt}
                         >
                           Mark Departed
                         </Button>

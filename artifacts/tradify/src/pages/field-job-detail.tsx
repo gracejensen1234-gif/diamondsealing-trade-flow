@@ -130,11 +130,14 @@ export default function FieldJobDetail() {
           </div>
 
           <div className="space-y-3">
-            <Label className="text-base">Job Photos <span className="text-destructive">*</span></Label>
+            <div>
+              <Label className="text-base">Completion Photos <span className="text-destructive">*</span></Label>
+              <p className="text-xs text-muted-foreground mt-0.5">Take photos of the completed work for quality audit and job evidence.</p>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {photos.map((src, i) => (
                 <div key={i} className="relative aspect-square rounded-md overflow-hidden bg-muted">
-                  <img src={src} alt="job photo" className="object-cover w-full h-full" />
+                  <img src={src} alt="completion photo" className="object-cover w-full h-full" />
                   <button 
                     onClick={() => removePhoto(i)}
                     className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"
@@ -156,7 +159,7 @@ export default function FieldJobDetail() {
                 />
               </label>
             </div>
-            {photos.length === 0 && <p className="text-xs text-destructive">At least 1 photo is required</p>}
+            {photos.length === 0 && <p className="text-xs text-destructive">At least 1 completion photo is required</p>}
           </div>
 
           <div className="space-y-3">

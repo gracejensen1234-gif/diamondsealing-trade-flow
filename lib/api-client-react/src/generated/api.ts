@@ -38,6 +38,7 @@ import type {
   CreateBonusRuleBody,
   CreateDocketBody,
   CreateInventoryTransactionBody,
+  CreateLocationVerificationBody,
   CreateMonthlyAwardBody,
   CreateNotificationBody,
   CreateRestockRequestBody,
@@ -82,6 +83,7 @@ import type {
   ListInvoicesParams,
   ListJobReportsParams,
   ListJobsParams,
+  ListLocationVerificationsParams,
   ListMonthlyRankingsParams,
   ListNotificationsParams,
   ListQuotesParams,
@@ -89,6 +91,7 @@ import type {
   ListSubInventoryParams,
   ListWeeklyInvoicesParams,
   ListWorkSessionsParams,
+  LocationVerification,
   MarkAllNotificationsRead200,
   MarkAllNotificationsReadBody,
   MonthlyAward,
@@ -100,6 +103,7 @@ import type {
   RegisterPushSubscription201,
   RegisterPushSubscriptionBody,
   RestockRequest,
+  ReviewLocationVerificationBody,
   RunAuditBody,
   ScoringWeights,
   StockItem,
@@ -3371,7 +3375,7 @@ export const getPushGpsLocationUrl = () => {
 }
 
 /**
- * @summary Push a GPS location point
+ * @summary Push a GPS location point (legacy)
  */
 export const pushGpsLocation = async (gpsLocationInput: GpsLocationInput, options?: RequestInit): Promise<GpsLocation> => {
 
@@ -3420,7 +3424,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PushGpsLocationMutationError = ErrorType<unknown>
 
     /**
- * @summary Push a GPS location point
+ * @summary Push a GPS location point (legacy)
  */
 export const usePushGpsLocation = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushGpsLocation>>, TError,{data: BodyType<GpsLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -3431,6 +3435,237 @@ export const usePushGpsLocation = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getPushGpsLocationMutationOptions(options));
+    }
+
+export const getCreateLocationVerificationUrl = () => {
+
+
+
+
+  return `/api/location-verifications`
+}
+
+/**
+ * Called at clock-on, mark-arrived, mark-departed, and clock-off.
+Worker must consent before location is requested. If they skip or the
+browser errors, the status field reflects that and no coordinates are stored.
+
+ * @summary Record a point-in-time location verification event
+ */
+export const createLocationVerification = async (createLocationVerificationBody: CreateLocationVerificationBody, options?: RequestInit): Promise<LocationVerification> => {
+
+  return customFetch<LocationVerification>(getCreateLocationVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createLocationVerificationBody,)
+  }
+);}
+
+
+
+
+export const getCreateLocationVerificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocationVerification>>, TError,{data: BodyType<CreateLocationVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLocationVerification>>, TError,{data: BodyType<CreateLocationVerificationBody>}, TContext> => {
+
+const mutationKey = ['createLocationVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLocationVerification>>, {data: BodyType<CreateLocationVerificationBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLocationVerification(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLocationVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof createLocationVerification>>>
+    export type CreateLocationVerificationMutationBody = BodyType<CreateLocationVerificationBody>
+    export type CreateLocationVerificationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Record a point-in-time location verification event
+ */
+export const useCreateLocationVerification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocationVerification>>, TError,{data: BodyType<CreateLocationVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLocationVerification>>,
+        TError,
+        {data: BodyType<CreateLocationVerificationBody>},
+        TContext
+      > => {
+      return useMutation(getCreateLocationVerificationMutationOptions(options));
+    }
+
+export const getListLocationVerificationsUrl = (params?: ListLocationVerificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/location-verifications?${stringifiedParams}` : `/api/location-verifications`
+}
+
+/**
+ * @summary List location verification records (admin)
+ */
+export const listLocationVerifications = async (params?: ListLocationVerificationsParams, options?: RequestInit): Promise<LocationVerification[]> => {
+
+  return customFetch<LocationVerification[]>(getListLocationVerificationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLocationVerificationsQueryKey = (params?: ListLocationVerificationsParams,) => {
+    return [
+    `/api/location-verifications`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLocationVerificationsQueryOptions = <TData = Awaited<ReturnType<typeof listLocationVerifications>>, TError = ErrorType<unknown>>(params?: ListLocationVerificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocationVerifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLocationVerificationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLocationVerifications>>> = ({ signal }) => listLocationVerifications(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLocationVerifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLocationVerificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listLocationVerifications>>>
+export type ListLocationVerificationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List location verification records (admin)
+ */
+
+export function useListLocationVerifications<TData = Awaited<ReturnType<typeof listLocationVerifications>>, TError = ErrorType<unknown>>(
+ params?: ListLocationVerificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocationVerifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLocationVerificationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReviewLocationVerificationUrl = (id: number,) => {
+
+
+
+
+  return `/api/location-verifications/${id}/review`
+}
+
+/**
+ * @summary Mark a verification as admin-reviewed
+ */
+export const reviewLocationVerification = async (id: number,
+    reviewLocationVerificationBody?: ReviewLocationVerificationBody, options?: RequestInit): Promise<LocationVerification> => {
+
+  return customFetch<LocationVerification>(getReviewLocationVerificationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reviewLocationVerificationBody,)
+  }
+);}
+
+
+
+
+export const getReviewLocationVerificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewLocationVerification>>, TError,{id: number;data?: BodyType<ReviewLocationVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewLocationVerification>>, TError,{id: number;data?: BodyType<ReviewLocationVerificationBody>}, TContext> => {
+
+const mutationKey = ['reviewLocationVerification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewLocationVerification>>, {id: number;data?: BodyType<ReviewLocationVerificationBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewLocationVerification(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewLocationVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof reviewLocationVerification>>>
+    export type ReviewLocationVerificationMutationBody = BodyType<ReviewLocationVerificationBody> | undefined
+    export type ReviewLocationVerificationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark a verification as admin-reviewed
+ */
+export const useReviewLocationVerification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewLocationVerification>>, TError,{id: number;data?: BodyType<ReviewLocationVerificationBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewLocationVerification>>,
+        TError,
+        {id: number;data?: BodyType<ReviewLocationVerificationBody>},
+        TContext
+      > => {
+      return useMutation(getReviewLocationVerificationMutationOptions(options));
     }
 
 export const getListDispatchUrl = (params?: ListDispatchParams,) => {
