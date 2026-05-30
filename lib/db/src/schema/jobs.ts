@@ -1,0 +1,26 @@
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { customersTable } from "./customers";
+
+export const jobStatusValues = ["pending", "in_progress", "completed", "invoiced", "cancelled"] as const;
+export const jobPriorityValues = ["low", "medium", "high"] as const;
+
+export const jobsTable = pgTable("jobs", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("pending"),
+  priority: text("priority").notNull().default("medium"),
+  customerId: integer("customer_id").references(() => customersTable.id),
+  address: text("address"),
+  scheduledDate: text("scheduled_date"),
+  completedDate: text("completed_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertJob = z.infer<typeof insertJobSchema>;
+export type Job = typeof jobsTable.$inferSelect;
