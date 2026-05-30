@@ -2213,7 +2213,7 @@ export const UpdateRestockRequestResponse = zod.object({
 
 
 /**
- * @summary Trigger AI audit for a job report or subcontractor
+ * @summary Trigger rule-based audit for a subcontractor and date
  */
 export const RunAuditBody = zod.object({
   "jobReportId": zod.number().optional(),
@@ -2238,11 +2238,30 @@ export const RunAuditResponseItem = zod.object({
   "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
   "adminNotes": zod.string().nullish(),
   "workerFeedback": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
   "showToWorker": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()
 })
 export const RunAuditResponse = zod.array(RunAuditResponseItem)
+
+
+/**
+ * @summary Trigger AI-powered audit (GPT vision, completion photos, location events)
+ */
+export const RunAIAuditBody = zod.object({
+  "jobReportId": zod.number().optional(),
+  "subcontractorId": zod.number().optional(),
+  "date": zod.coerce.date().optional()
+})
+
+export const RunAIAuditResponseItem = zod.object({
+  "subcontractorId": zod.number().optional(),
+  "subcontractorName": zod.string().optional(),
+  "flagsCreated": zod.number().optional(),
+  "error": zod.string().optional()
+})
+export const RunAIAuditResponse = zod.array(RunAIAuditResponseItem)
 
 
 export const ListAuditFlagsQueryParams = zod.object({
@@ -2269,6 +2288,7 @@ export const ListAuditFlagsResponseItem = zod.object({
   "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
   "adminNotes": zod.string().nullish(),
   "workerFeedback": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
   "showToWorker": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()
@@ -2304,6 +2324,7 @@ export const UpdateAuditFlagResponse = zod.object({
   "status": zod.enum(['pending', 'reviewed', 'approved', 'dismissed', 'fix_requested', 'callback_created']),
   "adminNotes": zod.string().nullish(),
   "workerFeedback": zod.string().nullish(),
+  "aiGenerated": zod.boolean().optional(),
   "showToWorker": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()

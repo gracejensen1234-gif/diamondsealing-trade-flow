@@ -8,10 +8,15 @@ import {
   jobAssignmentsTable,
   workSessionsTable,
   docketsTable,
+  locationVerificationsTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, desc, count } from "drizzle-orm";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { openai } from "../lib/openai-client.js";
+import type OpenAI from "openai";
 
 const router = Router();
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AuditRule {
   type: string;
@@ -27,6 +32,19 @@ interface AuditContext {
   sessions: typeof workSessionsTable.$inferSelect[];
   dockets: typeof docketsTable.$inferSelect[];
 }
+
+type FlagType = typeof auditFlagsTable.$inferSelect["flagType"];
+
+interface AIAuditFlag {
+  flagType: FlagType;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description: string;
+  suggestedAction: string;
+  jobReportId?: number;
+}
+
+// ─── Rule-based checks ────────────────────────────────────────────────────────
 
 const AUDIT_RULES: AuditRule[] = [
   {
@@ -130,7 +148,116 @@ function calcScoreFromFlags(flags: typeof auditFlagsTable.$inferSelect[]): numbe
   return Math.max(0, Math.min(100, score));
 }
 
-// POST /audit/run
+// ─── AI analysis helper ───────────────────────────────────────────────────────
+
+const VALID_FLAG_TYPES: FlagType[] = [
+  "missing_photos", "low_photo_count", "wrong_colour", "unusual_stock_ratio",
+  "excessive_break", "early_departure", "late_arrival", "missing_stock_usage",
+  "low_metres_vs_time", "repeat_callback", "incomplete_documentation",
+  "safety_concern", "missing_builder_contact", "photo_quality_concern",
+  "inconsistent_data", "possible_false_reporting", "other",
+];
+
+async function runAIAnalysis(
+  sub: { id: number; name: string },
+  date: string,
+  reports: typeof jobReportsTable.$inferSelect[],
+  locationVerifications: typeof locationVerificationsTable.$inferSelect[],
+): Promise<AIAuditFlag[]> {
+  if (reports.length === 0) return [];
+
+  const systemPrompt = `You are a quality audit assistant for Diamond Sealing, an Australian silicone and sealing subcontractor company.
+Analyse the job report data and completion photos provided and flag genuine quality, safety, or compliance concerns for admin review.
+You do NOT penalise workers automatically — your flags are suggestions for a human admin to review.
+Only flag real concerns. Do not invent issues. If everything looks fine, return an empty array.
+
+Return a JSON object with a single key "flags" containing an array. Each flag must have:
+- flagType: one of [missing_photos, low_photo_count, wrong_colour, unusual_stock_ratio, excessive_break, early_departure, late_arrival, missing_stock_usage, low_metres_vs_time, repeat_callback, incomplete_documentation, safety_concern, missing_builder_contact, photo_quality_concern, inconsistent_data, possible_false_reporting, other]
+- severity: "info", "warning", or "critical"
+- title: short title (max 8 words)
+- description: clear explanation for admin review (2-3 sentences)
+- suggestedAction: concrete follow-up action for the admin
+- jobReportId: (optional) the id of the specific job report this flag relates to`;
+
+  const summaryParts: string[] = [
+    `Worker: ${sub.name}`,
+    `Date: ${date}`,
+    `Job reports submitted: ${reports.length}`,
+  ];
+
+  const photoItems: OpenAI.ChatCompletionContentPartImage[] = [];
+
+  for (const report of reports) {
+    const photos = (report.photos as string[]) ?? [];
+    const stock = (report.stockUsed as { itemName?: string; quantity?: number }[]) ?? [];
+    const metres = Number(report.metersCompleted || 0);
+
+    summaryParts.push(
+      `\nJob Report ID ${report.id}:`,
+      `  Metres completed: ${metres}`,
+      `  Stock used: ${stock.length > 0 ? stock.map((s) => `${s.quantity ?? "?"} x ${s.itemName ?? "unknown"}`).join(", ") : "none recorded"}`,
+      `  Issue type: ${report.issueType || "none"}`,
+      report.issueDescription ? `  Issue description: ${report.issueDescription}` : "",
+      report.generalNotes ? `  Notes: ${report.generalNotes}` : "",
+      `  Completion photos: ${photos.length}`,
+    );
+
+    const photosToSend = photos.slice(0, 4);
+    for (const photo of photosToSend) {
+      if (typeof photo === "string" && photo.startsWith("data:image")) {
+        photoItems.push({
+          type: "image_url",
+          image_url: { url: photo, detail: "low" },
+        });
+      }
+    }
+  }
+
+  if (locationVerifications.length > 0) {
+    summaryParts.push("\nLocation verification events:");
+    for (const lv of locationVerifications) {
+      const dist = lv.distanceMetres ? `${Number(lv.distanceMetres).toFixed(0)}m from job` : "";
+      summaryParts.push(`  ${lv.eventType}: ${lv.status}${dist ? " (" + dist + ")" : ""}`);
+    }
+  }
+
+  const userContent: OpenAI.ChatCompletionContentPart[] = [
+    { type: "text", text: summaryParts.filter(Boolean).join("\n") },
+    ...photoItems,
+  ];
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 1500,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content ?? "{}";
+  const parsed = JSON.parse(raw) as { flags?: unknown[] };
+  const flags = Array.isArray(parsed.flags) ? parsed.flags : [];
+
+  return flags
+    .filter((f): f is AIAuditFlag => {
+      if (typeof f !== "object" || f === null) return false;
+      const flag = f as Record<string, unknown>;
+      return (
+        typeof flag.flagType === "string" &&
+        VALID_FLAG_TYPES.includes(flag.flagType as FlagType) &&
+        typeof flag.severity === "string" &&
+        ["info", "warning", "critical"].includes(flag.severity) &&
+        typeof flag.title === "string" &&
+        typeof flag.description === "string"
+      );
+    });
+}
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+// POST /audit/run  (rule-based)
 router.post("/audit/run", async (req, res) => {
   const { subcontractorId, date } = req.body;
   const targetDate = date || new Date().toISOString().split("T")[0];
@@ -168,12 +295,13 @@ router.post("/audit/run", async (req, res) => {
 
       const [flag] = await db.insert(auditFlagsTable).values({
         subcontractorId: sub.id,
-        flagType: rule.type,
+        flagType: rule.type as FlagType,
         severity: rule.severity,
         title: rule.title,
         description: result.description,
         evidence: result.evidence,
         status: "pending",
+        aiGenerated: false,
         showToWorker: rule.severity !== "info",
       }).returning();
 
@@ -182,6 +310,88 @@ router.post("/audit/run", async (req, res) => {
   }
 
   return res.json(allFlags);
+});
+
+// POST /audit/ai-run  (AI-powered analysis)
+router.post("/audit/ai-run", async (req, res) => {
+  const { subcontractorId, date } = req.body;
+  const targetDate = (date as string | undefined) || new Date().toISOString().split("T")[0];
+  const targetSubId = subcontractorId ? Number(subcontractorId) : null;
+
+  const subs = targetSubId
+    ? await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, targetSubId))
+    : await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+
+  const results: {
+    subcontractorId: number;
+    subcontractorName: string;
+    flagsCreated: number;
+    flags: typeof auditFlagsTable.$inferSelect[];
+    error?: string;
+  }[] = [];
+
+  for (const sub of subs) {
+    const [reports, locationVerifications] = await Promise.all([
+      db.select().from(jobReportsTable).where(
+        and(eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate))
+      ),
+      db.select().from(locationVerificationsTable).where(
+        and(
+          eq(locationVerificationsTable.subcontractorId, sub.id),
+          gte(locationVerificationsTable.createdAt, new Date(`${targetDate}T00:00:00`)),
+          lte(locationVerificationsTable.createdAt, new Date(`${targetDate}T23:59:59`)),
+        )
+      ),
+    ]);
+
+    if (reports.length === 0) {
+      results.push({ subcontractorId: sub.id, subcontractorName: sub.name, flagsCreated: 0, flags: [] });
+      continue;
+    }
+
+    let aiFlags: AIAuditFlag[] = [];
+    let analysisError: string | undefined;
+
+    try {
+      aiFlags = await runAIAnalysis(sub, targetDate, reports, locationVerifications);
+    } catch (err) {
+      req.log.error({ err, subcontractorId: sub.id }, "AI audit analysis failed");
+      analysisError = err instanceof Error ? err.message : "Unknown error";
+    }
+
+    const insertedFlags: typeof auditFlagsTable.$inferSelect[] = [];
+
+    for (const aiFlag of aiFlags) {
+      const reportId = typeof aiFlag.jobReportId === "number"
+        ? reports.find((r) => r.id === aiFlag.jobReportId)?.id
+        : undefined;
+
+      const [flag] = await db.insert(auditFlagsTable).values({
+        subcontractorId: sub.id,
+        jobReportId: reportId ?? null,
+        flagType: aiFlag.flagType,
+        severity: aiFlag.severity,
+        title: aiFlag.title,
+        description: aiFlag.description,
+        evidence: { suggestedAction: aiFlag.suggestedAction },
+        status: "pending",
+        aiGenerated: true,
+        showToWorker: false,
+      }).returning();
+
+      insertedFlags.push(flag);
+    }
+
+    results.push({
+      subcontractorId: sub.id,
+      subcontractorName: sub.name,
+      flagsCreated: insertedFlags.length,
+      flags: insertedFlags,
+      ...(analysisError ? { error: analysisError } : {}),
+    });
+  }
+
+  return res.json(results);
 });
 
 // GET /audit/flags
@@ -195,6 +405,7 @@ router.get("/audit/flags", async (req, res) => {
   if (req.query.status) filtered = filtered.filter((f) => f.status === req.query.status);
   if (req.query.severity) filtered = filtered.filter((f) => f.severity === req.query.severity);
   if (req.query.startDate) filtered = filtered.filter((f) => f.createdAt >= new Date(req.query.startDate as string));
+  if (req.query.aiGenerated !== undefined) filtered = filtered.filter((f) => f.aiGenerated === (req.query.aiGenerated === "true"));
 
   return res.json(filtered.map((f) => ({ ...f, subcontractorName: subMap.get(f.subcontractorId) ?? "" })));
 });
@@ -276,19 +487,17 @@ router.post("/audit/scores/calculate", async (req, res) => {
         );
 
       const criticalCount = flags.filter((f) => f.severity === "critical").length;
-      const warningCount = flags.filter((f) => f.severity === "warning").length;
 
-      // Sub-scores based on flag types
-      const photoFlags = flags.filter((f) => f.flagType === "missing_photos");
+      const photoFlags = flags.filter((f) => f.flagType === "missing_photos" || f.flagType === "low_photo_count" || f.flagType === "photo_quality_concern");
       const photoScore = Math.max(0, 100 - photoFlags.length * 20);
 
       const punctualityFlags = flags.filter((f) => f.flagType === "late_arrival");
       const punctualityScore = Math.max(0, 100 - punctualityFlags.length * 15);
 
-      const productivityFlags = flags.filter((f) => f.flagType === "low_metres");
+      const productivityFlags = flags.filter((f) => f.flagType === "low_metres_vs_time");
       const productivityScore = Math.max(0, 100 - productivityFlags.length * 15);
 
-      const docFlags = flags.filter((f) => ["no_report_submitted", "missing_stock_usage"].includes(f.flagType));
+      const docFlags = flags.filter((f) => ["no_report_submitted", "missing_stock_usage", "incomplete_documentation"].includes(f.flagType));
       const documentationScore = Math.max(0, 100 - docFlags.length * 15);
 
       const overallScore = calcScoreFromFlags(flags);

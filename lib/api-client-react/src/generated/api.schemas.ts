@@ -1312,6 +1312,7 @@ export interface AuditFlag {
   adminNotes?: string | null;
   /** @nullable */
   workerFeedback?: string | null;
+  aiGenerated?: boolean;
   showToWorker?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -2313,6 +2314,13 @@ transactionType?: string;
 export type ListRestockRequestsParams = {
 subcontractorId?: number;
 status?: string;
+};
+
+export type RunAIAudit200Item = {
+  subcontractorId?: number;
+  subcontractorName?: string;
+  flagsCreated?: number;
+  error?: string;
 };
 
 export type ListAuditFlagsParams = {

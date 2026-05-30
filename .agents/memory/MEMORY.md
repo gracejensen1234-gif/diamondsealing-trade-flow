@@ -5,3 +5,4 @@
 - [API server import paths](api-server-imports.md) — db import is @workspace/db; logger is ./lib/logger from src/; lib/ files use ./logger (same dir)
 - [Location verification design](location-verification.md) — point-in-time only (no continuous GPS); Haversine + Nominatim geocoding; consent prompt before each check; geocoded coords cached on jobs.addressLat/Lng
 - [Before photos removed](photo-policy.md) — no before-photo requirement; only completion photos (photos field on job reports) required; AI audit scores completion photos only
+- [AI Audit integration](ai-audit.md) — GPT-4o vision server-side only; user's OPENAI_API_KEY secret; two endpoints (rules vs AI); aiGenerated boolean on audit_flags

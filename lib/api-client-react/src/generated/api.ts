@@ -104,6 +104,7 @@ import type {
   RegisterPushSubscriptionBody,
   RestockRequest,
   ReviewLocationVerificationBody,
+  RunAIAudit200Item,
   RunAuditBody,
   ScoringWeights,
   StockItem,
@@ -6942,7 +6943,7 @@ export const getRunAuditUrl = () => {
 }
 
 /**
- * @summary Trigger AI audit for a job report or subcontractor
+ * @summary Trigger rule-based audit for a subcontractor and date
  */
 export const runAudit = async (runAuditBody: RunAuditBody, options?: RequestInit): Promise<AuditFlag[]> => {
 
@@ -6991,7 +6992,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RunAuditMutationError = ErrorType<unknown>
 
     /**
- * @summary Trigger AI audit for a job report or subcontractor
+ * @summary Trigger rule-based audit for a subcontractor and date
  */
 export const useRunAudit = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runAudit>>, TError,{data: BodyType<RunAuditBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -7002,6 +7003,77 @@ export const useRunAudit = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRunAuditMutationOptions(options));
+    }
+
+export const getRunAIAuditUrl = () => {
+
+
+
+
+  return `/api/audit/ai-run`
+}
+
+/**
+ * @summary Trigger AI-powered audit (GPT vision, completion photos, location events)
+ */
+export const runAIAudit = async (runAuditBody: RunAuditBody, options?: RequestInit): Promise<RunAIAudit200Item[]> => {
+
+  return customFetch<RunAIAudit200Item[]>(getRunAIAuditUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      runAuditBody,)
+  }
+);}
+
+
+
+
+export const getRunAIAuditMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runAIAudit>>, TError,{data: BodyType<RunAuditBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runAIAudit>>, TError,{data: BodyType<RunAuditBody>}, TContext> => {
+
+const mutationKey = ['runAIAudit'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runAIAudit>>, {data: BodyType<RunAuditBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  runAIAudit(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunAIAuditMutationResult = NonNullable<Awaited<ReturnType<typeof runAIAudit>>>
+    export type RunAIAuditMutationBody = BodyType<RunAuditBody>
+    export type RunAIAuditMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Trigger AI-powered audit (GPT vision, completion photos, location events)
+ */
+export const useRunAIAudit = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runAIAudit>>, TError,{data: BodyType<RunAuditBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runAIAudit>>,
+        TError,
+        {data: BodyType<RunAuditBody>},
+        TContext
+      > => {
+      return useMutation(getRunAIAuditMutationOptions(options));
     }
 
 export const getListAuditFlagsUrl = (params?: ListAuditFlagsParams,) => {

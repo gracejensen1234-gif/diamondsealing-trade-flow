@@ -1866,7 +1866,7 @@ paths:
     post:
       operationId: runAudit
       tags: [aiAudit]
-      summary: Trigger AI audit for a job report or subcontractor
+      summary: Trigger rule-based audit for a subcontractor and date
       requestBody:
         required: true
         content:
@@ -1880,6 +1880,31 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/AuditFlag" }
+
+  /audit/ai-run:
+    post:
+      operationId: runAIAudit
+      tags: [aiAudit]
+      summary: Trigger AI-powered audit (GPT vision, completion photos, location events)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunAuditBody" }
+      responses:
+        "200":
+          description: AI audit results per subcontractor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    subcontractorId: { type: integer }
+                    subcontractorName: { type: string }
+                    flagsCreated: { type: integer }
+                    error: { type: string }
 
   /audit/flags:
     get:
@@ -3781,6 +3806,7 @@ components:
         status: { type: string, enum: [pending, reviewed, approved, dismissed, fix_requested, callback_created] }
         adminNotes: { type: ["string", "null"] }
         workerFeedback: { type: ["string", "null"] }
+        aiGenerated: { type: boolean }
         showToWorker: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

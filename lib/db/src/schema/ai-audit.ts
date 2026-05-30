@@ -37,6 +37,7 @@ export const auditFlagsTable = pgTable("audit_flags", {
   status: text("status", { enum: ["pending", "reviewed", "approved", "dismissed", "fix_requested", "callback_created"] }).notNull().default("pending"),
   adminNotes: text("admin_notes"),
   workerFeedback: text("worker_feedback"),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
   showToWorker: boolean("show_to_worker").notNull().default(false),
   resolvedAt: timestamp("resolved_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
