@@ -15,6 +15,17 @@ import stockItemsRouter from "./stock-items";
 import xeroRouter from "./xero";
 import weeklyInvoicesRouter from "./weekly-invoices";
 import adminRouter from "./admin";
+import analyticsRouter from "./analytics";
+import bonusesRouter from "./bonuses";
+import docketsRouter from "./dockets";
+import inventoryRouter from "./inventory";
+import aiAuditRouter from "./ai-audit";
+import awardsRouter from "./awards";
+import workerProfilesRouter from "./worker-profiles";
+import builderProfilesRouter from "./builder-profiles";
+import smartAllocationRouter from "./smart-allocation";
+import suppliersRouter from "./suppliers";
+import profitabilityRouter from "./profitability";
 
 const router: IRouter = Router();
 
@@ -34,5 +45,16 @@ router.use(stockItemsRouter);
 router.use(xeroRouter);
 router.use(weeklyInvoicesRouter);
 router.use(adminRouter);
+router.use(analyticsRouter);
+router.use(bonusesRouter);
+router.use(docketsRouter);
+router.use(inventoryRouter);
+router.use(aiAuditRouter);
+router.use(awardsRouter);
+router.use(workerProfilesRouter);
+router.use(builderProfilesRouter);
+router.use(smartAllocationRouter);
+router.use(suppliersRouter);
+router.use(profitabilityRouter);
 
 export default router;

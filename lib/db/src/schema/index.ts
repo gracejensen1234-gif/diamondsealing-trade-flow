@@ -19,3 +19,8 @@ export * from "./sub-inventory";
 export * from "./ai-audit";
 export * from "./awards";
 export * from "./analytics";
+export * from "./worker-profiles";
+export * from "./builder-profiles";
+export * from "./smart-allocation";
+export * from "./suppliers";
+export * from "./profitability";

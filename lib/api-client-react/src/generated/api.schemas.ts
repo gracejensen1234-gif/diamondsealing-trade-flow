@@ -1503,6 +1503,445 @@ export interface UpdateMonthlyAwardBody {
   publishedToStaff?: boolean;
 }
 
+export type WorkerSkillsExperienceLevel = typeof WorkerSkillsExperienceLevel[keyof typeof WorkerSkillsExperienceLevel];
+
+
+export const WorkerSkillsExperienceLevel = {
+  junior: 'junior',
+  intermediate: 'intermediate',
+  senior: 'senior',
+  specialist: 'specialist',
+} as const;
+
+export interface WorkerSkills {
+  id: number;
+  subcontractorId: number;
+  subcontractorName?: string;
+  canSilicone?: boolean;
+  canSikaflex?: boolean;
+  canFireRated?: boolean;
+  canWaterproofing?: boolean;
+  canBackerRod?: boolean;
+  canPrimer?: boolean;
+  canJointPrep?: boolean;
+  canGrindingCutting?: boolean;
+  canResidential?: boolean;
+  canCommercial?: boolean;
+  canPools?: boolean;
+  canCarParks?: boolean;
+  customSkills?: string[];
+  experienceLevel?: WorkerSkillsExperienceLevel;
+  yearsExperience?: number;
+  qualityScore?: number;
+  /** @nullable */
+  builderRatingAvg?: number | null;
+  callbackRate?: number;
+  punctualityScore?: number;
+  attendanceScore?: number;
+  photoComplianceScore?: number;
+  safetyScore?: number;
+  /** @nullable */
+  notes?: string | null;
+  updatedAt?: string;
+}
+
+export type UpdateWorkerSkillsBodyExperienceLevel = typeof UpdateWorkerSkillsBodyExperienceLevel[keyof typeof UpdateWorkerSkillsBodyExperienceLevel];
+
+
+export const UpdateWorkerSkillsBodyExperienceLevel = {
+  junior: 'junior',
+  intermediate: 'intermediate',
+  senior: 'senior',
+  specialist: 'specialist',
+} as const;
+
+export interface UpdateWorkerSkillsBody {
+  canSilicone?: boolean;
+  canSikaflex?: boolean;
+  canFireRated?: boolean;
+  canWaterproofing?: boolean;
+  canBackerRod?: boolean;
+  canPrimer?: boolean;
+  canJointPrep?: boolean;
+  canGrindingCutting?: boolean;
+  canResidential?: boolean;
+  canCommercial?: boolean;
+  canPools?: boolean;
+  canCarParks?: boolean;
+  customSkills?: string[];
+  experienceLevel?: UpdateWorkerSkillsBodyExperienceLevel;
+  yearsExperience?: number;
+  qualityScore?: number;
+  callbackRate?: number;
+  notes?: string;
+}
+
+export type BuilderProfileQualityTier = typeof BuilderProfileQualityTier[keyof typeof BuilderProfileQualityTier];
+
+
+export const BuilderProfileQualityTier = {
+  premium: 'premium',
+  high_end: 'high_end',
+  standard: 'standard',
+  production: 'production',
+  budget: 'budget',
+  custom: 'custom',
+} as const;
+
+export interface BuilderProfile {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  name: string;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  qualityTier: BuilderProfileQualityTier;
+  /** @nullable */
+  customTierLabel?: string | null;
+  preferredWorkerIds?: number[];
+  avoidedWorkerIds?: number[];
+  /** @nullable */
+  finishExpectations?: string | null;
+  /** @nullable */
+  documentationRequirements?: string | null;
+  signOffRequired?: boolean;
+  /** @nullable */
+  signOffNotes?: string | null;
+  /** @nullable */
+  siteNotes?: string | null;
+  /** @nullable */
+  specialInstructions?: string | null;
+  /** @nullable */
+  averageRatingGiven?: number | null;
+  active?: boolean;
+}
+
+export type CreateBuilderProfileBodyQualityTier = typeof CreateBuilderProfileBodyQualityTier[keyof typeof CreateBuilderProfileBodyQualityTier];
+
+
+export const CreateBuilderProfileBodyQualityTier = {
+  premium: 'premium',
+  high_end: 'high_end',
+  standard: 'standard',
+  production: 'production',
+  budget: 'budget',
+  custom: 'custom',
+} as const;
+
+export interface CreateBuilderProfileBody {
+  name: string;
+  customerId?: number;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  qualityTier: CreateBuilderProfileBodyQualityTier;
+  customTierLabel?: string;
+  preferredWorkerIds?: number[];
+  avoidedWorkerIds?: number[];
+  finishExpectations?: string;
+  documentationRequirements?: string;
+  signOffRequired?: boolean;
+  signOffNotes?: string;
+  siteNotes?: string;
+  specialInstructions?: string;
+}
+
+export interface BuilderRating {
+  id: number;
+  builderProfileId: number;
+  builderName?: string;
+  subcontractorId: number;
+  subcontractorName?: string;
+  /** @nullable */
+  jobAssignmentId?: number | null;
+  rating: number;
+  /** @nullable */
+  qualityComment?: string | null;
+  /** @nullable */
+  punctualityComment?: string | null;
+  /** @nullable */
+  professionalismComment?: string | null;
+  /** @nullable */
+  wouldRequestAgain?: boolean | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  createdAt?: string;
+}
+
+export interface CreateBuilderRatingBody {
+  builderProfileId: number;
+  subcontractorId: number;
+  jobAssignmentId?: number;
+  rating: number;
+  qualityComment?: string;
+  punctualityComment?: string;
+  professionalismComment?: string;
+  wouldRequestAgain?: boolean;
+  internalNotes?: string;
+}
+
+export interface AllocationRequest {
+  jobId: number;
+  date: string;
+  productType?: string;
+  colour?: string;
+  estimatedMetres?: number;
+  jobType?: string;
+  suburb?: string;
+  builderProfileId?: number;
+  requiredSkills?: string[];
+}
+
+export type WorkerRecommendationRecommendation = typeof WorkerRecommendationRecommendation[keyof typeof WorkerRecommendationRecommendation];
+
+
+export const WorkerRecommendationRecommendation = {
+  recommended: 'recommended',
+  suitable: 'suitable',
+  possible: 'possible',
+  not_recommended: 'not_recommended',
+} as const;
+
+export interface WorkerRecommendation {
+  subcontractorId?: number;
+  subcontractorName?: string;
+  rank?: number;
+  suitabilityScore?: number;
+  recommendation?: WorkerRecommendationRecommendation;
+  reasons?: string[];
+  warnings?: string[];
+  skillMatch?: boolean;
+  stockMatch?: boolean;
+  stockShortfall?: string[];
+  proximityScore?: number;
+  /** @nullable */
+  nearbyJobDate?: string | null;
+  /** @nullable */
+  nearbyJobSuburb?: string | null;
+  scheduleFit?: boolean;
+  builderTierMatch?: boolean;
+  qualityScore?: number;
+  callbackRate?: number;
+  availableOnDate?: boolean;
+}
+
+export interface AllocationResult {
+  jobId?: number;
+  date?: string;
+  recommendations?: WorkerRecommendation[];
+  autoSelected?: WorkerRecommendation;
+  warnings?: string[];
+}
+
+export type WeeklyPlannerProposalStatus = typeof WeeklyPlannerProposalStatus[keyof typeof WeeklyPlannerProposalStatus];
+
+
+export const WeeklyPlannerProposalStatus = {
+  draft: 'draft',
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export type WeeklyPlannerProposalProposedScheduleItemAssignmentsItem = {
+  date?: string;
+  jobId?: number;
+  jobTitle?: string;
+  suburb?: string;
+  estimatedMetres?: number;
+  colour?: string;
+  routeNote?: string;
+};
+
+export type WeeklyPlannerProposalProposedScheduleItem = {
+  subcontractorId?: number;
+  subcontractorName?: string;
+  assignments?: WeeklyPlannerProposalProposedScheduleItemAssignmentsItem[];
+};
+
+export type WeeklyPlannerProposalSupplierOrdersItem = { [key: string]: unknown };
+
+export type WeeklyPlannerProposalOptimisationSummary = {
+  totalJobs?: number;
+  totalWorkers?: number;
+  travelSavings?: string;
+  stockWarnings?: number;
+  unallocatedJobs?: number;
+  notes?: string[];
+};
+
+export interface WeeklyPlannerProposal {
+  id?: number;
+  weekStart?: string;
+  status?: WeeklyPlannerProposalStatus;
+  proposedSchedule?: WeeklyPlannerProposalProposedScheduleItem[];
+  supplierOrders?: WeeklyPlannerProposalSupplierOrdersItem[];
+  optimisationSummary?: WeeklyPlannerProposalOptimisationSummary;
+  /** @nullable */
+  adminNotes?: string | null;
+  createdAt?: string;
+}
+
+export interface SupplierProfile {
+  id: number;
+  name: string;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  preferredProducts?: string[];
+  preferredColours?: string[];
+  /** @nullable */
+  notes?: string | null;
+  active?: boolean;
+}
+
+export interface CreateSupplierProfileBody {
+  name: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  address?: string;
+  suburb?: string;
+  preferredProducts?: string[];
+  preferredColours?: string[];
+  notes?: string;
+}
+
+export type SupplierOrderStatus = typeof SupplierOrderStatus[keyof typeof SupplierOrderStatus];
+
+
+export const SupplierOrderStatus = {
+  draft: 'draft',
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+  sent_to_supplier: 'sent_to_supplier',
+  ready_for_pickup: 'ready_for_pickup',
+  picked_up: 'picked_up',
+  cancelled: 'cancelled',
+} as const;
+
+export type SupplierOrderUrgency = typeof SupplierOrderUrgency[keyof typeof SupplierOrderUrgency];
+
+
+export const SupplierOrderUrgency = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export interface SupplierOrderItem {
+  id: number;
+  orderId?: number;
+  /** @nullable */
+  stockItemId?: number | null;
+  productName: string;
+  /** @nullable */
+  colour?: string | null;
+  unit?: string;
+  quantityOrdered: number;
+  /** @nullable */
+  unitCost?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface SupplierOrder {
+  id: number;
+  supplierId: number;
+  supplierName?: string;
+  subcontractorId: number;
+  subcontractorName?: string;
+  orderNumber: string;
+  status: SupplierOrderStatus;
+  urgency?: SupplierOrderUrgency;
+  /** @nullable */
+  requiredByDate?: string | null;
+  /** @nullable */
+  pickupDate?: string | null;
+  /** @nullable */
+  totalCost?: number | null;
+  triggerJobIds?: number[];
+  /** @nullable */
+  adminNotes?: string | null;
+  /** @nullable */
+  subNotes?: string | null;
+  items?: SupplierOrderItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CreateSupplierOrderBodyUrgency = typeof CreateSupplierOrderBodyUrgency[keyof typeof CreateSupplierOrderBodyUrgency];
+
+
+export const CreateSupplierOrderBodyUrgency = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export type CreateSupplierOrderBodyItemsItem = {
+  stockItemId?: number;
+  productName: string;
+  colour?: string;
+  unit?: string;
+  quantityOrdered: number;
+  unitCost?: number;
+  notes?: string;
+};
+
+export interface CreateSupplierOrderBody {
+  supplierId: number;
+  subcontractorId: number;
+  urgency?: CreateSupplierOrderBodyUrgency;
+  requiredByDate?: string;
+  adminNotes?: string;
+  triggerJobIds?: number[];
+  items: CreateSupplierOrderBodyItemsItem[];
+}
+
+export type ProfitabilityScorePeriodType = typeof ProfitabilityScorePeriodType[keyof typeof ProfitabilityScorePeriodType];
+
+
+export const ProfitabilityScorePeriodType = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export interface ProfitabilityScore {
+  id?: number;
+  subcontractorId?: number;
+  subcontractorName?: string;
+  periodType?: ProfitabilityScorePeriodType;
+  periodStart?: string;
+  revenueGenerated?: number;
+  totalMetres?: number;
+  labourCost?: number;
+  productCost?: number;
+  callbackCost?: number;
+  totalCost?: number;
+  grossProfit?: number;
+  marginPct?: number;
+  /** @nullable */
+  profitRank?: number | null;
+  jobsCompleted?: number;
+  callbackCount?: number;
+  productConsumedValue?: number;
+  calculatedAt?: string;
+}
+
 export type ListCustomersParams = {
 search?: string;
 };

@@ -16,7 +16,7 @@ import Invoices from "@/pages/invoices";
 import InvoiceDetail from "@/pages/invoice-detail";
 import Schedule from "@/pages/schedule";
 
-// New Pages
+// Operations
 import FieldView from "@/pages/field";
 import FieldJobDetail from "@/pages/field-job-detail";
 import Dispatch from "@/pages/dispatch";
@@ -27,6 +27,21 @@ import WeeklyInvoices from "@/pages/weekly-invoices";
 import WeeklyInvoiceDetail from "@/pages/weekly-invoice-detail";
 import Stock from "@/pages/stock";
 import XeroSettings from "@/pages/xero-settings";
+
+// New Feature Pages
+import Analytics from "@/pages/analytics";
+import Leaderboard from "@/pages/leaderboard";
+import Bonuses from "@/pages/bonuses";
+import Dockets from "@/pages/dockets";
+import Inventory from "@/pages/inventory";
+import AuditFlags from "@/pages/audit-flags";
+import Awards from "@/pages/awards";
+import WorkerProfiles from "@/pages/worker-profiles";
+import BuilderProfiles from "@/pages/builder-profiles";
+import Allocation from "@/pages/allocation";
+import WeeklyPlanner from "@/pages/weekly-planner";
+import Suppliers from "@/pages/suppliers";
+import Profitability from "@/pages/profitability";
 
 const queryClient = new QueryClient();
 
@@ -45,7 +60,7 @@ function Router() {
         <Route path="/invoices/:id" component={InvoiceDetail} />
         <Route path="/schedule" component={Schedule} />
 
-        {/* New Routes */}
+        {/* Operations */}
         <Route path="/field" component={FieldView} />
         <Route path="/field/jobs/:id" component={FieldJobDetail} />
         <Route path="/dispatch" component={Dispatch} />
@@ -56,6 +71,29 @@ function Router() {
         <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
         <Route path="/stock" component={Stock} />
         <Route path="/settings/xero" component={XeroSettings} />
+
+        {/* Analytics & Performance */}
+        <Route path="/analytics" component={Analytics} />
+        <Route path="/leaderboard" component={Leaderboard} />
+        <Route path="/profitability" component={Profitability} />
+
+        {/* Workforce */}
+        <Route path="/worker-profiles" component={WorkerProfiles} />
+        <Route path="/builder-profiles" component={BuilderProfiles} />
+        <Route path="/allocation" component={Allocation} />
+        <Route path="/weekly-planner" component={WeeklyPlanner} />
+
+        {/* Finance */}
+        <Route path="/bonuses" component={Bonuses} />
+        <Route path="/dockets" component={Dockets} />
+
+        {/* Quality & Compliance */}
+        <Route path="/audit" component={AuditFlags} />
+        <Route path="/awards" component={Awards} />
+
+        {/* Inventory & Suppliers */}
+        <Route path="/inventory" component={Inventory} />
+        <Route path="/suppliers" component={Suppliers} />
 
         <Route component={NotFound} />
       </Switch>

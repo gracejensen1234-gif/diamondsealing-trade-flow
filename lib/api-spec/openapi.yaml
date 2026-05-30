@@ -3661,3 +3661,375 @@ components:
         reasonText: { type: string }
         adminApproved: { type: boolean }
         publishedToStaff: { type: boolean }
+
+    # ─── Worker Profiles & Skills ──────────────────────────────────────────
+    WorkerSkills:
+      type: object
+      required: [id, subcontractorId]
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        canSilicone: { type: boolean }
+        canSikaflex: { type: boolean }
+        canFireRated: { type: boolean }
+        canWaterproofing: { type: boolean }
+        canBackerRod: { type: boolean }
+        canPrimer: { type: boolean }
+        canJointPrep: { type: boolean }
+        canGrindingCutting: { type: boolean }
+        canResidential: { type: boolean }
+        canCommercial: { type: boolean }
+        canPools: { type: boolean }
+        canCarParks: { type: boolean }
+        customSkills:
+          type: array
+          items: { type: string }
+        experienceLevel: { type: string, enum: [junior, intermediate, senior, specialist] }
+        yearsExperience: { type: integer }
+        qualityScore: { type: number }
+        builderRatingAvg: { type: ["number", "null"] }
+        callbackRate: { type: number }
+        punctualityScore: { type: number }
+        attendanceScore: { type: number }
+        photoComplianceScore: { type: number }
+        safetyScore: { type: number }
+        notes: { type: ["string", "null"] }
+        updatedAt: { type: string, format: date-time }
+
+    UpdateWorkerSkillsBody:
+      type: object
+      properties:
+        canSilicone: { type: boolean }
+        canSikaflex: { type: boolean }
+        canFireRated: { type: boolean }
+        canWaterproofing: { type: boolean }
+        canBackerRod: { type: boolean }
+        canPrimer: { type: boolean }
+        canJointPrep: { type: boolean }
+        canGrindingCutting: { type: boolean }
+        canResidential: { type: boolean }
+        canCommercial: { type: boolean }
+        canPools: { type: boolean }
+        canCarParks: { type: boolean }
+        customSkills:
+          type: array
+          items: { type: string }
+        experienceLevel: { type: string, enum: [junior, intermediate, senior, specialist] }
+        yearsExperience: { type: integer }
+        qualityScore: { type: number }
+        callbackRate: { type: number }
+        notes: { type: string }
+
+    # ─── Builder Profiles ──────────────────────────────────────────────────
+    BuilderProfile:
+      type: object
+      required: [id, name, qualityTier]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        name: { type: string }
+        contactName: { type: ["string", "null"] }
+        contactPhone: { type: ["string", "null"] }
+        contactEmail: { type: ["string", "null"] }
+        qualityTier: { type: string, enum: [premium, high_end, standard, production, budget, custom] }
+        customTierLabel: { type: ["string", "null"] }
+        preferredWorkerIds:
+          type: array
+          items: { type: integer }
+        avoidedWorkerIds:
+          type: array
+          items: { type: integer }
+        finishExpectations: { type: ["string", "null"] }
+        documentationRequirements: { type: ["string", "null"] }
+        signOffRequired: { type: boolean }
+        signOffNotes: { type: ["string", "null"] }
+        siteNotes: { type: ["string", "null"] }
+        specialInstructions: { type: ["string", "null"] }
+        averageRatingGiven: { type: ["integer", "null"] }
+        active: { type: boolean }
+
+    CreateBuilderProfileBody:
+      type: object
+      required: [name, qualityTier]
+      properties:
+        name: { type: string }
+        customerId: { type: integer }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string }
+        qualityTier: { type: string, enum: [premium, high_end, standard, production, budget, custom] }
+        customTierLabel: { type: string }
+        preferredWorkerIds:
+          type: array
+          items: { type: integer }
+        avoidedWorkerIds:
+          type: array
+          items: { type: integer }
+        finishExpectations: { type: string }
+        documentationRequirements: { type: string }
+        signOffRequired: { type: boolean }
+        signOffNotes: { type: string }
+        siteNotes: { type: string }
+        specialInstructions: { type: string }
+
+    BuilderRating:
+      type: object
+      required: [id, builderProfileId, subcontractorId, rating]
+      properties:
+        id: { type: integer }
+        builderProfileId: { type: integer }
+        builderName: { type: string }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        jobAssignmentId: { type: ["integer", "null"] }
+        rating: { type: integer }
+        qualityComment: { type: ["string", "null"] }
+        punctualityComment: { type: ["string", "null"] }
+        professionalismComment: { type: ["string", "null"] }
+        wouldRequestAgain: { type: ["boolean", "null"] }
+        internalNotes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    CreateBuilderRatingBody:
+      type: object
+      required: [builderProfileId, subcontractorId, rating]
+      properties:
+        builderProfileId: { type: integer }
+        subcontractorId: { type: integer }
+        jobAssignmentId: { type: integer }
+        rating: { type: integer }
+        qualityComment: { type: string }
+        punctualityComment: { type: string }
+        professionalismComment: { type: string }
+        wouldRequestAgain: { type: boolean }
+        internalNotes: { type: string }
+
+    # ─── Smart Allocation ──────────────────────────────────────────────────
+    AllocationRequest:
+      type: object
+      required: [jobId, date]
+      properties:
+        jobId: { type: integer }
+        date: { type: string, format: date }
+        productType: { type: string }
+        colour: { type: string }
+        estimatedMetres: { type: number }
+        jobType: { type: string }
+        suburb: { type: string }
+        builderProfileId: { type: integer }
+        requiredSkills:
+          type: array
+          items: { type: string }
+
+    WorkerRecommendation:
+      type: object
+      properties:
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        rank: { type: integer }
+        suitabilityScore: { type: number }
+        recommendation: { type: string, enum: [recommended, suitable, possible, not_recommended] }
+        reasons:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        skillMatch: { type: boolean }
+        stockMatch: { type: boolean }
+        stockShortfall:
+          type: array
+          items: { type: string }
+        proximityScore: { type: number }
+        nearbyJobDate: { type: ["string", "null"] }
+        nearbyJobSuburb: { type: ["string", "null"] }
+        scheduleFit: { type: boolean }
+        builderTierMatch: { type: boolean }
+        qualityScore: { type: number }
+        callbackRate: { type: number }
+        availableOnDate: { type: boolean }
+
+    AllocationResult:
+      type: object
+      properties:
+        jobId: { type: integer }
+        date: { type: string }
+        recommendations:
+          type: array
+          items: { $ref: "#/components/schemas/WorkerRecommendation" }
+        autoSelected: { $ref: "#/components/schemas/WorkerRecommendation" }
+        warnings:
+          type: array
+          items: { type: string }
+
+    # ─── Weekly Planner ────────────────────────────────────────────────────
+    WeeklyPlannerProposal:
+      type: object
+      properties:
+        id: { type: integer }
+        weekStart: { type: string }
+        status: { type: string, enum: [draft, pending_approval, approved, rejected] }
+        proposedSchedule:
+          type: array
+          items:
+            type: object
+            properties:
+              subcontractorId: { type: integer }
+              subcontractorName: { type: string }
+              assignments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date: { type: string }
+                    jobId: { type: integer }
+                    jobTitle: { type: string }
+                    suburb: { type: string }
+                    estimatedMetres: { type: number }
+                    colour: { type: string }
+                    routeNote: { type: string }
+        supplierOrders:
+          type: array
+          items: { type: object }
+        optimisationSummary:
+          type: object
+          properties:
+            totalJobs: { type: integer }
+            totalWorkers: { type: integer }
+            travelSavings: { type: string }
+            stockWarnings: { type: integer }
+            unallocatedJobs: { type: integer }
+            notes:
+              type: array
+              items: { type: string }
+        adminNotes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    # ─── Supplier Profiles & Orders ────────────────────────────────────────
+    SupplierProfile:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        contactName: { type: ["string", "null"] }
+        contactPhone: { type: ["string", "null"] }
+        contactEmail: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        suburb: { type: ["string", "null"] }
+        preferredProducts:
+          type: array
+          items: { type: string }
+        preferredColours:
+          type: array
+          items: { type: string }
+        notes: { type: ["string", "null"] }
+        active: { type: boolean }
+
+    CreateSupplierProfileBody:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string }
+        address: { type: string }
+        suburb: { type: string }
+        preferredProducts:
+          type: array
+          items: { type: string }
+        preferredColours:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+
+    SupplierOrder:
+      type: object
+      required: [id, supplierId, subcontractorId, orderNumber, status]
+      properties:
+        id: { type: integer }
+        supplierId: { type: integer }
+        supplierName: { type: string }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        orderNumber: { type: string }
+        status: { type: string, enum: [draft, pending_approval, approved, sent_to_supplier, ready_for_pickup, picked_up, cancelled] }
+        urgency: { type: string, enum: [low, normal, high, urgent] }
+        requiredByDate: { type: ["string", "null"] }
+        pickupDate: { type: ["string", "null"] }
+        totalCost: { type: ["number", "null"] }
+        triggerJobIds:
+          type: array
+          items: { type: integer }
+        adminNotes: { type: ["string", "null"] }
+        subNotes: { type: ["string", "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SupplierOrderItem" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SupplierOrderItem:
+      type: object
+      required: [id, productName, quantityOrdered]
+      properties:
+        id: { type: integer }
+        orderId: { type: integer }
+        stockItemId: { type: ["integer", "null"] }
+        productName: { type: string }
+        colour: { type: ["string", "null"] }
+        unit: { type: string }
+        quantityOrdered: { type: number }
+        unitCost: { type: ["number", "null"] }
+        notes: { type: ["string", "null"] }
+
+    CreateSupplierOrderBody:
+      type: object
+      required: [supplierId, subcontractorId, items]
+      properties:
+        supplierId: { type: integer }
+        subcontractorId: { type: integer }
+        urgency: { type: string, enum: [low, normal, high, urgent] }
+        requiredByDate: { type: string }
+        adminNotes: { type: string }
+        triggerJobIds:
+          type: array
+          items: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [productName, quantityOrdered]
+            properties:
+              stockItemId: { type: integer }
+              productName: { type: string }
+              colour: { type: string }
+              unit: { type: string }
+              quantityOrdered: { type: number }
+              unitCost: { type: number }
+              notes: { type: string }
+
+    # ─── Profitability ─────────────────────────────────────────────────────
+    ProfitabilityScore:
+      type: object
+      properties:
+        id: { type: integer }
+        subcontractorId: { type: integer }
+        subcontractorName: { type: string }
+        periodType: { type: string, enum: [weekly, monthly] }
+        periodStart: { type: string }
+        revenueGenerated: { type: number }
+        totalMetres: { type: number }
+        labourCost: { type: number }
+        productCost: { type: number }
+        callbackCost: { type: number }
+        totalCost: { type: number }
+        grossProfit: { type: number }
+        marginPct: { type: number }
+        profitRank: { type: ["integer", "null"] }
+        jobsCompleted: { type: integer }
+        callbackCount: { type: integer }
+        productConsumedValue: { type: number }
+        calculatedAt: { type: string, format: date-time }
