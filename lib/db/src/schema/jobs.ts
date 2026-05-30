@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { customersTable } from "./customers";
@@ -14,6 +14,9 @@ export const jobsTable = pgTable("jobs", {
   priority: text("priority").notNull().default("medium"),
   customerId: integer("customer_id").references(() => customersTable.id),
   address: text("address"),
+  builderContactName: text("builder_contact_name"),
+  builderContactPhone: text("builder_contact_phone"),
+  requiredColours: jsonb("required_colours").notNull().default([]),
   scheduledDate: text("scheduled_date"),
   completedDate: text("completed_date"),
   notes: text("notes"),

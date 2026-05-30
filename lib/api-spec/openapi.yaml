@@ -1,26 +1,28 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.1.0
-  description: TradeFlow API — trades business management
+  version: 0.2.0
+  description: Diamond Sealing — subcontractor operations management
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
   - name: customers
-    description: Customer/contact management
   - name: jobs
-    description: Job management
   - name: quotes
-    description: Quote management
   - name: invoices
-    description: Invoice management
   - name: schedule
-    description: Scheduling and appointments
   - name: dashboard
-    description: Dashboard summaries
+  - name: subcontractors
+  - name: workSessions
+  - name: gps
+  - name: dispatch
+  - name: jobReports
+  - name: stockItems
+  - name: xero
+  - name: weeklyInvoices
+  - name: admin
 
 paths:
   /healthz:
@@ -107,7 +109,6 @@ paths:
     get:
       operationId: getCustomer
       tags: [customers]
-      summary: Get a customer
       parameters:
         - name: id
           in: path
@@ -126,7 +127,6 @@ paths:
     patch:
       operationId: updateCustomer
       tags: [customers]
-      summary: Update a customer
       parameters:
         - name: id
           in: path
@@ -149,7 +149,6 @@ paths:
     delete:
       operationId: deleteCustomer
       tags: [customers]
-      summary: Delete a customer
       parameters:
         - name: id
           in: path
@@ -165,7 +164,6 @@ paths:
     get:
       operationId: listJobs
       tags: [jobs]
-      summary: List jobs
       parameters:
         - name: status
           in: query
@@ -192,7 +190,6 @@ paths:
     post:
       operationId: createJob
       tags: [jobs]
-      summary: Create a job
       requestBody:
         required: true
         content:
@@ -211,7 +208,6 @@ paths:
     get:
       operationId: getJob
       tags: [jobs]
-      summary: Get a job
       parameters:
         - name: id
           in: path
@@ -230,7 +226,6 @@ paths:
     patch:
       operationId: updateJob
       tags: [jobs]
-      summary: Update a job
       parameters:
         - name: id
           in: path
@@ -253,7 +248,6 @@ paths:
     delete:
       operationId: deleteJob
       tags: [jobs]
-      summary: Delete a job
       parameters:
         - name: id
           in: path
@@ -269,7 +263,6 @@ paths:
     get:
       operationId: listQuotes
       tags: [quotes]
-      summary: List quotes
       parameters:
         - name: status
           in: query
@@ -292,7 +285,6 @@ paths:
     post:
       operationId: createQuote
       tags: [quotes]
-      summary: Create a quote
       requestBody:
         required: true
         content:
@@ -311,7 +303,6 @@ paths:
     get:
       operationId: getQuote
       tags: [quotes]
-      summary: Get a quote
       parameters:
         - name: id
           in: path
@@ -330,7 +321,6 @@ paths:
     patch:
       operationId: updateQuote
       tags: [quotes]
-      summary: Update a quote
       parameters:
         - name: id
           in: path
@@ -353,7 +343,6 @@ paths:
     delete:
       operationId: deleteQuote
       tags: [quotes]
-      summary: Delete a quote
       parameters:
         - name: id
           in: path
@@ -368,7 +357,6 @@ paths:
     post:
       operationId: sendQuote
       tags: [quotes]
-      summary: Mark quote as sent
       parameters:
         - name: id
           in: path
@@ -387,7 +375,6 @@ paths:
     post:
       operationId: acceptQuote
       tags: [quotes]
-      summary: Mark quote as accepted
       parameters:
         - name: id
           in: path
@@ -406,7 +393,6 @@ paths:
     post:
       operationId: declineQuote
       tags: [quotes]
-      summary: Mark quote as declined
       parameters:
         - name: id
           in: path
@@ -425,7 +411,6 @@ paths:
     post:
       operationId: convertQuoteToInvoice
       tags: [quotes]
-      summary: Convert accepted quote to invoice
       parameters:
         - name: id
           in: path
@@ -445,7 +430,6 @@ paths:
     get:
       operationId: listInvoices
       tags: [invoices]
-      summary: List invoices
       parameters:
         - name: status
           in: query
@@ -468,7 +452,6 @@ paths:
     post:
       operationId: createInvoice
       tags: [invoices]
-      summary: Create an invoice
       requestBody:
         required: true
         content:
@@ -487,7 +470,6 @@ paths:
     get:
       operationId: getInvoice
       tags: [invoices]
-      summary: Get an invoice
       parameters:
         - name: id
           in: path
@@ -506,7 +488,6 @@ paths:
     patch:
       operationId: updateInvoice
       tags: [invoices]
-      summary: Update an invoice
       parameters:
         - name: id
           in: path
@@ -529,7 +510,6 @@ paths:
     delete:
       operationId: deleteInvoice
       tags: [invoices]
-      summary: Delete an invoice
       parameters:
         - name: id
           in: path
@@ -544,7 +524,6 @@ paths:
     post:
       operationId: sendInvoice
       tags: [invoices]
-      summary: Mark invoice as sent
       parameters:
         - name: id
           in: path
@@ -563,7 +542,6 @@ paths:
     post:
       operationId: payInvoice
       tags: [invoices]
-      summary: Mark invoice as paid
       parameters:
         - name: id
           in: path
@@ -583,7 +561,6 @@ paths:
     get:
       operationId: listAppointments
       tags: [schedule]
-      summary: List appointments
       parameters:
         - name: startDate
           in: query
@@ -611,7 +588,6 @@ paths:
     post:
       operationId: createAppointment
       tags: [schedule]
-      summary: Create an appointment
       requestBody:
         required: true
         content:
@@ -630,7 +606,6 @@ paths:
     get:
       operationId: getAppointment
       tags: [schedule]
-      summary: Get an appointment
       parameters:
         - name: id
           in: path
@@ -649,7 +624,6 @@ paths:
     patch:
       operationId: updateAppointment
       tags: [schedule]
-      summary: Update an appointment
       parameters:
         - name: id
           in: path
@@ -672,7 +646,6 @@ paths:
     delete:
       operationId: deleteAppointment
       tags: [schedule]
-      summary: Delete an appointment
       parameters:
         - name: id
           in: path
@@ -683,15 +656,747 @@ paths:
         "204":
           description: Deleted
 
+  # ─── SUBCONTRACTORS ───────────────────────────────────────────
+  /subcontractors:
+    get:
+      operationId: listSubcontractors
+      tags: [subcontractors]
+      summary: List subcontractors
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subcontractor"
+    post:
+      operationId: createSubcontractor
+      tags: [subcontractors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcontractorInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+
+  /subcontractors/{id}:
+    get:
+      operationId: getSubcontractor
+      tags: [subcontractors]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subcontractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSubcontractor
+      tags: [subcontractors]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcontractorUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+
+  # ─── WORK SESSIONS ────────────────────────────────────────────
+  /work-sessions/clock-on:
+    post:
+      operationId: clockOn
+      tags: [workSessions]
+      summary: Clock on to start the day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockOnInput"
+      responses:
+        "201":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+
+  /work-sessions/clock-off:
+    post:
+      operationId: clockOff
+      tags: [workSessions]
+      summary: Clock off to end the day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockOffInput"
+      responses:
+        "200":
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+
+  /work-sessions/break-start:
+    post:
+      operationId: startBreak
+      tags: [workSessions]
+      summary: Start lunch/rest break
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BreakInput"
+      responses:
+        "200":
+          description: Break started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+
+  /work-sessions/break-end:
+    post:
+      operationId: endBreak
+      tags: [workSessions]
+      summary: End lunch/rest break
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BreakInput"
+      responses:
+        "200":
+          description: Break ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+
+  /work-sessions/today:
+    get:
+      operationId: getTodaySession
+      tags: [workSessions]
+      summary: Get today's session for a subcontractor
+      parameters:
+        - name: subcontractorId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Today's session or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+        "404":
+          description: No session today
+
+  /work-sessions:
+    get:
+      operationId: listWorkSessions
+      tags: [workSessions]
+      summary: List work sessions (admin)
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: weekStart
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkSession"
+
+  /work-sessions/{id}:
+    get:
+      operationId: getWorkSession
+      tags: [workSessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session with GPS timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSessionDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateWorkSession
+      tags: [workSessions]
+      summary: Admin edit of session (correct hours)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkSessionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkSession"
+
+  # ─── GPS ──────────────────────────────────────────────────────
+  /gps/location:
+    post:
+      operationId: pushGpsLocation
+      tags: [gps]
+      summary: Push a GPS location point
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GpsLocationInput"
+      responses:
+        "201":
+          description: Location recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GpsLocation"
+
+  # ─── DISPATCH ─────────────────────────────────────────────────
+  /dispatch:
+    get:
+      operationId: listDispatch
+      tags: [dispatch]
+      summary: List dispatch days
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job assignments for date/subcontractor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobAssignment"
+    post:
+      operationId: createDispatch
+      tags: [dispatch]
+      summary: Create dispatch assignments for a day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchInput"
+      responses:
+        "201":
+          description: Assignments created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobAssignment"
+
+  /dispatch/{id}:
+    patch:
+      operationId: updateJobAssignment
+      tags: [dispatch]
+      summary: Update a job assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobAssignmentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAssignment"
+    delete:
+      operationId: deleteJobAssignment
+      tags: [dispatch]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /dispatch/{id}/arrive:
+    post:
+      operationId: markArrived
+      tags: [dispatch]
+      summary: Subcontractor marks arrival at job site
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Arrival recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAssignment"
+
+  /dispatch/{id}/depart:
+    post:
+      operationId: markDeparted
+      tags: [dispatch]
+      summary: Subcontractor marks departure (job done or leaving)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Departure recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAssignment"
+
+  # ─── JOB REPORTS ──────────────────────────────────────────────
+  /job-reports:
+    get:
+      operationId: listJobReports
+      tags: [jobReports]
+      summary: List job completion reports (admin)
+      parameters:
+        - name: jobId
+          in: query
+          schema:
+            type: integer
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: hasIssues
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobReport"
+    post:
+      operationId: createJobReport
+      tags: [jobReports]
+      summary: Submit job completion report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobReportInput"
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobReport"
+
+  /job-reports/{id}:
+    get:
+      operationId: getJobReport
+      tags: [jobReports]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobReport"
+        "404":
+          description: Not found
+
+  # ─── STOCK ITEMS ──────────────────────────────────────────────
+  /stock-items:
+    get:
+      operationId: listStockItems
+      tags: [stockItems]
+      summary: List stock items / silicone products
+      responses:
+        "200":
+          description: Stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockItem"
+    post:
+      operationId: createStockItem
+      tags: [stockItems]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockItemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockItem"
+
+  /stock-items/{id}:
+    patch:
+      operationId: updateStockItem
+      tags: [stockItems]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockItemUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockItem"
+    delete:
+      operationId: deleteStockItem
+      tags: [stockItems]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── XERO ─────────────────────────────────────────────────────
+  /xero/settings:
+    get:
+      operationId: getXeroSettings
+      tags: [xero]
+      summary: Get Xero integration settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSettings"
+    patch:
+      operationId: updateXeroSettings
+      tags: [xero]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XeroSettingsUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSettings"
+
+  /xero/connect:
+    post:
+      operationId: connectXero
+      tags: [xero]
+      summary: Initiate Xero OAuth connection
+      responses:
+        "200":
+          description: OAuth URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authUrl]
+                properties:
+                  authUrl:
+                    type: string
+
+  /xero/disconnect:
+    post:
+      operationId: disconnectXero
+      tags: [xero]
+      summary: Disconnect Xero integration
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XeroSettings"
+
+  # ─── WEEKLY INVOICES ──────────────────────────────────────────
+  /weekly-invoices:
+    get:
+      operationId: listWeeklyInvoices
+      tags: [weeklyInvoices]
+      summary: List weekly invoice drafts
+      parameters:
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, paid]
+      responses:
+        "200":
+          description: Weekly invoice drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WeeklyInvoice"
+
+  /weekly-invoices/generate:
+    post:
+      operationId: generateWeeklyInvoices
+      tags: [weeklyInvoices]
+      summary: Generate weekly invoice drafts for completed work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateWeeklyInvoicesInput"
+      responses:
+        "201":
+          description: Drafts generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WeeklyInvoice"
+
+  /weekly-invoices/{id}:
+    get:
+      operationId: getWeeklyInvoice
+      tags: [weeklyInvoices]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice draft detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyInvoice"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateWeeklyInvoice
+      tags: [weeklyInvoices]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WeeklyInvoiceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyInvoice"
+
+  /weekly-invoices/{id}/submit:
+    post:
+      operationId: submitWeeklyInvoice
+      tags: [weeklyInvoices]
+      summary: Mark as submitted to Xero
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyInvoice"
+
+  # ─── ADMIN ────────────────────────────────────────────────────
+  /admin/live:
+    get:
+      operationId: getAdminLive
+      tags: [admin]
+      summary: Live status of all subcontractors
+      responses:
+        "200":
+          description: Live statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubcontractorLiveStatus"
+
+  /admin/timesheets:
+    get:
+      operationId: getAdminTimesheets
+      tags: [admin]
+      summary: Admin timesheet view
+      parameters:
+        - name: weekStart
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: subcontractorId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Timesheet entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimesheetEntry"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
     # ─── DASHBOARD ──────────────────────────────────────────────
     DashboardSummary:
@@ -736,17 +1441,13 @@ components:
 
     ActivityItem:
       type: object
-      required:
-        - id
-        - type
-        - description
-        - createdAt
+      required: [id, type, description, createdAt]
       properties:
         id:
           type: integer
         type:
           type: string
-          enum: [job_created, job_updated, quote_sent, quote_accepted, invoice_sent, invoice_paid, customer_created]
+          enum: [job_created, job_updated, quote_sent, quote_accepted, invoice_sent, invoice_paid, customer_created, clocked_on, clocked_off, job_report_submitted]
         description:
           type: string
         entityId:
@@ -760,11 +1461,7 @@ components:
     # ─── CUSTOMER ───────────────────────────────────────────────
     Customer:
       type: object
-      required:
-        - id
-        - name
-        - createdAt
-        - updatedAt
+      required: [id, name, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -795,8 +1492,7 @@ components:
 
     CustomerInput:
       type: object
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
@@ -823,7 +1519,6 @@ components:
       properties:
         name:
           type: string
-          minLength: 1
         email:
           type: string
         phone:
@@ -844,12 +1539,7 @@ components:
     # ─── LINE ITEM ───────────────────────────────────────────────
     LineItem:
       type: object
-      required:
-        - id
-        - description
-        - quantity
-        - unitPrice
-        - total
+      required: [id, description, quantity, unitPrice, total]
       properties:
         id:
           type: integer
@@ -864,10 +1554,7 @@ components:
 
     LineItemInput:
       type: object
-      required:
-        - description
-        - quantity
-        - unitPrice
+      required: [description, quantity, unitPrice]
       properties:
         description:
           type: string
@@ -879,12 +1566,7 @@ components:
     # ─── JOB ────────────────────────────────────────────────────
     Job:
       type: object
-      required:
-        - id
-        - title
-        - status
-        - createdAt
-        - updatedAt
+      required: [id, title, status, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -901,6 +1583,14 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        builderContactName:
+          type: ["string", "null"]
+        builderContactPhone:
+          type: ["string", "null"]
+        requiredColours:
+          type: array
+          items:
+            type: string
         scheduledDate:
           type: ["string", "null"]
           format: date
@@ -921,8 +1611,7 @@ components:
 
     JobInput:
       type: object
-      required:
-        - title
+      required: [title]
       properties:
         title:
           type: string
@@ -936,6 +1625,14 @@ components:
           type: integer
         address:
           type: string
+        builderContactName:
+          type: string
+        builderContactPhone:
+          type: string
+        requiredColours:
+          type: array
+          items:
+            type: string
         scheduledDate:
           type: string
           format: date
@@ -950,7 +1647,6 @@ components:
       properties:
         title:
           type: string
-          minLength: 1
         description:
           type: string
         status:
@@ -960,6 +1656,14 @@ components:
           type: integer
         address:
           type: string
+        builderContactName:
+          type: string
+        builderContactPhone:
+          type: string
+        requiredColours:
+          type: array
+          items:
+            type: string
         scheduledDate:
           type: string
           format: date
@@ -975,15 +1679,7 @@ components:
     # ─── QUOTE ──────────────────────────────────────────────────
     Quote:
       type: object
-      required:
-        - id
-        - quoteNumber
-        - status
-        - subtotal
-        - tax
-        - total
-        - createdAt
-        - updatedAt
+      required: [id, quoteNumber, status, subtotal, tax, total, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1075,15 +1771,7 @@ components:
     # ─── INVOICE ────────────────────────────────────────────────
     Invoice:
       type: object
-      required:
-        - id
-        - invoiceNumber
-        - status
-        - subtotal
-        - tax
-        - total
-        - createdAt
-        - updatedAt
+      required: [id, invoiceNumber, status, subtotal, tax, total, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1179,13 +1867,7 @@ components:
     # ─── APPOINTMENT ────────────────────────────────────────────
     Appointment:
       type: object
-      required:
-        - id
-        - title
-        - startTime
-        - endTime
-        - createdAt
-        - updatedAt
+      required: [id, title, startTime, endTime, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1221,10 +1903,7 @@ components:
 
     AppointmentInput:
       type: object
-      required:
-        - title
-        - startTime
-        - endTime
+      required: [title, startTime, endTime]
       properties:
         title:
           type: string
@@ -1252,7 +1931,6 @@ components:
       properties:
         title:
           type: string
-          minLength: 1
         description:
           type: string
         jobId:
@@ -1270,3 +1948,631 @@ components:
         status:
           type: string
           enum: [scheduled, completed, cancelled]
+
+    # ─── SUBCONTRACTOR ──────────────────────────────────────────
+    Subcontractor:
+      type: object
+      required: [id, name, active, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        vehiclePlate:
+          type: ["string", "null"]
+        abn:
+          type: ["string", "null"]
+        ratePerMetre:
+          type: ["number", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    SubcontractorInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+        phone:
+          type: string
+        vehiclePlate:
+          type: string
+        abn:
+          type: string
+        ratePerMetre:
+          type: number
+        active:
+          type: boolean
+
+    SubcontractorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        vehiclePlate:
+          type: string
+        abn:
+          type: string
+        ratePerMetre:
+          type: number
+        active:
+          type: boolean
+
+    # ─── WORK SESSION ───────────────────────────────────────────
+    WorkSession:
+      type: object
+      required: [id, subcontractorId, subcontractorName, date, status, gpsEnabled, gpsDisabledOnBreak, createdAt]
+      properties:
+        id:
+          type: integer
+        subcontractorId:
+          type: integer
+        subcontractorName:
+          type: string
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, on_break, clocked_off]
+        gpsEnabled:
+          type: boolean
+        gpsDisabledOnBreak:
+          type: boolean
+        clockedOnAt:
+          type: ["string", "null"]
+          format: date-time
+        clockedOffAt:
+          type: ["string", "null"]
+          format: date-time
+        breakStartAt:
+          type: ["string", "null"]
+          format: date-time
+        breakEndAt:
+          type: ["string", "null"]
+          format: date-time
+        totalBreakMinutes:
+          type: integer
+        totalWorkMinutes:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    WorkSessionDetail:
+      allOf:
+        - $ref: "#/components/schemas/WorkSession"
+        - type: object
+          properties:
+            gpsTrack:
+              type: array
+              items:
+                $ref: "#/components/schemas/GpsLocation"
+
+    WorkSessionUpdate:
+      type: object
+      properties:
+        clockedOnAt:
+          type: string
+          format: date-time
+        clockedOffAt:
+          type: string
+          format: date-time
+        totalBreakMinutes:
+          type: integer
+        gpsEnabled:
+          type: boolean
+        gpsDisabledOnBreak:
+          type: boolean
+
+    ClockOnInput:
+      type: object
+      required: [subcontractorId]
+      properties:
+        subcontractorId:
+          type: integer
+        gpsEnabled:
+          type: boolean
+        gpsDisabledOnBreak:
+          type: boolean
+
+    ClockOffInput:
+      type: object
+      required: [subcontractorId]
+      properties:
+        subcontractorId:
+          type: integer
+
+    BreakInput:
+      type: object
+      required: [subcontractorId]
+      properties:
+        subcontractorId:
+          type: integer
+
+    # ─── GPS ────────────────────────────────────────────────────
+    GpsLocation:
+      type: object
+      required: [id, subcontractorId, latitude, longitude, recordedAt]
+      properties:
+        id:
+          type: integer
+        subcontractorId:
+          type: integer
+        workSessionId:
+          type: ["integer", "null"]
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy:
+          type: ["number", "null"]
+        recordedAt:
+          type: string
+          format: date-time
+
+    GpsLocationInput:
+      type: object
+      required: [subcontractorId, latitude, longitude]
+      properties:
+        subcontractorId:
+          type: integer
+        workSessionId:
+          type: integer
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy:
+          type: number
+
+    # ─── DISPATCH / JOB ASSIGNMENT ──────────────────────────────
+    JobAssignment:
+      type: object
+      required: [id, dispatchDate, scheduledOrder, status, createdAt]
+      properties:
+        id:
+          type: integer
+        dispatchDate:
+          type: string
+          format: date
+        scheduledOrder:
+          type: integer
+        jobId:
+          type: ["integer", "null"]
+        jobTitle:
+          type: ["string", "null"]
+        jobAddress:
+          type: ["string", "null"]
+        jobDescription:
+          type: ["string", "null"]
+        subcontractorId:
+          type: ["integer", "null"]
+        subcontractorName:
+          type: ["string", "null"]
+        builderContactName:
+          type: ["string", "null"]
+        builderContactPhone:
+          type: ["string", "null"]
+        requiredColours:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, arrived, in_progress, completed]
+        arrivedAt:
+          type: ["string", "null"]
+          format: date-time
+        departedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    DispatchInput:
+      type: object
+      required: [dispatchDate, assignments]
+      properties:
+        dispatchDate:
+          type: string
+          format: date
+        assignments:
+          type: array
+          items:
+            type: object
+            required: [jobId, scheduledOrder]
+            properties:
+              jobId:
+                type: integer
+              subcontractorId:
+                type: integer
+              scheduledOrder:
+                type: integer
+              requiredColours:
+                type: array
+                items:
+                  type: string
+              builderContactName:
+                type: string
+              builderContactPhone:
+                type: string
+              notes:
+                type: string
+
+    JobAssignmentUpdate:
+      type: object
+      properties:
+        scheduledOrder:
+          type: integer
+        subcontractorId:
+          type: integer
+        requiredColours:
+          type: array
+          items:
+            type: string
+        builderContactName:
+          type: string
+        builderContactPhone:
+          type: string
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [pending, arrived, in_progress, completed]
+
+    # ─── JOB REPORT ─────────────────────────────────────────────
+    StockUsageItem:
+      type: object
+      required: [stockItemId, stockItemName, quantityUsed, unit]
+      properties:
+        stockItemId:
+          type: integer
+        stockItemName:
+          type: string
+        quantityUsed:
+          type: number
+        unit:
+          type: string
+
+    StockUsageInput:
+      type: object
+      required: [stockItemId, quantityUsed]
+      properties:
+        stockItemId:
+          type: integer
+        quantityUsed:
+          type: number
+
+    JobReport:
+      type: object
+      required: [id, jobId, subcontractorId, metersCompleted, photos, silikoneColoursUsed, stockUsed, issueType, createdAt]
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        jobTitle:
+          type: ["string", "null"]
+        jobAssignmentId:
+          type: ["integer", "null"]
+        subcontractorId:
+          type: integer
+        subcontractorName:
+          type: ["string", "null"]
+        dispatchDate:
+          type: ["string", "null"]
+          format: date
+        metersCompleted:
+          type: number
+        photos:
+          type: array
+          items:
+            type: string
+        silikoneColoursUsed:
+          type: array
+          items:
+            type: string
+        stockUsed:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockUsageItem"
+        issueType:
+          type: string
+          enum: [none, excessive_cleaning, site_not_ready, unsafe_environment, builder_complaint, other]
+        issueDescription:
+          type: ["string", "null"]
+        generalNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    JobReportInput:
+      type: object
+      required: [jobId, subcontractorId, metersCompleted, photos, silikoneColoursUsed, stockUsed, issueType]
+      properties:
+        jobId:
+          type: integer
+        jobAssignmentId:
+          type: integer
+        subcontractorId:
+          type: integer
+        dispatchDate:
+          type: string
+          format: date
+        metersCompleted:
+          type: number
+        photos:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        silikoneColoursUsed:
+          type: array
+          items:
+            type: string
+        stockUsed:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockUsageInput"
+        issueType:
+          type: string
+          enum: [none, excessive_cleaning, site_not_ready, unsafe_environment, builder_complaint, other]
+        issueDescription:
+          type: string
+        generalNotes:
+          type: string
+
+    # ─── STOCK ITEM ─────────────────────────────────────────────
+    StockItem:
+      type: object
+      required: [id, name, unit, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        unit:
+          type: string
+        colour:
+          type: ["string", "null"]
+        currentStock:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    StockItemInput:
+      type: object
+      required: [name, unit]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        unit:
+          type: string
+        colour:
+          type: string
+        currentStock:
+          type: number
+
+    StockItemUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        unit:
+          type: string
+        colour:
+          type: string
+        currentStock:
+          type: number
+
+    # ─── XERO ───────────────────────────────────────────────────
+    XeroSettings:
+      type: object
+      required: [id, connected]
+      properties:
+        id:
+          type: integer
+        connected:
+          type: boolean
+        tenantId:
+          type: ["string", "null"]
+        tenantName:
+          type: ["string", "null"]
+        clientId:
+          type: ["string", "null"]
+        invoicePrefix:
+          type: ["string", "null"]
+        defaultAccountCode:
+          type: ["string", "null"]
+        autoGenerateDay:
+          type: integer
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+
+    XeroSettingsUpdate:
+      type: object
+      properties:
+        clientId:
+          type: string
+        invoicePrefix:
+          type: string
+        defaultAccountCode:
+          type: string
+        autoGenerateDay:
+          type: integer
+        tenantName:
+          type: string
+
+    # ─── WEEKLY INVOICE ─────────────────────────────────────────
+    WeeklyInvoiceLineItem:
+      type: object
+      required: [jobId, jobTitle, metersCompleted, ratePerMetre, amount]
+      properties:
+        jobId:
+          type: integer
+        jobTitle:
+          type: string
+        jobAddress:
+          type: ["string", "null"]
+        dispatchDate:
+          type: string
+          format: date
+        metersCompleted:
+          type: number
+        ratePerMetre:
+          type: number
+        amount:
+          type: number
+        stockCost:
+          type: number
+        reportId:
+          type: integer
+
+    WeeklyInvoice:
+      type: object
+      required: [id, subcontractorId, weekStartDate, weekEndDate, status, totalMetres, subtotal, tax, total, createdAt]
+      properties:
+        id:
+          type: integer
+        subcontractorId:
+          type: integer
+        subcontractorName:
+          type: ["string", "null"]
+        weekStartDate:
+          type: string
+          format: date
+        weekEndDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, submitted, paid]
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklyInvoiceLineItem"
+        totalMetres:
+          type: number
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        xeroInvoiceId:
+          type: ["string", "null"]
+        submittedAt:
+          type: ["string", "null"]
+          format: date-time
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    GenerateWeeklyInvoicesInput:
+      type: object
+      required: [weekStartDate]
+      properties:
+        weekStartDate:
+          type: string
+          format: date
+        subcontractorId:
+          type: integer
+
+    WeeklyInvoiceUpdate:
+      type: object
+      properties:
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [draft, submitted, paid]
+
+    # ─── ADMIN ──────────────────────────────────────────────────
+    SubcontractorLiveStatus:
+      type: object
+      required: [subcontractorId, subcontractorName, sessionStatus]
+      properties:
+        subcontractorId:
+          type: integer
+        subcontractorName:
+          type: string
+        sessionStatus:
+          type: string
+          enum: [not_started, active, on_break, clocked_off]
+        clockedOnAt:
+          type: ["string", "null"]
+          format: date-time
+        currentJobTitle:
+          type: ["string", "null"]
+        currentJobAddress:
+          type: ["string", "null"]
+        jobsCompleted:
+          type: integer
+        totalMetresToday:
+          type: number
+        lastLocation:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+            recordedAt:
+              type: string
+              format: date-time
+
+    TimesheetEntry:
+      type: object
+      required: [sessionId, subcontractorId, subcontractorName, date, status]
+      properties:
+        sessionId:
+          type: integer
+        subcontractorId:
+          type: integer
+        subcontractorName:
+          type: string
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, on_break, clocked_off]
+        clockedOnAt:
+          type: ["string", "null"]
+          format: date-time
+        clockedOffAt:
+          type: ["string", "null"]
+          format: date-time
+        totalWorkMinutes:
+          type: ["integer", "null"]
+        totalBreakMinutes:
+          type: integer
+        jobsCompleted:
+          type: integer
+        totalMetres:
+          type: number

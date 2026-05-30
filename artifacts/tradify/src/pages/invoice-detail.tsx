@@ -1,4 +1,4 @@
-import { useGetInvoice, getGetInvoiceQueryKey, useSendInvoice, usePayInvoice } from "@workspace/api-client-react";
+import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
 import { useRoute, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,23 +14,7 @@ export default function InvoiceDetail() {
   const id = Number(params?.id);
   const { data: invoice, isLoading } = useGetInvoice(id, { query: { enabled: !!id, queryKey: getGetInvoiceQueryKey(id) } });
   
-  const sendInvoice = useSendInvoice();
-  const payInvoice = usePayInvoice();
-  
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  const handleAction = (action: any, successMessage: string) => {
-    action.mutate({ id }, {
-      onSuccess: () => {
-        toast({ title: "Success", description: successMessage });
-        queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(id) });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "Action failed.", variant: "destructive" });
-      }
-    });
-  };
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!invoice) return <div>Invoice not found</div>;
@@ -47,12 +31,12 @@ export default function InvoiceDetail() {
         </div>
         <div className="flex items-center gap-2">
           {invoice.status === 'draft' && (
-            <Button onClick={() => handleAction(sendInvoice, "Invoice marked as sent")} disabled={sendInvoice.isPending}>
+            <Button onClick={() => toast({ title: "Send functionality coming soon" })}>
               <Send className="mr-2 h-4 w-4" /> Send
             </Button>
           )}
           {invoice.status === 'sent' && (
-            <Button onClick={() => handleAction(payInvoice, "Invoice marked as paid")} disabled={payInvoice.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+            <Button onClick={() => toast({ title: "Mark paid functionality coming soon" })} className="bg-green-600 hover:bg-green-700 text-white">
               <DollarSign className="mr-2 h-4 w-4" /> Mark Paid
             </Button>
           )}

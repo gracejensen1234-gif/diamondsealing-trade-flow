@@ -1,0 +1,21 @@
+import { pgTable, serial, integer, text, numeric, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { subcontractorsTable } from "./subcontractors";
+
+export const weeklyInvoicesTable = pgTable("weekly_invoices", {
+  id: serial("id").primaryKey(),
+  subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
+  weekStartDate: text("week_start_date").notNull(),
+  weekEndDate: text("week_end_date").notNull(),
+  status: text("status").notNull().default("draft"),
+  lineItems: jsonb("line_items").notNull().default([]),
+  totalMetres: numeric("total_metres", { precision: 10, scale: 2 }).notNull().default("0"),
+  subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
+  tax: numeric("tax", { precision: 10, scale: 2 }).notNull().default("0"),
+  total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  xeroInvoiceId: text("xero_invoice_id"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type WeeklyInvoice = typeof weeklyInvoicesTable.$inferSelect;

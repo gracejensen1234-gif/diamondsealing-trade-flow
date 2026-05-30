@@ -16,6 +16,18 @@ import Invoices from "@/pages/invoices";
 import InvoiceDetail from "@/pages/invoice-detail";
 import Schedule from "@/pages/schedule";
 
+// New Pages
+import FieldView from "@/pages/field";
+import FieldJobDetail from "@/pages/field-job-detail";
+import Dispatch from "@/pages/dispatch";
+import AdminReports from "@/pages/admin-reports";
+import AdminLive from "@/pages/admin-live";
+import AdminTimesheets from "@/pages/admin-timesheets";
+import WeeklyInvoices from "@/pages/weekly-invoices";
+import WeeklyInvoiceDetail from "@/pages/weekly-invoice-detail";
+import Stock from "@/pages/stock";
+import XeroSettings from "@/pages/xero-settings";
+
 const queryClient = new QueryClient();
 
 function Router() {
@@ -32,6 +44,19 @@ function Router() {
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoices/:id" component={InvoiceDetail} />
         <Route path="/schedule" component={Schedule} />
+
+        {/* New Routes */}
+        <Route path="/field" component={FieldView} />
+        <Route path="/field/jobs/:id" component={FieldJobDetail} />
+        <Route path="/dispatch" component={Dispatch} />
+        <Route path="/admin/reports" component={AdminReports} />
+        <Route path="/admin/live" component={AdminLive} />
+        <Route path="/admin/timesheets" component={AdminTimesheets} />
+        <Route path="/weekly-invoices" component={WeeklyInvoices} />
+        <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
+        <Route path="/stock" component={Stock} />
+        <Route path="/settings/xero" component={XeroSettings} />
+
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

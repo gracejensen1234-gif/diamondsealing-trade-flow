@@ -1,0 +1,2 @@
+- [Diamond Sealing hook conventions](diamond-sealing-hooks.md) — Generated hook names and which mutations need direct fetch fallbacks
+- [Diamond Sealing schema codegen](diamond-sealing-codegen.md) — Always update OpenAPI spec first, then run codegen before writing routes or pages

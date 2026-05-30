@@ -1,4 +1,4 @@
-import { useGetQuote, getGetQuoteQueryKey, useSendQuote, useAcceptQuote, useDeclineQuote, useConvertQuoteToInvoice } from "@workspace/api-client-react";
+import { useGetQuote, getGetQuoteQueryKey } from "@workspace/api-client-react";
 import { useRoute, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,25 +14,7 @@ export default function QuoteDetail() {
   const id = Number(params?.id);
   const { data: quote, isLoading } = useGetQuote(id, { query: { enabled: !!id, queryKey: getGetQuoteQueryKey(id) } });
   
-  const sendQuote = useSendQuote();
-  const acceptQuote = useAcceptQuote();
-  const declineQuote = useDeclineQuote();
-  const convertToInvoice = useConvertQuoteToInvoice();
-  
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  const handleAction = (action: any, successMessage: string) => {
-    action.mutate({ id }, {
-      onSuccess: () => {
-        toast({ title: "Success", description: successMessage });
-        queryClient.invalidateQueries({ queryKey: getGetQuoteQueryKey(id) });
-      },
-      onError: () => {
-        toast({ title: "Error", description: "Action failed.", variant: "destructive" });
-      }
-    });
-  };
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!quote) return <div>Quote not found</div>;
@@ -49,22 +31,22 @@ export default function QuoteDetail() {
         </div>
         <div className="flex items-center gap-2">
           {quote.status === 'draft' && (
-            <Button onClick={() => handleAction(sendQuote, "Quote marked as sent")} disabled={sendQuote.isPending}>
+            <Button onClick={() => toast({ title: "Send functionality coming soon" })}>
               <Send className="mr-2 h-4 w-4" /> Send
             </Button>
           )}
           {quote.status === 'sent' && (
             <>
-              <Button variant="outline" onClick={() => handleAction(acceptQuote, "Quote accepted")} disabled={acceptQuote.isPending} className="text-green-600 border-green-200 hover:bg-green-50">
+              <Button variant="outline" onClick={() => toast({ title: "Accept functionality coming soon" })} className="text-green-600 border-green-200 hover:bg-green-50">
                 <CheckCircle className="mr-2 h-4 w-4" /> Accept
               </Button>
-              <Button variant="outline" onClick={() => handleAction(declineQuote, "Quote declined")} disabled={declineQuote.isPending} className="text-red-600 border-red-200 hover:bg-red-50">
+              <Button variant="outline" onClick={() => toast({ title: "Decline functionality coming soon" })} className="text-red-600 border-red-200 hover:bg-red-50">
                 <XCircle className="mr-2 h-4 w-4" /> Decline
               </Button>
             </>
           )}
           {quote.status === 'accepted' && (
-            <Button onClick={() => handleAction(convertToInvoice, "Converted to invoice")} disabled={convertToInvoice.isPending}>
+            <Button onClick={() => toast({ title: "Convert to invoice coming soon" })}>
               <FilePlus2 className="mr-2 h-4 w-4" /> Convert to Invoice
             </Button>
           )}
