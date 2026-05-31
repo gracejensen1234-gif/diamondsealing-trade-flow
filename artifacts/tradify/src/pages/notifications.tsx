@@ -213,7 +213,7 @@ export default function NotificationCentre() {
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       {/* Unread dot */}
-                      <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.isRead ? "bg-blue-500" : "bg-transparent"}`} />
+                      <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.isRead ? "bg-orange-500" : "bg-transparent"}`} />
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">

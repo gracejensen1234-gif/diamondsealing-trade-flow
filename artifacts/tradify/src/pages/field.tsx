@@ -10,6 +10,7 @@ import {
   useListDispatch,
   useMarkArrived,
   useMarkDeparted,
+  useUpdateJobAssignment,
   getGetTodaySessionQueryKey,
   getListDispatchQueryKey,
 } from "@workspace/api-client-react";
@@ -63,7 +64,7 @@ async function subscribeToPush(subcontractorId: number, vapidPublicKey: string) 
     });
 
     const json = sub.toJSON();
-    await fetch("/api/push-subscriptions", {
+    const response = await fetch("/api/push-subscriptions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -74,7 +75,7 @@ async function subscribeToPush(subcontractorId: number, vapidPublicKey: string) 
         userAgent: navigator.userAgent,
       }),
     });
-    return true;
+    return response.ok;
   } catch {
     return false;
   }
@@ -175,13 +176,14 @@ export default function FieldView() {
       setPushSubscribed(true);
       setPushStatus("granted");
       setShowPushPrompt(false);
+      queryClient.invalidateQueries({ queryKey: ["push-subscription-status", subId] });
       toast({ title: "Notifications enabled", description: "You'll get alerts for new jobs, reminders, and updates." });
     } else {
       setPushStatus("denied");
       setShowPushPrompt(false);
       toast({ title: "Notifications blocked", description: "You can enable them in your browser settings.", variant: "destructive" });
     }
-  }, [subId, vapidKey, toast]);
+  }, [subId, vapidKey, queryClient, toast]);
 
   // ─── Location verification helper ────────────────────────────────────────
   const requestLocationVerification = useCallback(
@@ -270,6 +272,18 @@ export default function FieldView() {
     refetchInterval: 20000,
   });
 
+  const { data: pushServerStatus } = useQuery<{ enabled: boolean; subscriptionCount: number }>({
+    queryKey: ["push-subscription-status", subId],
+    queryFn: async () => {
+      if (!subId) return { enabled: false, subscriptionCount: 0 };
+      const response = await fetch(`/api/push-subscriptions/status?subcontractorId=${subId}`);
+      if (!response.ok) return { enabled: false, subscriptionCount: 0 };
+      return response.json();
+    },
+    enabled: !!subId,
+    refetchInterval: 60000,
+  });
+
   const { data: urgentNotifications } = useQuery<any[]>({
     queryKey: ["urgent-notifications", subId],
     queryFn: () => {
@@ -343,6 +357,15 @@ export default function FieldView() {
     },
   });
 
+  const startWork = useUpdateJobAssignment({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Work started" });
+        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
+      },
+    },
+  });
+
   // ─── Action handlers with location verification ───────────────────────────
   const handleClockOn = useCallback(async () => {
     if (!subId) return;
@@ -380,6 +403,7 @@ export default function FieldView() {
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
   const isOnBreak = session?.status === "on_break";
   const unreadCount = unreadData?.count ?? 0;
+  const pushEnabled = pushSubscribed || Boolean(pushServerStatus?.enabled);
 
   return (
     <div className="max-w-md mx-auto space-y-4 pb-20">
@@ -409,15 +433,15 @@ export default function FieldView() {
 
       {/* Location consent prompt */}
       {locationPrompt && (
-        <Card className="border-blue-300 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-700 shadow-md">
+        <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-700 shadow-md">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <Navigation className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <Navigation className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                <p className="font-semibold text-sm text-orange-950 dark:text-orange-100">
                   Location check — {locationPrompt.eventLabel}
                 </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                <p className="text-xs text-orange-800 dark:text-orange-300 mt-1">
                   Your location will activate briefly to confirm you are at the job address.
                   {locationPrompt.jobAddress && (
                     <span className="block mt-0.5 font-medium">{locationPrompt.jobAddress}</span>
@@ -448,14 +472,14 @@ export default function FieldView() {
       )}
 
       {/* Push notification permission prompt */}
-      {showPushPrompt && subId && pushStatus !== "granted" && pushStatus !== "unsupported" && (
-        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+      {showPushPrompt && subId && !pushEnabled && pushStatus !== "granted" && pushStatus !== "unsupported" && (
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-800">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <Bell className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <Bell className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">Enable push notifications</p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                <p className="font-semibold text-sm text-orange-950 dark:text-orange-100">Enable push notifications</p>
+                <p className="text-xs text-orange-800 dark:text-orange-300 mt-0.5">
                   Get instant alerts for new jobs, clock-on reminders, stock pickups, and more — even when the app is closed.
                 </p>
                 <div className="flex gap-2 mt-3">
@@ -473,10 +497,18 @@ export default function FieldView() {
       )}
 
       {/* Push denied reminder */}
-      {pushStatus === "denied" && subId && (
+      {pushStatus === "denied" && subId && !pushEnabled && (
         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
           <BellOff className="h-3.5 w-3.5 flex-shrink-0" />
           <span>Notifications are blocked — enable them in browser settings to receive job alerts.</span>
+        </div>
+      )}
+
+      {/* Push enabled status */}
+      {pushEnabled && subId && pushStatus !== "unsupported" && (
+        <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
+          <Bell className="h-3.5 w-3.5 flex-shrink-0" />
+          <span>Push notifications are enabled for this worker.</span>
         </div>
       )}
 
@@ -692,7 +724,12 @@ export default function FieldView() {
                     {(assignment.status === "arrived" || assignment.status === "in_progress") && (
                       <div className="flex w-full gap-2">
                         {assignment.status === "arrived" && (
-                          <Button variant="secondary" className="flex-1">
+                          <Button
+                            variant="secondary"
+                            className="flex-1"
+                            onClick={() => startWork.mutate({ id: assignment.id, data: { status: "in_progress" } })}
+                            disabled={startWork.isPending}
+                          >
                             Start Work
                           </Button>
                         )}

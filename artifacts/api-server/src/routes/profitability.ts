@@ -12,6 +12,7 @@ import {
   bonusCalculationsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { workSessionMinutes } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -56,9 +57,9 @@ router.post("/profitability/calculate", async (req, res) => {
       );
 
       const totalMetres = reports.reduce((a, r) => a + n(r.metersCompleted), 0);
-      const totalWorkMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+      const totalWorkMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
       const jobsCompleted = reports.length;
-      const callbackCount = flags.filter((f) => f.flagType === "callback").length;
+      const callbackCount = flags.filter((f) => f.flagType === "repeat_callback").length;
 
       // Revenue: rate_per_metre × total metres
       const ratePerMetre = n((sub as any).ratePerMetre ?? 25);

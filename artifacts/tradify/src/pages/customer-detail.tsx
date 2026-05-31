@@ -1,22 +1,124 @@
-import { useGetCustomer, getGetCustomerQueryKey, useListJobs, useListQuotes, useListInvoices } from "@workspace/api-client-react";
+import {
+  getGetCustomerQueryKey,
+  getListCustomersQueryKey,
+  useGetCustomer,
+  useListInvoices,
+  useListJobs,
+  useListQuotes,
+  useUpdateCustomer,
+} from "@workspace/api-client-react";
 import { useRoute, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Phone, MapPin, Building, Briefcase, FileText, Receipt } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+
+const emptyClientForm = {
+  name: "",
+  company: "",
+  email: "",
+  phone: "",
+  address: "",
+  suburb: "",
+  state: "",
+  postcode: "",
+  notes: "",
+};
+
+function optionalText(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
 
 export default function CustomerDetail() {
   const [, params] = useRoute("/customers/:id");
   const id = Number(params?.id);
   const { data: customer, isLoading } = useGetCustomer(id, { query: { enabled: !!id, queryKey: getGetCustomerQueryKey(id) } });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState(emptyClientForm);
 
   const { data: jobs, isLoading: isLoadingJobs } = useListJobs({ customerId: id });
   const { data: quotes, isLoading: isLoadingQuotes } = useListQuotes({ customerId: id });
   const { data: invoices, isLoading: isLoadingInvoices } = useListInvoices({ customerId: id });
 
+  useEffect(() => {
+    if (!customer) return;
+    setForm({
+      name: customer.name ?? "",
+      company: customer.company ?? "",
+      email: customer.email ?? "",
+      phone: customer.phone ?? "",
+      address: customer.address ?? "",
+      suburb: customer.suburb ?? "",
+      state: customer.state ?? "",
+      postcode: customer.postcode ?? "",
+      notes: customer.notes ?? "",
+    });
+  }, [customer]);
+
+  const updateCustomer = useUpdateCustomer({
+    mutation: {
+      onSuccess: (updatedCustomer) => {
+        queryClient.setQueryData(getGetCustomerQueryKey(id), updatedCustomer);
+        queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+        setEditOpen(false);
+        toast({ title: "Client updated" });
+      },
+      onError: () => {
+        toast({
+          title: "Could not update client",
+          description: "Check the required fields and try again.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const updateForm = (field: keyof typeof emptyClientForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleUpdateClient = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = form.name.trim();
+
+    if (!name) {
+      toast({
+        title: "Client name required",
+        description: "Enter a name before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateCustomer.mutate({
+      id,
+      data: {
+        name,
+        company: optionalText(form.company),
+        email: optionalText(form.email),
+        phone: optionalText(form.phone),
+        address: optionalText(form.address),
+        suburb: optionalText(form.suburb),
+        state: optionalText(form.state),
+        postcode: optionalText(form.postcode),
+        notes: optionalText(form.notes),
+      },
+    });
+  };
+
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
-  if (!customer) return <div>Customer not found</div>;
+  if (!customer) return <div>Client not found</div>;
 
   return (
     <div className="space-y-8">
@@ -31,9 +133,106 @@ export default function CustomerDetail() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Edit Customer</Button>
+          <Button variant="outline" onClick={() => setEditOpen(true)}>Edit Client</Button>
         </div>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-5" onSubmit={handleUpdateClient}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-client-name">Name</Label>
+                <Input
+                  id="edit-client-name"
+                  value={form.name}
+                  onChange={(event) => updateForm("name", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-client-company">Company</Label>
+                <Input
+                  id="edit-client-company"
+                  value={form.company}
+                  onChange={(event) => updateForm("company", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-client-phone">Phone</Label>
+                <Input
+                  id="edit-client-phone"
+                  value={form.phone}
+                  onChange={(event) => updateForm("phone", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-client-email">Email</Label>
+                <Input
+                  id="edit-client-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => updateForm("email", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-client-address">Address</Label>
+                <Input
+                  id="edit-client-address"
+                  value={form.address}
+                  onChange={(event) => updateForm("address", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-client-suburb">Suburb</Label>
+                <Input
+                  id="edit-client-suburb"
+                  value={form.suburb}
+                  onChange={(event) => updateForm("suburb", event.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-[1fr_7rem] gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-client-state">State</Label>
+                  <Input
+                    id="edit-client-state"
+                    value={form.state}
+                    onChange={(event) => updateForm("state", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-client-postcode">Postcode</Label>
+                  <Input
+                    id="edit-client-postcode"
+                    value={form.postcode}
+                    onChange={(event) => updateForm("postcode", event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-client-notes">Notes</Label>
+                <Textarea
+                  id="edit-client-notes"
+                  value={form.notes}
+                  onChange={(event) => updateForm("notes", event.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateCustomer.isPending}>
+                {updateCustomer.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="col-span-1">
@@ -92,7 +291,7 @@ export default function CustomerDetail() {
                       </div>
                     </Link>
                   ))}
-                  {!jobs?.length && <p className="text-sm text-muted-foreground">No jobs found for this customer.</p>}
+                  {!jobs?.length && <p className="text-sm text-muted-foreground">No jobs found for this client.</p>}
                 </div>
               )}
             </CardContent>
@@ -121,7 +320,7 @@ export default function CustomerDetail() {
                       </div>
                     </Link>
                   ))}
-                  {!quotes?.length && <p className="text-sm text-muted-foreground">No quotes found for this customer.</p>}
+                  {!quotes?.length && <p className="text-sm text-muted-foreground">No quotes found for this client.</p>}
                 </div>
               )}
             </CardContent>
@@ -150,7 +349,7 @@ export default function CustomerDetail() {
                       </div>
                     </Link>
                   ))}
-                  {!invoices?.length && <p className="text-sm text-muted-foreground">No invoices found for this customer.</p>}
+                  {!invoices?.length && <p className="text-sm text-muted-foreground">No invoices found for this client.</p>}
                 </div>
               )}
             </CardContent>

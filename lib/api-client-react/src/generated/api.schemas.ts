@@ -157,6 +157,8 @@ export interface Job {
   /** @nullable */
   scheduledDate?: string | null;
   /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
   completedDate?: string | null;
   /** @nullable */
   notes?: string | null;
@@ -196,6 +198,7 @@ export interface JobInput {
   builderContactPhone?: string;
   requiredColours?: string[];
   scheduledDate?: string;
+  dueDate?: string;
   notes?: string;
   priority?: JobInputPriority;
 }
@@ -230,6 +233,7 @@ export interface JobUpdate {
   builderContactPhone?: string;
   requiredColours?: string[];
   scheduledDate?: string;
+  dueDate?: string;
   completedDate?: string;
   notes?: string;
   priority?: JobUpdatePriority;
@@ -2401,4 +2405,3 @@ export type RegisterPushSubscription201 = {
 export type UnregisterPushSubscriptionBody = {
   endpoint: string;
 };
-

@@ -1,4 +1,10 @@
-import { useGetInvoice, getGetInvoiceQueryKey } from "@workspace/api-client-react";
+import {
+  getGetInvoiceQueryKey,
+  getListInvoicesQueryKey,
+  useGetInvoice,
+  usePayInvoice,
+  useSendInvoice,
+} from "@workspace/api-client-react";
 import { useRoute, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,11 +19,47 @@ export default function InvoiceDetail() {
   const [, params] = useRoute("/invoices/:id");
   const id = Number(params?.id);
   const { data: invoice, isLoading } = useGetInvoice(id, { query: { enabled: !!id, queryKey: getGetInvoiceQueryKey(id) } });
-  
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleActionError = () => {
+    toast({
+      title: "Action failed",
+      description: "Please try again. If it keeps happening, check the API connection.",
+      variant: "destructive",
+    });
+  };
+
+  const updateInvoiceCache = (updatedInvoice: typeof invoice) => {
+    if (!updatedInvoice) return;
+    queryClient.setQueryData(getGetInvoiceQueryKey(id), updatedInvoice);
+    queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+  };
+
+  const sendInvoice = useSendInvoice({
+    mutation: {
+      onSuccess: (updatedInvoice) => {
+        updateInvoiceCache(updatedInvoice);
+        toast({ title: "Invoice sent" });
+      },
+      onError: handleActionError,
+    },
+  });
+
+  const payInvoice = usePayInvoice({
+    mutation: {
+      onSuccess: (updatedInvoice) => {
+        updateInvoiceCache(updatedInvoice);
+        toast({ title: "Invoice marked as paid" });
+      },
+      onError: handleActionError,
+    },
+  });
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!invoice) return <div>Invoice not found</div>;
+
+  const actionPending = sendInvoice.isPending || payInvoice.isPending;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -31,13 +73,13 @@ export default function InvoiceDetail() {
         </div>
         <div className="flex items-center gap-2">
           {invoice.status === 'draft' && (
-            <Button onClick={() => toast({ title: "Send functionality coming soon" })}>
-              <Send className="mr-2 h-4 w-4" /> Send
+            <Button onClick={() => sendInvoice.mutate({ id })} disabled={actionPending}>
+              <Send className="mr-2 h-4 w-4" /> {sendInvoice.isPending ? "Sending..." : "Send"}
             </Button>
           )}
           {invoice.status === 'sent' && (
-            <Button onClick={() => toast({ title: "Mark paid functionality coming soon" })} className="bg-green-600 hover:bg-green-700 text-white">
-              <DollarSign className="mr-2 h-4 w-4" /> Mark Paid
+            <Button onClick={() => payInvoice.mutate({ id })} disabled={actionPending} className="bg-green-600 hover:bg-green-700 text-white">
+              <DollarSign className="mr-2 h-4 w-4" /> {payInvoice.isPending ? "Saving..." : "Mark Paid"}
             </Button>
           )}
         </div>
@@ -98,7 +140,7 @@ export default function InvoiceDetail() {
                 <span>${invoice.subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax ({(invoice.taxRate || 0) * 100}%)</span>
+                <span className="text-muted-foreground">Tax ({invoice.taxRate ?? 0}%)</span>
                 <span>${invoice.tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-3 border-t">

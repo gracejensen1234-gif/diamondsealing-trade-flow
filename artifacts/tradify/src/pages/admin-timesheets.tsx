@@ -24,8 +24,7 @@ export default function AdminTimesheets() {
 
   const { data: subs } = useListSubcontractors();
   const { data: timesheets, isLoading } = useGetAdminTimesheets({
-    startDate: format(weekStart, 'yyyy-MM-dd'),
-    endDate: format(weekEnd, 'yyyy-MM-dd'),
+    weekStart: format(weekStart, 'yyyy-MM-dd'),
     subcontractorId: subId !== "all" ? parseInt(subId) : undefined
   });
 

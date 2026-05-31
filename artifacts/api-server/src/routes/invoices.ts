@@ -12,6 +12,7 @@ import {
   SendInvoiceParams,
   PayInvoiceParams,
 } from "@workspace/api-zod";
+import { dateOnly } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -93,7 +94,7 @@ router.post("/invoices", async (req, res) => {
     subtotal: totals.subtotal,
     tax: totals.tax,
     total: totals.total,
-    dueDate: parsed.data.dueDate ?? null,
+    dueDate: dateOnly(parsed.data.dueDate),
   }).returning();
 
   const enriched = await enrichInvoice(invoice);
@@ -123,7 +124,7 @@ router.patch("/invoices/:id", async (req, res) => {
   if (body.data.jobId !== undefined) updates.jobId = body.data.jobId;
   if (body.data.title !== undefined) updates.title = body.data.title;
   if (body.data.notes !== undefined) updates.notes = body.data.notes;
-  if (body.data.dueDate !== undefined) updates.dueDate = body.data.dueDate;
+  if (body.data.dueDate !== undefined) updates.dueDate = dateOnly(body.data.dueDate);
 
   if (body.data.lineItems !== undefined) {
     const lineItems = body.data.lineItems.map((item, i) => ({
@@ -166,7 +167,7 @@ router.post("/invoices/:id/send", async (req, res) => {
 
   await db.insert(activityTable).values({
     type: "invoice_sent",
-    description: `Invoice ${invoice.invoiceNumber} sent to customer`,
+    description: `Invoice ${invoice.invoiceNumber} sent to client`,
     entityId: invoice.id,
     entityType: "invoice",
   });

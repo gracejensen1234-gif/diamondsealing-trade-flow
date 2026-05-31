@@ -13,8 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Building2, Plus, Star } from "lucide-react";
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  premium: { label: "Premium", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
-  high_end: { label: "High End", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  premium: { label: "Premium", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  high_end: { label: "High End", color: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300" },
   standard: { label: "Standard", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
   production: { label: "Production", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
   budget: { label: "Budget", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },

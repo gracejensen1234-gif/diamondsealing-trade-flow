@@ -16,8 +16,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Diamond Sealing";
   const options = {
     body: payload.body || "",
-    icon: "/favicon.ico",
-    badge: "/favicon.ico",
+    icon: "/diamond-sealing-logo.jpeg",
+    badge: "/diamond-sealing-logo.jpeg",
     tag: payload.tag || payload.type || "ds-notification",
     data: { actionUrl: payload.actionUrl || "/field" },
     requireInteraction: payload.priority === "urgent",

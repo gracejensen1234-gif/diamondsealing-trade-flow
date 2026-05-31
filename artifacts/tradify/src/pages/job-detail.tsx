@@ -8,6 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
+function formatJobDate(value: string | null | undefined, fallback: string): string {
+  return value ? new Date(value).toLocaleDateString("en-AU") : fallback;
+}
+
 export default function JobDetail() {
   const [, params] = useRoute("/jobs/:id");
   const id = Number(params?.id);
@@ -36,7 +40,7 @@ export default function JobDetail() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{job.title}</h1>
-          <p className="text-muted-foreground mt-1">Customer: {job.customerName}</p>
+          <p className="text-muted-foreground mt-1">Client: {job.customerName}</p>
           <p className="text-muted-foreground">Address: {job.address}</p>
         </div>
         <div className="flex items-center gap-4">
@@ -59,8 +63,13 @@ export default function JobDetail() {
         <Card>
           <CardHeader><CardTitle>Details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            <div><span className="font-semibold">Job type:</span> {job.title}</div>
             <div><span className="font-semibold">Priority:</span> <Badge variant="outline">{job.priority}</Badge></div>
-            <div><span className="font-semibold">Scheduled Date:</span> {job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : 'Unscheduled'}</div>
+            <div><span className="font-semibold">Scheduled date:</span> {formatJobDate(job.scheduledDate, "Unscheduled")}</div>
+            <div><span className="font-semibold">Due date:</span> {formatJobDate(job.dueDate, "No due date")}</div>
+            {job.completedDate && (
+              <div><span className="font-semibold">Completed date:</span> {formatJobDate(job.completedDate, "Not completed")}</div>
+            )}
             <div><span className="font-semibold">Description:</span> <p className="mt-1 text-sm">{job.description || 'No description'}</p></div>
             <div><span className="font-semibold">Notes:</span> <p className="mt-1 text-sm text-muted-foreground">{job.notes || 'No notes'}</p></div>
           </CardContent>

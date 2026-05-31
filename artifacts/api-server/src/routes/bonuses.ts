@@ -9,6 +9,7 @@ import {
   auditScoresTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { workSessionMinutes } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -123,7 +124,7 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
         );
 
       const totalMetres = reports.reduce((a, r) => a + Number(r.metersCompleted || 0), 0);
-      const totalWorkMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+      const totalWorkMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
       const avgMetresPerHour = totalWorkMinutes > 0 ? totalMetres / (totalWorkMinutes / 60) : null;
       const avgMetresPerDay = sessions.length > 0 ? totalMetres / sessions.length : null;
       const daysWorked = sessions.filter((s) => s.clockedOnAt).length;

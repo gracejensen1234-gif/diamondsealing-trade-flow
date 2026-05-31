@@ -37,13 +37,13 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Productivity Analytics</h1>
           <p className="text-muted-foreground mt-1">Metres per hour, daily breakdown, performance overview</p>
         </div>
         <Select value={range} onValueChange={(v) => setRange(v as "week" | "month")}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -54,12 +54,12 @@ export default function Analytics() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                <Layers className="w-5 h-5 text-blue-600" />
+              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/20">
+                <Layers className="w-5 h-5 text-orange-600" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Metres</p>
@@ -97,8 +97,8 @@ export default function Analytics() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/20">
-                <Users className="w-5 h-5 text-purple-600" />
+              <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900/40">
+                <Users className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Active Workers</p>
@@ -114,9 +114,9 @@ export default function Analytics() {
         {subs.map((sub: any) => (
           <Card key={sub.subcontractorId}>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{sub.subcontractorName}</CardTitle>
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="min-w-0 text-base">{sub.subcontractorName}</CardTitle>
+                <div className="flex flex-wrap items-center gap-3">
                   <span className="text-sm text-muted-foreground">{sub.jobsCompleted} jobs</span>
                   <Badge variant={sub.avgMetresPerHour >= 8 ? "default" : sub.avgMetresPerHour >= 5 ? "secondary" : "destructive"}>
                     {fmt(sub.avgMetresPerHour)} m/hr
@@ -125,7 +125,7 @@ export default function Analytics() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-4 mb-4 text-sm">
+              <div className="mb-4 grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
                 <div><p className="text-muted-foreground">Total Metres</p><p className="font-semibold">{fmt(sub.totalMetres, 0)}m</p></div>
                 <div><p className="text-muted-foreground">Work Hours</p><p className="font-semibold">{fmt(sub.totalWorkMinutes / 60)}h</p></div>
                 <div><p className="text-muted-foreground">Days Worked</p><p className="font-semibold">{sub.daysWorked}</p></div>
@@ -134,8 +134,8 @@ export default function Analytics() {
 
               {/* Daily breakdown */}
               {sub.dailyBreakdown?.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                <div className="-mx-1 overflow-x-auto px-1">
+                  <table className="min-w-[32rem] w-full text-xs">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-1 font-medium text-muted-foreground">Date</th>

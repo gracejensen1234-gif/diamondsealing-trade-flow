@@ -209,7 +209,7 @@ export default function Dispatch() {
         <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Schedule for {format(new Date(date), 'MMM do, yyyy')}</CardTitle>
-            <CardDescription>Drag handles to reorder (visual only in mockup)</CardDescription>
+            <CardDescription>Use stop numbers when assigning jobs to set the daily order.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">

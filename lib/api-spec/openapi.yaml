@@ -2503,6 +2503,9 @@ components:
         scheduledDate:
           type: ["string", "null"]
           format: date
+        dueDate:
+          type: ["string", "null"]
+          format: date
         completedDate:
           type: ["string", "null"]
           format: date
@@ -2545,6 +2548,9 @@ components:
         scheduledDate:
           type: string
           format: date
+        dueDate:
+          type: string
+          format: date
         notes:
           type: string
         priority:
@@ -2574,6 +2580,9 @@ components:
           items:
             type: string
         scheduledDate:
+          type: string
+          format: date
+        dueDate:
           type: string
           format: date
         completedDate:

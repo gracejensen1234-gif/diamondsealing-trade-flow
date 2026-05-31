@@ -8,6 +8,7 @@ import {
   workSessionsTable,
   subInventoryTable,
   stockItemsTable,
+  customersTable,
   builderProfilesTable,
   allocationRecommendationsTable,
   weeklyPlannerProposalsTable,
@@ -47,17 +48,17 @@ async function loadSubInfo(date: string): Promise<SubInfo[]> {
 
       // Get existing assignments for proximity calculation
       const assignments = await db
-        .select({ date: jobAssignmentsTable.scheduledDate, jobId: jobAssignmentsTable.jobId })
+        .select({ date: jobAssignmentsTable.dispatchDate, jobId: jobAssignmentsTable.jobId })
         .from(jobAssignmentsTable)
         .where(
           and(
             eq(jobAssignmentsTable.subcontractorId, sub.id),
-            gte(jobAssignmentsTable.scheduledDate, (() => {
+            gte(jobAssignmentsTable.dispatchDate, (() => {
               const d = new Date(date);
               d.setDate(d.getDate() - 3);
               return d.toISOString().split("T")[0];
             })()),
-            lte(jobAssignmentsTable.scheduledDate, (() => {
+            lte(jobAssignmentsTable.dispatchDate, (() => {
               const d = new Date(date);
               d.setDate(d.getDate() + 3);
               return d.toISOString().split("T")[0];
@@ -65,12 +66,17 @@ async function loadSubInfo(date: string): Promise<SubInfo[]> {
           ),
         );
 
-      const assignedDates = assignments.map((a) => a.scheduledDate);
-      const jobIds = assignments.map((a) => a.jobId);
+      const assignedDates = assignments.map((a) => a.date);
+      const jobIds = assignments.map((a) => a.jobId).filter((jobId): jobId is number => jobId !== null);
       const assignedSuburbs: string[] = [];
       for (const jid of jobIds) {
-        const [j] = await db.select({ suburb: jobsTable.suburb }).from(jobsTable).where(eq(jobsTable.id, jid)).limit(1);
-        if (j?.suburb) assignedSuburbs.push(j.suburb);
+        const [j] = await db.select({ customerId: jobsTable.customerId, address: jobsTable.address }).from(jobsTable).where(eq(jobsTable.id, jid)).limit(1);
+        if (j?.customerId) {
+          const [customer] = await db.select({ suburb: customersTable.suburb }).from(customersTable).where(eq(customersTable.id, j.customerId)).limit(1);
+          if (customer?.suburb) assignedSuburbs.push(customer.suburb);
+        } else if (j?.address) {
+          assignedSuburbs.push(j.address);
+        }
       }
 
       return { id: sub.id, name: sub.name, skills: skills ?? null, inventory, assignedDates, assignedSuburbs };

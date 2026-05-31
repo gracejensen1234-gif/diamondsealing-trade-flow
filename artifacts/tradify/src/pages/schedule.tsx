@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 export default function Schedule() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   
-  // Just fetching all for simple view, in real app would filter by date
+  // The calendar view groups jobs by their scheduled date on the client.
   const { data: appointments, isLoading } = useListAppointments();
 
   const selectedDateAppointments = appointments?.filter(app => {

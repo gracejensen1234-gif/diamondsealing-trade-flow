@@ -14,6 +14,7 @@ import {
   DeclineQuoteParams,
   ConvertQuoteToInvoiceParams,
 } from "@workspace/api-zod";
+import { dateOnly } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.post("/quotes", async (req, res) => {
     subtotal: totals.subtotal,
     tax: totals.tax,
     total: totals.total,
-    validUntil: parsed.data.validUntil ?? null,
+    validUntil: dateOnly(parsed.data.validUntil),
   }).returning();
 
   const enriched = await enrichQuote(quote);
@@ -127,7 +128,7 @@ router.patch("/quotes/:id", async (req, res) => {
   if (body.data.jobId !== undefined) updates.jobId = body.data.jobId;
   if (body.data.title !== undefined) updates.title = body.data.title;
   if (body.data.notes !== undefined) updates.notes = body.data.notes;
-  if (body.data.validUntil !== undefined) updates.validUntil = body.data.validUntil;
+  if (body.data.validUntil !== undefined) updates.validUntil = dateOnly(body.data.validUntil);
 
   if (body.data.lineItems !== undefined) {
     const lineItems = body.data.lineItems.map((item, i) => ({
@@ -170,7 +171,7 @@ router.post("/quotes/:id/send", async (req, res) => {
 
   await db.insert(activityTable).values({
     type: "quote_sent",
-    description: `Quote ${quote.quoteNumber} sent to customer`,
+    description: `Quote ${quote.quoteNumber} sent to client`,
     entityId: quote.id,
     entityType: "quote",
   });

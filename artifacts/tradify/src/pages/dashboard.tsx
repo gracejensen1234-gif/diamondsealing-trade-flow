@@ -6,6 +6,7 @@ import { Briefcase, FileText, Receipt, DollarSign } from "lucide-react";
 export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
   const { data: activity, isLoading: loadingActivity } = useGetDashboardActivity();
+  const recentActivity = Array.isArray(activity) ? activity : [];
 
   return (
     <div className="space-y-8">
@@ -87,7 +88,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {activity?.map((item) => (
+                {recentActivity.map((item) => (
                   <div key={item.id} className="flex items-center gap-4 text-sm">
                     <div className="w-2 h-2 rounded-full bg-primary" />
                     <div className="flex-1">
@@ -96,7 +97,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-                {!activity?.length && <p className="text-muted-foreground text-sm">No recent activity</p>}
+                {!recentActivity.length && <p className="text-muted-foreground text-sm">No recent activity</p>}
               </div>
             )}
           </CardContent>

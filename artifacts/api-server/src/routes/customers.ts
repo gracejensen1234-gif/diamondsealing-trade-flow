@@ -52,7 +52,7 @@ router.post("/customers", async (req, res) => {
 
   await db.insert(activityTable).values({
     type: "customer_created",
-    description: `New customer ${customer.name} added`,
+    description: `New client ${customer.name} added`,
     entityId: customer.id,
     entityType: "customer",
   });

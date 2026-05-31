@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { useListDispatch, useListStockItems, useCreateJobReport, getListJobReportsQueryKey } from "@workspace/api-client-react";
+import { useListDispatch, useListStockItems, useCreateJobReport, getListDispatchQueryKey, getListJobReportsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default function FieldJobDetail() {
   const today = new Date().toISOString().split('T')[0];
   const { data: dispatchList, isLoading: loadingAssignment } = useListDispatch(
     { date: today },
-    { query: { enabled: !!id } }
+    { query: { queryKey: getListDispatchQueryKey({ date: today }), enabled: !!id } }
   );
   const assignment = dispatchList?.find(a => a.id === Number(id));
   const { data: stockItems, isLoading: loadingStock } = useListStockItems();
@@ -48,7 +48,7 @@ export default function FieldJobDetail() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     
-    // Convert files to data URLs (simplified for mockup, in reality would upload to storage)
+    // Keep local previews responsive; production can replace this with object storage uploads.
     Array.from(e.target.files).forEach(file => {
       const reader = new FileReader();
       reader.onload = (event) => {

@@ -20,6 +20,7 @@ export const jobsTable = pgTable("jobs", {
   addressLat: numeric("address_lat", { precision: 10, scale: 7 }),
   addressLng: numeric("address_lng", { precision: 10, scale: 7 }),
   scheduledDate: text("scheduled_date"),
+  dueDate: text("due_date"),
   completedDate: text("completed_date"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

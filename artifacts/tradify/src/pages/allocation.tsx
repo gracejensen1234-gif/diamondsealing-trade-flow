@@ -11,7 +11,7 @@ import { Brain, CheckCircle, AlertTriangle, XCircle, ChevronRight, Sparkles } fr
 
 const REC_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   recommended: { icon: CheckCircle, color: "text-green-600", label: "Recommended" },
-  suitable: { icon: CheckCircle, color: "text-blue-500", label: "Suitable" },
+  suitable: { icon: CheckCircle, color: "text-orange-500", label: "Suitable" },
   possible: { icon: AlertTriangle, color: "text-amber-500", label: "Possible" },
   not_recommended: { icon: XCircle, color: "text-red-500", label: "Not Recommended" },
 };

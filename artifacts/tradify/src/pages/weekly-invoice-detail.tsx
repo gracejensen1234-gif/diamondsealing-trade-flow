@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
-import { useGetWeeklyInvoice, useUpdateWeeklyInvoice, useSubmitWeeklyInvoice } from "@workspace/api-client-react";
+import { useGetWeeklyInvoice, useUpdateWeeklyInvoice, useSubmitWeeklyInvoice, getGetWeeklyInvoiceQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,8 @@ export default function WeeklyInvoiceDetail() {
   const { id } = useParams();
   const { toast } = useToast();
   
-  const { data: invoice, isLoading, refetch } = useGetWeeklyInvoice(Number(id), { query: { enabled: !!id } });
+  const invoiceId = Number(id);
+  const { data: invoice, isLoading, refetch } = useGetWeeklyInvoice(invoiceId, { query: { queryKey: getGetWeeklyInvoiceQueryKey(invoiceId), enabled: !!id } });
   
   const [notes, setNotes] = useState("");
   const notesInitRef = useRef<number | null>(null);
@@ -165,7 +166,7 @@ export default function WeeklyInvoiceDetail() {
             <CardFooter className="flex-col gap-3">
               {invoice.status === 'draft' ? (
                 <Button 
-                  className="w-full h-12 text-lg bg-[#13B5EA] hover:bg-[#0f92bd] text-white" 
+                  className="w-full h-12 text-lg" 
                   onClick={() => submitInvoice.mutate({ id: invoice.id })}
                   disabled={submitInvoice.isPending || !invoice.lineItems?.length}
                 >

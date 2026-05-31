@@ -10,6 +10,7 @@ import {
   UpdateWeeklyInvoiceBody,
   SubmitWeeklyInvoiceParams,
 } from "@workspace/api-zod";
+import { dateOnlyOrToday } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.post("/weekly-invoices/generate", async (req, res) => {
   const parsed = GenerateWeeklyInvoicesBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
-  const weekStart = parsed.data.weekStartDate;
+  const weekStart = dateOnlyOrToday(parsed.data.weekStartDate);
   const weekStartDate = new Date(weekStart);
   const weekEndDate = new Date(weekStartDate);
   weekEndDate.setDate(weekEndDate.getDate() + 6);

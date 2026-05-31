@@ -10,6 +10,8 @@ import {
   MarkArrivedParams,
   MarkDepartedParams,
 } from "@workspace/api-zod";
+import { dateOnlyOrToday } from "../lib/date-utils.js";
+import { createAndSendNotification } from "../lib/notificationService.js";
 
 const router = Router();
 
@@ -62,7 +64,7 @@ router.post("/dispatch", async (req, res) => {
 
   const inserted = await db.insert(jobAssignmentsTable).values(
     parsed.data.assignments.map((a) => ({
-      dispatchDate: parsed.data.dispatchDate,
+      dispatchDate: dateOnlyOrToday(parsed.data.dispatchDate),
       scheduledOrder: a.scheduledOrder,
       jobId: a.jobId,
       subcontractorId: a.subcontractorId ?? null,
@@ -75,6 +77,27 @@ router.post("/dispatch", async (req, res) => {
   ).returning();
 
   const enriched = await Promise.all(inserted.map(enrichAssignment));
+
+  await Promise.all(
+    enriched.map(async (assignment) => {
+      if (!assignment.subcontractorId) return;
+      try {
+        await createAndSendNotification({
+          subcontractorId: assignment.subcontractorId,
+          type: "new_job",
+          title: "New job assigned",
+          body: `${assignment.jobTitle ?? "Job"}${assignment.jobAddress ? ` at ${assignment.jobAddress}` : ""}`,
+          priority: "high",
+          actionUrl: "/field",
+          linkedEntityType: "job_assignment",
+          linkedEntityId: assignment.id,
+        });
+      } catch (err) {
+        req.log.warn({ err, assignmentId: assignment.id }, "Failed to send new job notification");
+      }
+    }),
+  );
+
   return res.status(201).json(enriched);
 });
 
@@ -95,7 +118,26 @@ router.patch("/dispatch/:id", async (req, res) => {
   const [a] = await db.update(jobAssignmentsTable).set(updates).where(eq(jobAssignmentsTable.id, params.data.id)).returning();
   if (!a) return res.status(404).json({ error: "Not found" });
 
-  return res.json(await enrichAssignment(a));
+  const enriched = await enrichAssignment(a);
+
+  if (enriched.subcontractorId && (body.data.subcontractorId !== undefined || body.data.scheduledOrder !== undefined || body.data.notes !== undefined || body.data.requiredColours !== undefined)) {
+    try {
+      await createAndSendNotification({
+        subcontractorId: enriched.subcontractorId,
+        type: "job_changed",
+        title: "Job assignment updated",
+        body: `${enriched.jobTitle ?? "Job"} has been updated. Check the field view before attending site.`,
+        priority: "normal",
+        actionUrl: "/field",
+        linkedEntityType: "job_assignment",
+        linkedEntityId: enriched.id,
+      });
+    } catch (err) {
+      req.log.warn({ err, assignmentId: enriched.id }, "Failed to send job update notification");
+    }
+  }
+
+  return res.json(enriched);
 });
 
 router.delete("/dispatch/:id", async (req, res) => {

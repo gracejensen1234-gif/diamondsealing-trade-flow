@@ -39,7 +39,25 @@ router.patch("/xero/settings", async (req, res) => {
 });
 
 router.post("/xero/connect", async (req, res) => {
-  const authUrl = "https://login.xero.com/identity/connect/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI&scope=openid profile email accounting.transactions accounting.contacts offline_access&state=diamond-sealing";
+  const settings = await getOrCreateSettings();
+  const clientId = settings.clientId?.trim();
+  const redirectUri = process.env.XERO_REDIRECT_URI?.trim();
+
+  if (!clientId || !redirectUri) {
+    return res.status(400).json({
+      error: "Xero connection is not configured",
+      message: "Set a Xero Client ID and XERO_REDIRECT_URI before connecting.",
+    });
+  }
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: "openid profile email accounting.transactions accounting.contacts offline_access",
+    state: "diamond-sealing",
+  });
+  const authUrl = `https://login.xero.com/identity/connect/authorize?${params.toString()}`;
   return res.json({ authUrl });
 });
 

@@ -10,6 +10,7 @@ import {
   GetJobReportParams,
   ListJobReportsQueryParams,
 } from "@workspace/api-zod";
+import { dateOnlyOrToday } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -70,7 +71,7 @@ router.get("/job-reports", async (req, res) => {
   if (parsed.data.jobId) conditions.push(eq(jobReportsTable.jobId, parsed.data.jobId));
   if (parsed.data.subcontractorId)
     conditions.push(eq(jobReportsTable.subcontractorId, parsed.data.subcontractorId));
-  if (parsed.data.date) conditions.push(eq(jobReportsTable.dispatchDate, parsed.data.date));
+  if (parsed.data.date) conditions.push(eq(jobReportsTable.dispatchDate, dateOnlyOrToday(parsed.data.date)));
 
   let reports = await db
     .select()
@@ -106,8 +107,7 @@ router.post("/job-reports", async (req, res) => {
       jobId: parsed.data.jobId,
       jobAssignmentId: parsed.data.jobAssignmentId ?? null,
       subcontractorId: parsed.data.subcontractorId,
-      dispatchDate:
-        parsed.data.dispatchDate ?? new Date().toISOString().split("T")[0],
+      dispatchDate: dateOnlyOrToday(parsed.data.dispatchDate),
       metersCompleted: String(parsed.data.metersCompleted),
       photos: parsed.data.photos,
       silikoneColoursUsed: parsed.data.silikoneColoursUsed ?? [],

@@ -78,7 +78,7 @@ export default function WeeklyInvoices() {
         </div>
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300 p-4 rounded-lg flex gap-3 text-sm">
+      <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
         <Info className="h-5 w-5 shrink-0" />
         <p>Diamond Sealing invoices are automatically generated every Thursday evening, based on completed job reports for the week. You can manually generate them anytime above.</p>
       </div>
@@ -122,7 +122,7 @@ export default function WeeklyInvoices() {
                 </Button>
                 {inv.status === 'draft' && (
                   <Button 
-                    className="flex-1 bg-[#13B5EA] hover:bg-[#0f92bd] text-white" 
+                    className="flex-1" 
                     onClick={() => submitInvoice.mutate({ id: inv.id })}
                     disabled={submitInvoice.isPending}
                   >

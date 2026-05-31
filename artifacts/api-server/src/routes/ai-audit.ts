@@ -11,7 +11,9 @@ import {
   locationVerificationsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
-import { openai } from "../lib/openai-client.js";
+import { createAndSendNotification } from "../lib/notificationService.js";
+import { getAuditModel, getOpenAIClient, hasOpenAIConfig } from "../lib/openai-client.js";
+import { workSessionMinutes } from "../lib/date-utils.js";
 import type OpenAI from "openai";
 
 const router = Router();
@@ -69,7 +71,7 @@ const AUDIT_RULES: AuditRule[] = [
     title: "Below average daily metres",
     check({ reports, sessions }) {
       const totalMetres = reports.reduce((a, r) => a + Number(r.metersCompleted || 0), 0);
-      const workMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+      const workMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
       const mPerHour = workMinutes > 0 ? totalMetres / (workMinutes / 60) : null;
       const triggered = mPerHour !== null && mPerHour < 4 && workMinutes > 60;
       return {
@@ -86,10 +88,10 @@ const AUDIT_RULES: AuditRule[] = [
     severity: "warning",
     title: "Unusually long shift",
     check({ sessions }) {
-      const long = sessions.filter((s) => (s.totalWorkMinutes || 0) > 600);
+      const long = sessions.filter((s) => workSessionMinutes(s) > 600);
       return {
         triggered: long.length > 0,
-        description: long.length > 0 ? `Shift of ${Math.round((long[0].totalWorkMinutes || 0) / 60 * 10) / 10} hours detected (>10hr).` : "",
+        description: long.length > 0 ? `Shift of ${Math.round((workSessionMinutes(long[0]) / 60) * 10) / 10} hours detected (>10hr).` : "",
         evidence: { sessionIds: long.map((s) => s.id) },
       };
     },
@@ -165,6 +167,10 @@ async function runAIAnalysis(
   locationVerifications: typeof locationVerificationsTable.$inferSelect[],
 ): Promise<AIAuditFlag[]> {
   if (reports.length === 0) return [];
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error("OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.");
+  }
 
   const systemPrompt = `You are a quality audit assistant for Diamond Sealing, an Australian silicone and sealing subcontractor company.
 Analyse the job report data and completion photos provided and flag genuine quality, safety, or compliance concerns for admin review.
@@ -227,7 +233,7 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
   ];
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: getAuditModel(),
     max_tokens: 1500,
     response_format: { type: "json_object" },
     messages: [
@@ -256,6 +262,17 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+
+// GET /audit/ai-status
+router.get("/audit/ai-status", (_req, res) => {
+  return res.json({
+    configured: hasOpenAIConfig(),
+    model: getAuditModel(),
+    message: hasOpenAIConfig()
+      ? "AI photo auditing is ready."
+      : "OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.",
+  });
+});
 
 // POST /audit/run  (rule-based)
 router.post("/audit/run", async (req, res) => {
@@ -314,6 +331,13 @@ router.post("/audit/run", async (req, res) => {
 
 // POST /audit/ai-run  (AI-powered analysis)
 router.post("/audit/ai-run", async (req, res) => {
+  if (!hasOpenAIConfig()) {
+    return res.status(400).json({
+      error: "OpenAI is not configured",
+      message: "OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.",
+    });
+  }
+
   const { subcontractorId, date } = req.body;
   const targetDate = (date as string | undefined) || new Date().toISOString().split("T")[0];
   const targetSubId = subcontractorId ? Number(subcontractorId) : null;
@@ -423,6 +447,24 @@ router.patch("/audit/flags/:id", async (req, res) => {
   if (!flag) return res.status(404).json({ error: "Not found" });
 
   const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, flag.subcontractorId));
+
+  if (status === "fix_requested" || showToWorker === true) {
+    try {
+      await createAndSendNotification({
+        subcontractorId: flag.subcontractorId,
+        type: "audit_fix_request",
+        title: "Audit follow-up requested",
+        body: `${flag.title}: ${adminNotes || "Please review this job audit item."}`,
+        priority: flag.severity === "critical" ? "high" : "normal",
+        actionUrl: "/notifications",
+        linkedEntityType: "audit_flag",
+        linkedEntityId: flag.id,
+      });
+    } catch (err) {
+      req.log.warn({ err, auditFlagId: flag.id }, "Failed to send audit fix notification");
+    }
+  }
+
   return res.json({ ...flag, subcontractorName: sub?.name ?? "" });
 });
 

@@ -1,5 +1,15 @@
-import { useGetQuote, getGetQuoteQueryKey } from "@workspace/api-client-react";
-import { useRoute, Link } from "wouter";
+import {
+  getGetInvoiceQueryKey,
+  getGetQuoteQueryKey,
+  getListInvoicesQueryKey,
+  getListQuotesQueryKey,
+  useAcceptQuote,
+  useConvertQuoteToInvoice,
+  useDeclineQuote,
+  useGetQuote,
+  useSendQuote,
+} from "@workspace/api-client-react";
+import { useRoute, Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +21,73 @@ import { Send, CheckCircle, XCircle, FilePlus2 } from "lucide-react";
 
 export default function QuoteDetail() {
   const [, params] = useRoute("/quotes/:id");
+  const [, setLocation] = useLocation();
   const id = Number(params?.id);
   const { data: quote, isLoading } = useGetQuote(id, { query: { enabled: !!id, queryKey: getGetQuoteQueryKey(id) } });
-  
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleActionError = () => {
+    toast({
+      title: "Action failed",
+      description: "Please try again. If it keeps happening, check the API connection.",
+      variant: "destructive",
+    });
+  };
+
+  const updateQuoteCache = (updatedQuote: typeof quote) => {
+    if (!updatedQuote) return;
+    queryClient.setQueryData(getGetQuoteQueryKey(id), updatedQuote);
+    queryClient.invalidateQueries({ queryKey: getListQuotesQueryKey() });
+  };
+
+  const sendQuote = useSendQuote({
+    mutation: {
+      onSuccess: (updatedQuote) => {
+        updateQuoteCache(updatedQuote);
+        toast({ title: "Quote sent" });
+      },
+      onError: handleActionError,
+    },
+  });
+
+  const acceptQuote = useAcceptQuote({
+    mutation: {
+      onSuccess: (updatedQuote) => {
+        updateQuoteCache(updatedQuote);
+        toast({ title: "Quote accepted" });
+      },
+      onError: handleActionError,
+    },
+  });
+
+  const declineQuote = useDeclineQuote({
+    mutation: {
+      onSuccess: (updatedQuote) => {
+        updateQuoteCache(updatedQuote);
+        toast({ title: "Quote declined" });
+      },
+      onError: handleActionError,
+    },
+  });
+
+  const convertQuote = useConvertQuoteToInvoice({
+    mutation: {
+      onSuccess: (invoice) => {
+        queryClient.setQueryData(getGetInvoiceQueryKey(invoice.id), invoice);
+        queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListQuotesQueryKey() });
+        toast({ title: "Invoice created", description: `${invoice.invoiceNumber} is ready to review.` });
+        setLocation(`/invoices/${invoice.id}`);
+      },
+      onError: handleActionError,
+    },
+  });
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-64 w-full" /></div>;
   if (!quote) return <div>Quote not found</div>;
+
+  const actionPending = sendQuote.isPending || acceptQuote.isPending || declineQuote.isPending || convertQuote.isPending;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -31,23 +101,23 @@ export default function QuoteDetail() {
         </div>
         <div className="flex items-center gap-2">
           {quote.status === 'draft' && (
-            <Button onClick={() => toast({ title: "Send functionality coming soon" })}>
-              <Send className="mr-2 h-4 w-4" /> Send
+            <Button onClick={() => sendQuote.mutate({ id })} disabled={actionPending}>
+              <Send className="mr-2 h-4 w-4" /> {sendQuote.isPending ? "Sending..." : "Send"}
             </Button>
           )}
           {quote.status === 'sent' && (
             <>
-              <Button variant="outline" onClick={() => toast({ title: "Accept functionality coming soon" })} className="text-green-600 border-green-200 hover:bg-green-50">
-                <CheckCircle className="mr-2 h-4 w-4" /> Accept
+              <Button variant="outline" onClick={() => acceptQuote.mutate({ id })} disabled={actionPending} className="text-green-600 border-green-200 hover:bg-green-50">
+                <CheckCircle className="mr-2 h-4 w-4" /> {acceptQuote.isPending ? "Accepting..." : "Accept"}
               </Button>
-              <Button variant="outline" onClick={() => toast({ title: "Decline functionality coming soon" })} className="text-red-600 border-red-200 hover:bg-red-50">
-                <XCircle className="mr-2 h-4 w-4" /> Decline
+              <Button variant="outline" onClick={() => declineQuote.mutate({ id })} disabled={actionPending} className="text-red-600 border-red-200 hover:bg-red-50">
+                <XCircle className="mr-2 h-4 w-4" /> {declineQuote.isPending ? "Declining..." : "Decline"}
               </Button>
             </>
           )}
           {quote.status === 'accepted' && (
-            <Button onClick={() => toast({ title: "Convert to invoice coming soon" })}>
-              <FilePlus2 className="mr-2 h-4 w-4" /> Convert to Invoice
+            <Button onClick={() => convertQuote.mutate({ id })} disabled={actionPending}>
+              <FilePlus2 className="mr-2 h-4 w-4" /> {convertQuote.isPending ? "Creating..." : "Convert to Invoice"}
             </Button>
           )}
         </div>
@@ -108,7 +178,7 @@ export default function QuoteDetail() {
                 <span>${quote.subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax ({(quote.taxRate || 0) * 100}%)</span>
+                <span className="text-muted-foreground">Tax ({quote.taxRate ?? 0}%)</span>
                 <span>${quote.tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-3 border-t">

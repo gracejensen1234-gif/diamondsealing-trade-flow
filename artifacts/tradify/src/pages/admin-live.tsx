@@ -21,7 +21,7 @@ const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; color: 
   skipped: { label: "Skipped", icon: <SkipForward className="h-3.5 w-3.5" />, color: "text-amber-600" },
   location_error: { label: "Error", icon: <XCircle className="h-3.5 w-3.5" />, color: "text-red-500" },
   geocode_failed: { label: "Address unresolved", icon: <AlertTriangle className="h-3.5 w-3.5" />, color: "text-amber-600" },
-  captured: { label: "Captured", icon: <Navigation className="h-3.5 w-3.5" />, color: "text-blue-600" },
+  captured: { label: "Captured", icon: <Navigation className="h-3.5 w-3.5" />, color: "text-orange-600" },
   no_job_address: { label: "No address", icon: <Navigation className="h-3.5 w-3.5" />, color: "text-slate-500" },
 };
 

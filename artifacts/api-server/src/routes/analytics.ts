@@ -10,6 +10,7 @@ import {
   bonusRulesTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { workSessionMinutes } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -64,6 +65,7 @@ router.get("/analytics/productivity", async (req, res) => {
       const metresByDate = new Map<string, number>();
       const jobsByDate = new Map<string, number>();
       for (const r of reports) {
+        if (!r.dispatchDate) continue;
         const m = metresByDate.get(r.dispatchDate) || 0;
         metresByDate.set(r.dispatchDate, m + Number(r.metersCompleted || 0));
         jobsByDate.set(r.dispatchDate, (jobsByDate.get(r.dispatchDate) || 0) + 1);
@@ -71,7 +73,7 @@ router.get("/analytics/productivity", async (req, res) => {
 
       const dailyBreakdown = sessions.map((s) => {
         const metres = metresByDate.get(s.date) || 0;
-        const wm = s.totalWorkMinutes || 0;
+        const wm = workSessionMinutes(s);
         return {
           date: s.date,
           metres,
@@ -148,7 +150,7 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
     );
 
   const totalMetres = reports.reduce((a, r) => a + Number(r.metersCompleted || 0), 0);
-  const totalWorkMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+  const totalWorkMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
   const daysWorked = sessions.filter((s) => s.clockedOnAt).length;
   const mPerHour = metresPerHour(totalMetres, totalWorkMinutes);
   const avgMetresPerDay = daysWorked > 0 ? Math.round((totalMetres / daysWorked) * 100) / 100 : 0;
@@ -184,11 +186,12 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
 
   const metresByDate = new Map<string, number>();
   for (const r of reports) {
+    if (!r.dispatchDate) continue;
     metresByDate.set(r.dispatchDate, (metresByDate.get(r.dispatchDate) || 0) + Number(r.metersCompleted || 0));
   }
   const workMinutesByDate = new Map<string, number>();
   for (const s of sessions) {
-    workMinutesByDate.set(s.date, s.totalWorkMinutes || 0);
+    workMinutesByDate.set(s.date, workSessionMinutes(s));
   }
 
   let topDay: { date: string; metres: number; metresPerHour: number } | null = null;
@@ -264,7 +267,7 @@ router.get("/analytics/leaderboard", async (req, res) => {
         );
 
       const totalMetres = reports.reduce((a, r) => a + Number(r.metersCompleted || 0), 0);
-      const totalWorkMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+      const totalWorkMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
       const daysWorked = sessions.filter((s) => s.clockedOnAt).length;
       const mph = metresPerHour(totalMetres, totalWorkMinutes) ?? 0;
 

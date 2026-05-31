@@ -28,7 +28,7 @@ router.get("/notifications", async (req, res) => {
     .orderBy(desc(notificationsTable.createdAt))
     .limit(limit);
 
-  res.json(rows);
+  return res.json(rows);
 });
 
 // GET /notifications/unread-count?subcontractorId=
@@ -41,7 +41,7 @@ router.get("/notifications/unread-count", async (req, res) => {
     .from(notificationsTable)
     .where(and(eq(notificationsTable.subcontractorId, subId), eq(notificationsTable.isRead, false)));
 
-  res.json({ count: row?.count ?? 0 });
+  return res.json({ count: row?.count ?? 0 });
 });
 
 // POST /notifications/read-all
@@ -54,7 +54,7 @@ router.post("/notifications/read-all", async (req, res) => {
     .set({ isRead: true, readAt: new Date() })
     .where(and(eq(notificationsTable.subcontractorId, subcontractorId), eq(notificationsTable.isRead, false)));
 
-  res.json({ updated: result.rowCount ?? 0 });
+  return res.json({ updated: result.rowCount ?? 0 });
 });
 
 // PATCH /notifications/:id/read
@@ -67,14 +67,14 @@ router.patch("/notifications/:id/read", async (req, res) => {
     .returning();
 
   if (!row) return res.status(404).json({ error: "Not found" });
-  res.json(row);
+  return res.json(row);
 });
 
 // DELETE /notifications/:id
 router.delete("/notifications/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   await db.delete(notificationsTable).where(eq(notificationsTable.id, id));
-  res.status(204).send();
+  return res.status(204).send();
 });
 
 // POST /notifications  (admin create + push)
@@ -96,13 +96,29 @@ router.post("/notifications", async (req, res) => {
     linkedEntityId,
   });
 
-  res.status(201).json(notification);
+  return res.status(201).json(notification);
 });
 
 // GET /push-subscriptions/vapid-public-key
 router.get("/push-subscriptions/vapid-public-key", async (_req, res) => {
   const publicKey = await ensureVapid();
-  res.json({ publicKey });
+  return res.json({ publicKey });
+});
+
+// GET /push-subscriptions/status?subcontractorId=
+router.get("/push-subscriptions/status", async (req, res) => {
+  const subId = parseInt(req.query.subcontractorId as string);
+  if (isNaN(subId)) return res.status(400).json({ error: "subcontractorId required" });
+
+  const subscriptions = await db
+    .select()
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.subcontractorId, subId));
+
+  return res.json({
+    enabled: subscriptions.length > 0,
+    subscriptionCount: subscriptions.length,
+  });
 });
 
 // POST /push-subscriptions
@@ -134,7 +150,7 @@ router.post("/push-subscriptions", async (req, res) => {
     .values({ subcontractorId, endpoint, p256dh, auth, userAgent: userAgent ?? null })
     .returning();
 
-  res.status(201).json({ id: row.id });
+  return res.status(201).json({ id: row.id });
 });
 
 // DELETE /push-subscriptions
@@ -143,7 +159,7 @@ router.delete("/push-subscriptions", async (req, res) => {
   if (!endpoint) return res.status(400).json({ error: "endpoint required" });
 
   await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, endpoint));
-  res.status(204).send();
+  return res.status(204).send();
 });
 
 export default router;

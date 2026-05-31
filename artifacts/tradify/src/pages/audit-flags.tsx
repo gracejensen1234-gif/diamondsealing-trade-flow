@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, AlertTriangle, CheckCircle, Sparkles, ListChecks, Bot } from "lucide-react";
 
 const SEV_STYLE: Record<string, { color: string; border: string }> = {
-  info:     { color: "text-blue-600",   border: "border-l-blue-400" },
+  info:     { color: "text-orange-600", border: "border-l-orange-400" },
   warning:  { color: "text-amber-600",  border: "border-l-amber-500" },
   critical: { color: "text-red-600",    border: "border-l-red-500" },
 };
@@ -52,6 +52,10 @@ export default function AuditFlags() {
     queryKey: ["audit-scores"],
     queryFn: () => fetch("/api/audit/scores").then((r) => r.json()),
   });
+  const { data: aiStatus } = useQuery<{ configured: boolean; model: string; message: string }>({
+    queryKey: ["ai-audit-status"],
+    queryFn: () => fetch("/api/audit/ai-status").then((r) => r.json()),
+  });
 
   const runRulesMutation = useMutation({
     mutationFn: (date: string) =>
@@ -69,12 +73,18 @@ export default function AuditFlags() {
   });
 
   const runAIMutation = useMutation({
-    mutationFn: (date: string) =>
-      fetch("/api/audit/ai-run", {
+    mutationFn: async (date: string) => {
+      const response = await fetch("/api/audit/ai-run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date }),
-      }).then((r) => r.json()),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || "AI audit failed");
+      }
+      return data;
+    },
     onSuccess: (data: { subcontractorName: string; flagsCreated: number; error?: string }[]) => {
       qc.invalidateQueries({ queryKey: ["ai-audit-flags"] });
       const total = Array.isArray(data) ? data.reduce((a, r) => a + (r.flagsCreated ?? 0), 0) : 0;
@@ -85,7 +95,11 @@ export default function AuditFlags() {
         toast({ title: `AI audit complete — ${total} flag(s) raised` });
       }
     },
-    onError: () => toast({ title: "AI audit failed", variant: "destructive" }),
+    onError: (error) => toast({
+      title: "AI audit failed",
+      description: error instanceof Error ? error.message : "Check the OpenAI audit configuration.",
+      variant: "destructive",
+    }),
   });
 
   const resolveMutation = useMutation({
@@ -161,7 +175,7 @@ export default function AuditFlags() {
           </Button>
           <Button
             size="sm"
-            disabled={isRunning}
+            disabled={isRunning || aiStatus?.configured === false}
             onClick={() => runAIMutation.mutate(auditDate)}
           >
             <Sparkles className="w-4 h-4 mr-1.5" />
@@ -169,6 +183,27 @@ export default function AuditFlags() {
           </Button>
         </div>
       </div>
+
+      {aiStatus && (
+        <Card className={aiStatus.configured ? "border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900" : "border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900"}>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              {aiStatus.configured ? (
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  {aiStatus.configured ? "AI photo auditing is connected" : "AI photo auditing needs setup"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{aiStatus.message}</p>
+                <p className="text-xs text-muted-foreground mt-1">Model: {aiStatus.model}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -188,7 +223,7 @@ export default function AuditFlags() {
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">AI-Generated</p>
             <div className="flex items-center gap-1.5 mt-1">
-              <Bot className="w-4 h-4 text-purple-500" />
+              <Bot className="w-4 h-4 text-orange-500" />
               <p className="text-3xl font-bold">{aiFlags}</p>
             </div>
           </CardContent>
@@ -294,7 +329,7 @@ export default function AuditFlags() {
                     </p>
                     <p className="text-sm text-muted-foreground">{flag.description}</p>
                     {suggestedAction && (
-                      <p className="text-xs mt-1.5 text-blue-600 dark:text-blue-400">
+                      <p className="text-xs mt-1.5 text-orange-600 dark:text-orange-400">
                         <span className="font-medium">Suggested: </span>{suggestedAction}
                       </p>
                     )}

@@ -153,7 +153,7 @@ router.post("/supplier-orders/check-and-create", async (req, res) => {
 
   const lowItems = inventory.filter((inv) => {
     const item = stockMap.get(inv.stockItemId);
-    return item && Number(inv.currentQuantity) <= Number(item.lowStockThreshold ?? 5);
+    return item && Number(inv.currentQuantity) <= 5;
   });
 
   if (lowItems.length === 0) return res.json({ message: "No low stock items", orders: [] });
@@ -177,7 +177,7 @@ router.post("/supplier-orders/check-and-create", async (req, res) => {
 
   for (const inv of lowItems) {
     const item = stockMap.get(inv.stockItemId)!;
-    const reorderQty = Math.max(20, Number(item.lowStockThreshold ?? 5) * 4) - Number(inv.currentQuantity);
+    const reorderQty = Math.max(20, 5 * 4) - Number(inv.currentQuantity);
     await db.insert(supplierOrderItemsTable).values({
       orderId: order.id,
       stockItemId: inv.stockItemId,

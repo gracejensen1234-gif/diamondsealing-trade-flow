@@ -169,6 +169,7 @@ export const ListJobsResponseItem = zod.object({
   "builderContactPhone": zod.string().nullish(),
   "requiredColours": zod.array(zod.string()).optional(),
   "scheduledDate": zod.coerce.date().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
   "completedDate": zod.coerce.date().nullish(),
   "notes": zod.string().nullish(),
   "priority": zod.enum(['low', 'medium', 'high']).optional(),
@@ -191,6 +192,7 @@ export const CreateJobBody = zod.object({
   "builderContactPhone": zod.string().optional(),
   "requiredColours": zod.array(zod.string()).optional(),
   "scheduledDate": zod.coerce.date().optional(),
+  "dueDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
   "priority": zod.enum(['low', 'medium', 'high']).optional()
 })
@@ -212,6 +214,7 @@ export const GetJobResponse = zod.object({
   "builderContactPhone": zod.string().nullish(),
   "requiredColours": zod.array(zod.string()).optional(),
   "scheduledDate": zod.coerce.date().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
   "completedDate": zod.coerce.date().nullish(),
   "notes": zod.string().nullish(),
   "priority": zod.enum(['low', 'medium', 'high']).optional(),
@@ -234,6 +237,7 @@ export const UpdateJobBody = zod.object({
   "builderContactPhone": zod.string().optional(),
   "requiredColours": zod.array(zod.string()).optional(),
   "scheduledDate": zod.coerce.date().optional(),
+  "dueDate": zod.coerce.date().optional(),
   "completedDate": zod.coerce.date().optional(),
   "notes": zod.string().optional(),
   "priority": zod.enum(['low', 'medium', 'high']).optional()
@@ -251,6 +255,7 @@ export const UpdateJobResponse = zod.object({
   "builderContactPhone": zod.string().nullish(),
   "requiredColours": zod.array(zod.string()).optional(),
   "scheduledDate": zod.coerce.date().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
   "completedDate": zod.coerce.date().nullish(),
   "notes": zod.string().nullish(),
   "priority": zod.enum(['low', 'medium', 'high']).optional(),
@@ -2701,5 +2706,4 @@ export const RegisterPushSubscriptionBody = zod.object({
 export const UnregisterPushSubscriptionBody = zod.object({
   "endpoint": zod.string()
 })
-
 

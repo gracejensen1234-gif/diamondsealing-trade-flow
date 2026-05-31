@@ -10,6 +10,7 @@ import {
   UpdateJobBody,
   DeleteJobParams,
 } from "@workspace/api-zod";
+import { dateOnly } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -69,7 +70,8 @@ router.post("/jobs", async (req, res) => {
     priority: parsed.data.priority ?? "medium",
     customerId: parsed.data.customerId ?? null,
     address: parsed.data.address ?? null,
-    scheduledDate: parsed.data.scheduledDate ?? null,
+    scheduledDate: dateOnly(parsed.data.scheduledDate),
+    dueDate: dateOnly(parsed.data.dueDate),
     notes: parsed.data.notes ?? null,
   }).returning();
 
@@ -103,9 +105,21 @@ router.patch("/jobs/:id", async (req, res) => {
   const prevJob = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
   if (!prevJob[0]) return res.status(404).json({ error: "Not found" });
 
+  const updates: Partial<typeof jobsTable.$inferInsert> = { updatedAt: new Date() };
+  if (body.data.title !== undefined) updates.title = body.data.title;
+  if (body.data.description !== undefined) updates.description = body.data.description;
+  if (body.data.status !== undefined) updates.status = body.data.status;
+  if (body.data.priority !== undefined) updates.priority = body.data.priority;
+  if (body.data.customerId !== undefined) updates.customerId = body.data.customerId;
+  if (body.data.address !== undefined) updates.address = body.data.address;
+  if (body.data.scheduledDate !== undefined) updates.scheduledDate = dateOnly(body.data.scheduledDate);
+  if (body.data.dueDate !== undefined) updates.dueDate = dateOnly(body.data.dueDate);
+  if (body.data.completedDate !== undefined) updates.completedDate = dateOnly(body.data.completedDate);
+  if (body.data.notes !== undefined) updates.notes = body.data.notes;
+
   const [job] = await db
     .update(jobsTable)
-    .set({ ...body.data, updatedAt: new Date() })
+    .set(updates)
     .where(eq(jobsTable.id, params.data.id))
     .returning();
 

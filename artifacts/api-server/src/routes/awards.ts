@@ -11,6 +11,7 @@ import {
   auditFlagsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, asc } from "drizzle-orm";
+import { workSessionMinutes } from "../lib/date-utils.js";
 
 const router = Router();
 
@@ -100,7 +101,7 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
         .limit(1);
 
       const totalMetres = reports.reduce((a, r) => a + n(r.metersCompleted), 0);
-      const totalWorkMinutes = sessions.reduce((a, s) => a + (s.totalWorkMinutes || 0), 0);
+      const totalWorkMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
       const daysWorked = sessions.filter((s) => s.clockedOnAt).length;
       const avgMetresPerHour = totalWorkMinutes > 0 ? totalMetres / (totalWorkMinutes / 60) : 0;
       const jobsCompleted = reports.length;

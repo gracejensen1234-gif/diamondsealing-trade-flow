@@ -13,7 +13,18 @@ let vapidInitialised = false;
 export async function ensureVapid(): Promise<string> {
   if (vapidInitialised) {
     const [row] = await db.select().from(vapidConfigTable).limit(1);
-    return row.publicKey;
+    if (row) return row.publicKey;
+    if (process.env.VAPID_PUBLIC_KEY) return process.env.VAPID_PUBLIC_KEY;
+  }
+
+  const envPublicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  const envPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  const envSubject = process.env.VAPID_SUBJECT?.trim() || "mailto:admin@diamondsealing.com.au";
+
+  if (envPublicKey && envPrivateKey) {
+    webpush.setVapidDetails(envSubject, envPublicKey, envPrivateKey);
+    vapidInitialised = true;
+    return envPublicKey;
   }
 
   const rows = await db.select().from(vapidConfigTable).limit(1);
@@ -24,9 +35,11 @@ export async function ensureVapid(): Promise<string> {
     return row.publicKey;
   }
 
-  // First run — generate and persist VAPID keys
+  // First run — generate and persist VAPID keys for local/trial deployments.
+  // Production should set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY so keys
+  // remain stable across database restores or environment rebuilds.
   const keys = webpush.generateVAPIDKeys();
-  const subject = "mailto:admin@diamondsealing.com.au";
+  const subject = envSubject;
   webpush.setVapidDetails(subject, keys.publicKey, keys.privateKey);
 
   await db.insert(vapidConfigTable).values({
