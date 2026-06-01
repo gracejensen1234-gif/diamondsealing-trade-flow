@@ -82,6 +82,9 @@ router.post("/auth/register", async (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+  const abn = typeof req.body?.abn === "string" ? req.body.abn.trim() : "";
+  const vehiclePlate = typeof req.body?.vehiclePlate === "string" ? req.body.vehiclePlate.trim() : "";
 
   if (accountType === "admin" && (!adminSignupsEnabled() || submittedAdminSignupCode !== adminSignupCode())) {
     return res.status(403).json({ error: "Admin account creation is invite-only" });
@@ -96,6 +99,9 @@ router.post("/auth/register", async (req, res) => {
   if (name.length < 2 || name.length > 120) return res.status(400).json({ error: "Your name is required" });
   if (!EMAIL_PATTERN.test(email)) return res.status(400).json({ error: "A valid email is required" });
   if (password.length < 6 || password.length > 128) return res.status(400).json({ error: "Password must be at least 6 characters" });
+  if (phone.length > 60) return res.status(400).json({ error: "Phone number is too long" });
+  if (abn.length > 40) return res.status(400).json({ error: "ABN is too long" });
+  if (vehiclePlate.length > 30) return res.status(400).json({ error: "Vehicle registration is too long" });
   const [existingUser] = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(eq(appUsersTable.email, email));
   if (existingUser) {
     return res.status(409).json({ error: "An account already exists for this email" });
@@ -105,41 +111,64 @@ router.post("/auth/register", async (req, res) => {
     const company = await findCompanyByCode(companyCode);
     if (!company) return res.status(404).json({ error: "Company code not found" });
 
-    const [subcontractor] = await db
-      .select()
-      .from(subcontractorsTable)
-      .where(and(
-        eq(subcontractorsTable.companyId, company.id),
-        eq(subcontractorsTable.email, email),
-        eq(subcontractorsTable.active, true),
-      ));
-
-    if (!subcontractor) {
-      return res.status(403).json({
-        error: "Ask an admin to add your employee/subcontractor profile with this email before creating an employee/subcontractor account",
-      });
-    }
-
     const passwordHash = await hashPassword(password);
-    const [createdWorker] = await db.insert(appUsersTable).values({
-      companyId: company.id,
-      name,
-      email,
-      role: "worker",
-      subcontractorId: subcontractor.id,
-      passwordHash,
-      active: true,
-    }).returning();
+    const result = await db.transaction(async (tx) => {
+      let [subcontractor] = await tx
+        .select()
+        .from(subcontractorsTable)
+        .where(and(
+          eq(subcontractorsTable.companyId, company.id),
+          eq(subcontractorsTable.email, email),
+        ))
+        .limit(1);
+
+      if (subcontractor) {
+        const updates: Record<string, unknown> = { name, active: true };
+        if (phone) updates.phone = phone;
+        if (abn) updates.abn = abn;
+        if (vehiclePlate) updates.vehiclePlate = vehiclePlate;
+        [subcontractor] = await tx
+          .update(subcontractorsTable)
+          .set(updates)
+          .where(and(
+            eq(subcontractorsTable.id, subcontractor.id),
+            eq(subcontractorsTable.companyId, company.id),
+          ))
+          .returning();
+      } else {
+        [subcontractor] = await tx.insert(subcontractorsTable).values({
+          companyId: company.id,
+          name,
+          email,
+          phone: phone || null,
+          abn: abn || null,
+          vehiclePlate: vehiclePlate || null,
+          active: true,
+        }).returning();
+      }
+
+      const [createdWorker] = await tx.insert(appUsersTable).values({
+        companyId: company.id,
+        name,
+        email,
+        role: "worker",
+        subcontractorId: subcontractor.id,
+        passwordHash,
+        active: true,
+      }).returning();
+
+      return { createdWorker, subcontractor };
+    });
 
     const user = {
-      id: createdWorker.id,
+      id: result.createdWorker.id,
       companyId: company.id,
       companyName: company.name,
       companySlug: company.slug,
-      name: createdWorker.name,
-      email: createdWorker.email,
+      name: result.createdWorker.name,
+      email: result.createdWorker.email,
       role: "worker" as const,
-      subcontractorId: subcontractor.id,
+      subcontractorId: result.subcontractor.id,
     };
 
     setSessionCookie(res, user);

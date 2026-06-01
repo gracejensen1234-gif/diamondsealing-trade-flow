@@ -30,6 +30,9 @@ type AuthContextValue = {
     name: string;
     email: string;
     password: string;
+    phone?: string;
+    abn?: string;
+    vehiclePlate?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -111,6 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     name: string;
     email: string;
     password: string;
+    phone?: string;
+    abn?: string;
+    vehiclePlate?: string;
   }) => {
     const response = await fetch("/api/auth/register", {
       method: "POST",

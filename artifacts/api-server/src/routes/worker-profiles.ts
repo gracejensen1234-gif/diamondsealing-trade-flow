@@ -2,9 +2,10 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { workerSkillsTable, subcontractorsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
-import { companyId } from "../lib/auth.js";
+import { companyId, requireAdmin } from "../lib/auth.js";
 
 const router = Router();
+router.use(requireAdmin);
 
 function formatSkills(row: typeof workerSkillsTable.$inferSelect, subName: string) {
   return {

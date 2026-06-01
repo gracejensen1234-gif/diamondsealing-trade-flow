@@ -17,6 +17,9 @@ export default function Login() {
   const [name, setName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerAbn, setRegisterAbn] = useState("");
+  const [registerVehiclePlate, setRegisterVehiclePlate] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,6 +43,9 @@ export default function Login() {
       name,
       email: registerEmail,
       password: registerPassword,
+      phone: mode === "employee" ? registerPhone : undefined,
+      abn: mode === "employee" ? registerAbn : undefined,
+      vehiclePlate: mode === "employee" ? registerVehiclePlate : undefined,
     });
     setSubmitting(false);
     if (!result.ok) setError(result.error ?? "Could not create account");
@@ -144,6 +150,9 @@ export default function Login() {
                         onChange={(event) => setCompanyCode(event.target.value)}
                         required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Your company admin can find this on the Employee/Subcontractor Profiles page.
+                      </p>
                     </div>
                   ) : null}
                   <div className="space-y-2">
@@ -157,6 +166,43 @@ export default function Login() {
                       required
                     />
                   </div>
+                  {mode === "employee" ? (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="registerPhone">Phone</Label>
+                        <Input
+                          id="registerPhone"
+                          type="tel"
+                          autoComplete="tel"
+                          value={registerPhone}
+                          onChange={(event) => setRegisterPhone(event.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="registerAbn">ABN</Label>
+                          <Input
+                            id="registerAbn"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={registerAbn}
+                            onChange={(event) => setRegisterAbn(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="registerVehiclePlate">Vehicle rego</Label>
+                          <Input
+                            id="registerVehiclePlate"
+                            type="text"
+                            autoComplete="off"
+                            value={registerVehiclePlate}
+                            onChange={(event) => setRegisterVehiclePlate(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                 </>
               ) : null}
 

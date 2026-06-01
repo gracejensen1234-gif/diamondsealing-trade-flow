@@ -12,8 +12,27 @@ import { canAccessSubcontractor, companyId, isAdmin, requireAdmin } from "../lib
 
 const router = Router();
 
+function serializeSubcontractor(sub: typeof subcontractorsTable.$inferSelect, includeAdminFields: boolean) {
+  const base = {
+    id: sub.id,
+    companyId: sub.companyId,
+    name: sub.name,
+    email: sub.email,
+    phone: sub.phone,
+    vehiclePlate: sub.vehiclePlate,
+    abn: sub.abn,
+    active: sub.active,
+    createdAt: sub.createdAt,
+  };
+
+  return includeAdminFields
+    ? { ...base, ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : null }
+    : base;
+}
+
 router.get("/subcontractors", async (req, res) => {
-  const subs = isAdmin(req)
+  const admin = isAdmin(req);
+  const subs = admin
     ? await db
       .select()
       .from(subcontractorsTable)
@@ -27,7 +46,7 @@ router.get("/subcontractors", async (req, res) => {
         eq(subcontractorsTable.companyId, companyId(req)),
       ))
       .orderBy(subcontractorsTable.name);
-  return res.json(subs.map((s) => ({ ...s, ratePerMetre: s.ratePerMetre ? Number(s.ratePerMetre) : null })));
+  return res.json(subs.map((s) => serializeSubcontractor(s, admin)));
 });
 
 router.post("/subcontractors", requireAdmin, async (req, res) => {
@@ -43,7 +62,7 @@ router.post("/subcontractors", requireAdmin, async (req, res) => {
     ratePerMetre: parsed.data.ratePerMetre != null ? String(parsed.data.ratePerMetre) : null,
     active: parsed.data.active ?? true,
   }).returning();
-  return res.status(201).json({ ...sub, ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : null });
+  return res.status(201).json(serializeSubcontractor(sub, true));
 });
 
 router.get("/subcontractors/:id", async (req, res) => {
@@ -57,7 +76,7 @@ router.get("/subcontractors/:id", async (req, res) => {
     .from(subcontractorsTable)
     .where(and(eq(subcontractorsTable.id, parsed.data.id), eq(subcontractorsTable.companyId, companyId(req))));
   if (!sub) return res.status(404).json({ error: "Not found" });
-  return res.json({ ...sub, ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : null });
+  return res.json(serializeSubcontractor(sub, isAdmin(req)));
 });
 
 router.patch("/subcontractors/:id", requireAdmin, async (req, res) => {
@@ -78,7 +97,7 @@ router.patch("/subcontractors/:id", requireAdmin, async (req, res) => {
     .where(and(eq(subcontractorsTable.id, params.data.id), eq(subcontractorsTable.companyId, companyId(req))))
     .returning();
   if (!sub) return res.status(404).json({ error: "Not found" });
-  return res.json({ ...sub, ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : null });
+  return res.json(serializeSubcontractor(sub, true));
 });
 
 export default router;
