@@ -2,7 +2,7 @@ FROM node:24-slim
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY artifacts/api-server/package.json artifacts/api-server/package.json
@@ -14,7 +14,7 @@ COPY lib/api-zod/package.json lib/api-zod/package.json
 COPY lib/db/package.json lib/db/package.json
 COPY scripts/package.json scripts/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 
