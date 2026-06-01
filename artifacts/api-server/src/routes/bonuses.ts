@@ -10,12 +10,17 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { workSessionMinutes } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
 // GET /bonus-rules
-router.get("/bonus-rules", async (_req, res) => {
-  const rules = await db.select().from(bonusRulesTable).orderBy(desc(bonusRulesTable.createdAt));
+router.get("/bonus-rules", async (req, res) => {
+  const rules = await db
+    .select()
+    .from(bonusRulesTable)
+    .where(eq(bonusRulesTable.companyId, companyId(req)))
+    .orderBy(desc(bonusRulesTable.createdAt));
   return res.json(rules.map((r) => ({ ...r, bonusAmount: Number(r.bonusAmount) })));
 });
 
@@ -25,6 +30,7 @@ router.post("/bonus-rules", async (req, res) => {
   if (!name || bonusAmount === undefined || !bonusType) return res.status(400).json({ error: "name, bonusAmount, bonusType required" });
 
   const [rule] = await db.insert(bonusRulesTable).values({
+    companyId: companyId(req),
     name,
     description,
     targetMetresPerDay: targetMetresPerDay?.toString(),
@@ -55,22 +61,33 @@ router.patch("/bonus-rules/:id", async (req, res) => {
   if (active !== undefined) updates.active = active;
   updates.updatedAt = new Date();
 
-  const [rule] = await db.update(bonusRulesTable).set(updates).where(eq(bonusRulesTable.id, id)).returning();
+  const [rule] = await db
+    .update(bonusRulesTable)
+    .set(updates)
+    .where(and(eq(bonusRulesTable.id, id), eq(bonusRulesTable.companyId, companyId(req))))
+    .returning();
   if (!rule) return res.status(404).json({ error: "Not found" });
   return res.json({ ...rule, bonusAmount: Number(rule.bonusAmount) });
 });
 
 // DELETE /bonus-rules/:id
 router.delete("/bonus-rules/:id", async (req, res) => {
-  await db.delete(bonusRulesTable).where(eq(bonusRulesTable.id, Number(req.params.id)));
+  await db
+    .delete(bonusRulesTable)
+    .where(and(eq(bonusRulesTable.id, Number(req.params.id)), eq(bonusRulesTable.companyId, companyId(req))));
   return res.status(204).send();
 });
 
 // GET /bonus-calculations
 router.get("/bonus-calculations", async (req, res) => {
   const { weekStart, subcontractorId, status } = req.query;
-  const calcs = await db.select().from(bonusCalculationsTable).orderBy(desc(bonusCalculationsTable.calculatedAt));
-  const subs = await db.select().from(subcontractorsTable);
+  const tenantId = companyId(req);
+  const calcs = await db
+    .select()
+    .from(bonusCalculationsTable)
+    .where(eq(bonusCalculationsTable.companyId, tenantId))
+    .orderBy(desc(bonusCalculationsTable.calculatedAt));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = calcs;
@@ -91,13 +108,20 @@ router.get("/bonus-calculations", async (req, res) => {
 router.post("/bonus-calculations/calculate", async (req, res) => {
   const { weekStart } = req.body;
   if (!weekStart) return res.status(400).json({ error: "weekStart required" });
+  const tenantId = companyId(req);
 
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   const weekEndStr = weekEnd.toISOString().split("T")[0];
 
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
-  const rules = await db.select().from(bonusRulesTable).where(eq(bonusRulesTable.active, true));
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
+  const rules = await db
+    .select()
+    .from(bonusRulesTable)
+    .where(and(eq(bonusRulesTable.companyId, tenantId), eq(bonusRulesTable.active, true)));
 
   const results = await Promise.all(
     subs.map(async (sub) => {
@@ -107,6 +131,7 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
         .where(
           and(
             eq(workSessionsTable.subcontractorId, sub.id),
+            eq(workSessionsTable.companyId, tenantId),
             gte(workSessionsTable.date, weekStart),
             lte(workSessionsTable.date, weekEndStr),
           ),
@@ -118,6 +143,7 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
         .where(
           and(
             eq(jobReportsTable.subcontractorId, sub.id),
+            eq(jobReportsTable.companyId, tenantId),
             gte(jobReportsTable.dispatchDate, weekStart),
             lte(jobReportsTable.dispatchDate, weekEndStr),
           ),
@@ -135,6 +161,7 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
         .where(
           and(
             eq(auditScoresTable.subcontractorId, sub.id),
+            eq(auditScoresTable.companyId, tenantId),
             eq(auditScoresTable.periodType, "weekly"),
             eq(auditScoresTable.periodStart, weekStart),
           ),
@@ -174,12 +201,14 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
         .where(
           and(
             eq(bonusCalculationsTable.subcontractorId, sub.id),
+            eq(bonusCalculationsTable.companyId, tenantId),
             eq(bonusCalculationsTable.weekStart, weekStart),
           ),
         )
         .limit(1);
 
       const values = {
+        companyId: tenantId,
         subcontractorId: sub.id,
         weekStart,
         totalMetres: totalMetres.toString(),
@@ -195,7 +224,11 @@ router.post("/bonus-calculations/calculate", async (req, res) => {
       };
 
       let [calc] = existing.length
-        ? await db.update(bonusCalculationsTable).set(values).where(eq(bonusCalculationsTable.id, existing[0].id)).returning()
+        ? await db
+            .update(bonusCalculationsTable)
+            .set(values)
+            .where(and(eq(bonusCalculationsTable.id, existing[0].id), eq(bonusCalculationsTable.companyId, tenantId)))
+            .returning()
         : await db.insert(bonusCalculationsTable).values(values).returning();
 
       return {
@@ -223,7 +256,7 @@ router.patch("/bonus-calculations/:id", async (req, res) => {
   const [calc] = await db
     .update(bonusCalculationsTable)
     .set(updates)
-    .where(eq(bonusCalculationsTable.id, Number(req.params.id)))
+    .where(and(eq(bonusCalculationsTable.id, Number(req.params.id)), eq(bonusCalculationsTable.companyId, companyId(req))))
     .returning();
 
   if (!calc) return res.status(404).json({ error: "Not found" });

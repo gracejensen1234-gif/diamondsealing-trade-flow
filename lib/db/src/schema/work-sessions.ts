@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const workSessionsTable = pgTable("work_sessions", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   date: text("date").notNull(),
   status: text("status").notNull().default("active"),

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Send, CheckCircle2, Save } from "lucide-react";
+import { ArrowLeft, Download, Send, CheckCircle2, Save } from "lucide-react";
 
 export default function WeeklyInvoiceDetail() {
   const { id } = useParams();
@@ -40,9 +40,15 @@ export default function WeeklyInvoiceDetail() {
   const submitInvoice = useSubmitWeeklyInvoice({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Submitted to Xero successfully" });
+        toast({ title: "Draft bill created in Xero" });
         refetch();
-      }
+      },
+      onError: (error) => {
+        const message = error instanceof Error
+          ? error.message.replace(/^HTTP 400 Bad Request:\s*/i, "")
+          : "Xero is not connected yet. Download the CSV and import it into Xero.";
+        toast({ title: "Xero submission not ready", description: message, variant: "destructive" });
+      },
     }
   });
 
@@ -51,6 +57,10 @@ export default function WeeklyInvoiceDetail() {
   }
 
   if (!invoice) return <div>Not found</div>;
+
+  const downloadXeroCsv = () => {
+    window.location.assign(`/api/weekly-invoices/${invoice.id}/xero-csv`);
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -164,13 +174,21 @@ export default function WeeklyInvoiceDetail() {
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-3">
+              <Button
+                variant="outline"
+                className="w-full h-11"
+                onClick={downloadXeroCsv}
+                disabled={!invoice.lineItems?.length}
+              >
+                <Download className="h-4 w-4 mr-2" /> Download Xero CSV
+              </Button>
               {invoice.status === 'draft' ? (
                 <Button 
                   className="w-full h-12 text-lg" 
                   onClick={() => submitInvoice.mutate({ id: invoice.id })}
                   disabled={submitInvoice.isPending || !invoice.lineItems?.length}
                 >
-                  <Send className="h-5 w-5 mr-2" /> Submit to Xero
+                  <Send className="h-5 w-5 mr-2" /> Send to Xero
                 </Button>
               ) : (
                 <div className="w-full bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 p-4 rounded-md flex flex-col items-center justify-center text-center space-y-2">

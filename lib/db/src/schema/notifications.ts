@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   type: text("type", {
     enum: [
@@ -36,6 +38,7 @@ export const notificationsTable = pgTable("notifications", {
 
 export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   endpoint: text("endpoint").notNull().unique(),
   p256dh: text("p256dh").notNull(),
@@ -48,7 +51,7 @@ export const vapidConfigTable = pgTable("vapid_config", {
   id: serial("id").primaryKey(),
   publicKey: text("public_key").notNull(),
   privateKey: text("private_key").notNull(),
-  subject: text("subject").notNull().default("mailto:admin@diamondsealing.com.au"),
+  subject: text("subject").notNull().default("mailto:admin@example.com"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

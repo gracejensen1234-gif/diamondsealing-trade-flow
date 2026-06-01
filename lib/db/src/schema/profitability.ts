@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const profitabilityScoresTable = pgTable("profitability_scores", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   periodType: text("period_type", { enum: ["weekly", "monthly"] }).notNull(),
   periodStart: text("period_start").notNull(),

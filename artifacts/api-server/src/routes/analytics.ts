@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { workSessionMinutes } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -32,10 +33,11 @@ router.get("/analytics/productivity", async (req, res) => {
   const startDate = (req.query.startDate as string) || currentWeekStart();
   const endDate = (req.query.endDate as string) || new Date().toISOString().split("T")[0];
   const subcontractorId = req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined;
+  const tenantId = companyId(req);
 
-  const subs = await db.select().from(subcontractorsTable).where(
-    subcontractorId ? eq(subcontractorsTable.id, subcontractorId) : undefined,
-  );
+  const subConditions = [eq(subcontractorsTable.companyId, tenantId)];
+  if (subcontractorId) subConditions.push(eq(subcontractorsTable.id, subcontractorId));
+  const subs = await db.select().from(subcontractorsTable).where(and(...subConditions));
 
   const result = await Promise.all(
     subs.map(async (sub) => {
@@ -45,6 +47,7 @@ router.get("/analytics/productivity", async (req, res) => {
         .where(
           and(
             eq(workSessionsTable.subcontractorId, sub.id),
+            eq(workSessionsTable.companyId, tenantId),
             gte(workSessionsTable.date, startDate),
             lte(workSessionsTable.date, endDate),
           ),
@@ -57,6 +60,7 @@ router.get("/analytics/productivity", async (req, res) => {
         .where(
           and(
             eq(jobReportsTable.subcontractorId, sub.id),
+            eq(jobReportsTable.companyId, tenantId),
             gte(jobReportsTable.dispatchDate, startDate),
             lte(jobReportsTable.dispatchDate, endDate),
           ),
@@ -119,8 +123,12 @@ router.get("/analytics/productivity", async (req, res) => {
 router.get("/analytics/productivity/friday-summary", async (req, res) => {
   const subcontractorId = Number(req.query.subcontractorId);
   if (!subcontractorId) return res.status(400).json({ error: "subcontractorId required" });
+  const tenantId = companyId(req);
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
   if (!sub) return res.status(404).json({ error: "Subcontractor not found" });
 
   const weekStart = currentWeekStart();
@@ -133,6 +141,7 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
     .where(
       and(
         eq(workSessionsTable.subcontractorId, subcontractorId),
+        eq(workSessionsTable.companyId, tenantId),
         gte(workSessionsTable.date, weekStart),
         lte(workSessionsTable.date, weekEndStr),
       ),
@@ -144,6 +153,7 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
     .where(
       and(
         eq(jobReportsTable.subcontractorId, subcontractorId),
+        eq(jobReportsTable.companyId, tenantId),
         gte(jobReportsTable.dispatchDate, weekStart),
         lte(jobReportsTable.dispatchDate, weekEndStr),
       ),
@@ -162,6 +172,7 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
     .where(
       and(
         eq(auditScoresTable.subcontractorId, subcontractorId),
+        eq(auditScoresTable.companyId, tenantId),
         eq(auditScoresTable.periodType, "weekly"),
         eq(auditScoresTable.periodStart, weekStart),
       ),
@@ -179,6 +190,7 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
     .where(
       and(
         eq(bonusCalculationsTable.subcontractorId, subcontractorId),
+        eq(bonusCalculationsTable.companyId, tenantId),
         eq(bonusCalculationsTable.weekStart, weekStart),
       ),
     )
@@ -235,12 +247,16 @@ router.get("/analytics/productivity/friday-summary", async (req, res) => {
 // GET /analytics/leaderboard
 router.get("/analytics/leaderboard", async (req, res) => {
   const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+  const tenantId = companyId(req);
   const monthStart = `${month}-01`;
   const nextMonth = new Date(`${month}-01`);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
   const monthEnd = nextMonth.toISOString().split("T")[0];
 
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const entries = await Promise.all(
     subs.map(async (sub) => {
@@ -250,6 +266,7 @@ router.get("/analytics/leaderboard", async (req, res) => {
         .where(
           and(
             eq(jobReportsTable.subcontractorId, sub.id),
+            eq(jobReportsTable.companyId, tenantId),
             gte(jobReportsTable.dispatchDate, monthStart),
             lte(jobReportsTable.dispatchDate, monthEnd),
           ),
@@ -261,6 +278,7 @@ router.get("/analytics/leaderboard", async (req, res) => {
         .where(
           and(
             eq(workSessionsTable.subcontractorId, sub.id),
+            eq(workSessionsTable.companyId, tenantId),
             gte(workSessionsTable.date, monthStart),
             lte(workSessionsTable.date, monthEnd),
           ),
@@ -277,6 +295,7 @@ router.get("/analytics/leaderboard", async (req, res) => {
         .where(
           and(
             eq(auditScoresTable.subcontractorId, sub.id),
+            eq(auditScoresTable.companyId, tenantId),
             eq(auditScoresTable.periodType, "monthly"),
             eq(auditScoresTable.periodStart, monthStart),
           ),

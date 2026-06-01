@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { companyId, requireAdmin, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -58,6 +59,7 @@ router.post("/location-verifications", async (req, res) => {
   if (!subcontractorId || !eventType) {
     return res.status(400).json({ error: "subcontractorId and eventType are required" });
   }
+  if (!requireSubcontractorAccess(req, res, Number(subcontractorId))) return;
 
   const validEvents = ["clock_on", "clock_off", "job_arrived", "job_departed"];
   if (!validEvents.includes(eventType)) {
@@ -70,6 +72,7 @@ router.post("/location-verifications", async (req, res) => {
       .insert(locationVerificationsTable)
       .values({
         subcontractorId,
+        companyId: companyId(req),
         workSessionId: workSessionId ?? null,
         jobAssignmentId: jobAssignmentId ?? null,
         eventType,
@@ -90,6 +93,15 @@ router.post("/location-verifications", async (req, res) => {
   let finalStatus: string = "captured";
 
   if (jobAssignmentId) {
+    const [assignedWorker] = await db
+      .select({ subcontractorId: jobAssignmentsTable.subcontractorId })
+      .from(jobAssignmentsTable)
+      .where(and(eq(jobAssignmentsTable.id, jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
+    if (!assignedWorker) return res.status(404).json({ error: "Job assignment not found" });
+    if (assignedWorker.subcontractorId !== Number(subcontractorId)) {
+      return res.status(403).json({ error: "Location verification must match the assigned worker" });
+    }
+
     // Fetch the associated job address
     const [assignment] = await db
       .select({
@@ -100,7 +112,7 @@ router.post("/location-verifications", async (req, res) => {
       })
       .from(jobAssignmentsTable)
       .leftJoin(jobsTable, eq(jobAssignmentsTable.jobId, jobsTable.id))
-      .where(eq(jobAssignmentsTable.id, jobAssignmentId));
+      .where(and(eq(jobAssignmentsTable.id, jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
 
     if (assignment?.address) {
       jobAddress = assignment.address;
@@ -150,6 +162,7 @@ router.post("/location-verifications", async (req, res) => {
     .insert(locationVerificationsTable)
     .values({
       subcontractorId,
+      companyId: companyId(req),
       workSessionId: workSessionId ?? null,
       jobAssignmentId: jobAssignmentId ?? null,
       eventType,
@@ -180,11 +193,11 @@ router.post("/location-verifications", async (req, res) => {
 
 // ─── GET /location-verifications ─────────────────────────────────────────────
 router.get("/location-verifications", async (req, res) => {
-  const subcontractorId = req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined;
+  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
   const date = req.query.date as string | undefined;
   const flagsOnly = req.query.flagsOnly === "true";
 
-  const conditions = [];
+  const conditions = [eq(locationVerificationsTable.companyId, companyId(req))];
   if (subcontractorId) {
     conditions.push(eq(locationVerificationsTable.subcontractorId, subcontractorId));
   }
@@ -226,7 +239,7 @@ router.get("/location-verifications", async (req, res) => {
 });
 
 // ─── PATCH /location-verifications/:id/review ────────────────────────────────
-router.patch("/location-verifications/:id/review", async (req, res) => {
+router.patch("/location-verifications/:id/review", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: "Invalid id" });
 
@@ -234,7 +247,7 @@ router.patch("/location-verifications/:id/review", async (req, res) => {
   const [updated] = await db
     .update(locationVerificationsTable)
     .set({ adminReviewed: true, adminNotes: adminNotes ?? null })
-    .where(eq(locationVerificationsTable.id, id))
+    .where(and(eq(locationVerificationsTable.id, id), eq(locationVerificationsTable.companyId, companyId(req))))
     .returning();
 
   if (!updated) return res.status(404).json({ error: "Not found" });

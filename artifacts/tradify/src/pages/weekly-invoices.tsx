@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSpreadsheet, Send, Info, Eye } from "lucide-react";
+import { Download, FileSpreadsheet, Send, Info, Eye } from "lucide-react";
 
 export default function WeeklyInvoices() {
   const { toast } = useToast();
@@ -35,9 +35,15 @@ export default function WeeklyInvoices() {
   const submitInvoice = useSubmitWeeklyInvoice({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Invoice submitted to Xero" });
+        toast({ title: "Draft bill created in Xero" });
         queryClient.invalidateQueries();
-      }
+      },
+      onError: (error) => {
+        const message = error instanceof Error
+          ? error.message.replace(/^HTTP 400 Bad Request:\s*/i, "")
+          : "Xero is not connected yet. Download the CSV and import it into Xero.";
+        toast({ title: "Xero submission not ready", description: message, variant: "destructive" });
+      },
     }
   });
 
@@ -45,6 +51,10 @@ export default function WeeklyInvoices() {
     generateInvoices.mutate({
       data: { weekStartDate: format(thisMonday, 'yyyy-MM-dd') }
     });
+  };
+
+  const downloadXeroCsv = (invoiceId: number) => {
+    window.location.assign(`/api/weekly-invoices/${invoiceId}/xero-csv`);
   };
 
   const filteredInvoices = invoices?.filter(inv => {
@@ -80,7 +90,7 @@ export default function WeeklyInvoices() {
 
       <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
         <Info className="h-5 w-5 shrink-0" />
-        <p>Diamond Sealing invoices are automatically generated every Thursday evening, based on completed job reports for the week. You can manually generate them anytime above.</p>
+        <p>Invoices are generated from completed job reports. If the direct Xero API connection is not ready, download the Xero CSV and import it as a draft bill in Xero.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -116,9 +126,12 @@ export default function WeeklyInvoices() {
                   {inv.totalMetres}m Completed
                 </div>
               </CardContent>
-              <CardFooter className="pt-4 border-t gap-3">
+              <CardFooter className="pt-4 border-t gap-2 flex-wrap">
                 <Button asChild variant="outline" className="flex-1">
                   <Link href={`/weekly-invoices/${inv.id}`}><Eye className="h-4 w-4 mr-2" /> View</Link>
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => downloadXeroCsv(inv.id)}>
+                  <Download className="h-4 w-4 mr-2" /> CSV
                 </Button>
                 {inv.status === 'draft' && (
                   <Button 
@@ -126,7 +139,7 @@ export default function WeeklyInvoices() {
                     onClick={() => submitInvoice.mutate({ id: inv.id })}
                     disabled={submitInvoice.isPending}
                   >
-                    <Send className="h-4 w-4 mr-2" /> Xero
+                    <Send className="h-4 w-4 mr-2" /> Send
                   </Button>
                 )}
               </CardFooter>

@@ -1,7 +1,10 @@
 import { pgTable, serial, text, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { integer } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 
 export const bonusRulesTable = pgTable("bonus_rules", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   name: text("name").notNull(),
   description: text("description"),
   targetMetresPerDay: numeric("target_metres_per_day", { precision: 10, scale: 2 }),

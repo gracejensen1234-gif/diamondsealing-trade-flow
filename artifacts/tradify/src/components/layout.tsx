@@ -5,10 +5,11 @@ import {
   Smartphone, ClipboardList, Radio, Clock, FileSpreadsheet, Package,
   Settings, BarChart2, Trophy, Star, ShieldCheck, Truck,
   Award, Brain, CalendarRange, TrendingUp, HardHat, Building2,
-  ScrollText, Bell, Menu,
+  ScrollText, Bell, Menu, LogOut,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 import {
   Sheet,
   SheetContent,
@@ -19,9 +20,10 @@ import {
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { user, logout } = useAuth();
 
-  // Read subcontractor from localStorage to show unread badge
   const subId = (() => {
+    if (user?.role === "worker") return user.subcontractorId ?? undefined;
     try {
       const v = localStorage.getItem("ds_selected_subcontractor_id");
       return v ? parseInt(v) : undefined;
@@ -42,7 +44,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const unreadCount = unreadData?.count ?? 0;
 
-  const navGroups = [
+  const adminNavGroups = [
     {
       title: "Admin",
       items: [
@@ -111,17 +113,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     },
   ];
 
+  const workerNavGroups = [
+    {
+      title: "Field",
+      items: [
+        { name: "Field View", href: "/field", icon: Smartphone },
+        { name: "Notifications", href: "/notifications", icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
+      ],
+    },
+  ];
+
+  const navGroups = user?.role === "worker" ? workerNavGroups : adminNavGroups;
+
   const sidebarContent = (onNavigate?: () => void) => (
     <>
       <div className="p-4 flex items-center gap-3 border-b border-sidebar-border">
         <div className="h-11 w-11 overflow-hidden rounded-md border border-sidebar-border bg-sidebar-primary shadow-sm">
           <img
             src="/diamond-sealing-logo.jpeg"
-            alt="Diamond Sealing logo"
+            alt="Company logo"
             className="h-full w-full object-cover"
           />
         </div>
-        <span className="min-w-0 text-lg font-bold tracking-tight">Diamond Sealing</span>
+        <span className="min-w-0 text-lg font-bold tracking-tight">{user?.companyName ?? "Operations"}</span>
       </div>
       <div className="flex-1 py-3 px-2 flex flex-col gap-4 overflow-y-auto">
         {navGroups.map((group) => (
@@ -159,6 +173,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         ))}
       </div>
+      <div className="border-t border-sidebar-border p-3">
+        <div className="mb-2 min-w-0">
+          <p className="truncate text-sm font-medium">{user?.name ?? "Signed in"}</p>
+          <p className="truncate text-xs capitalize text-sidebar-foreground/55">{user?.role ?? "user"}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          onClick={() => void logout()}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
+      </div>
     </>
   );
 
@@ -188,11 +217,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="h-9 w-9 overflow-hidden rounded-md border border-sidebar-border bg-sidebar-primary shadow-sm">
             <img
               src="/diamond-sealing-logo.jpeg"
-              alt="Diamond Sealing logo"
+              alt="Company logo"
               className="h-full w-full object-cover"
             />
           </div>
-          <span className="min-w-0 truncate text-base font-bold tracking-tight">Diamond Sealing</span>
+          <span className="min-w-0 truncate text-base font-bold tracking-tight">{user?.companyName ?? "Operations"}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto p-4 sm:p-6">{children}</div>

@@ -1,9 +1,11 @@
 import { pgTable, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 import { workSessionsTable } from "./work-sessions";
 
 export const gpsTracksTable = pgTable("gps_tracks", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   workSessionId: integer("work_session_id").references(() => workSessionsTable.id),
   latitude: numeric("latitude", { precision: 10, scale: 7 }).notNull(),

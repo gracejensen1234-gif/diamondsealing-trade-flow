@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { weeklyInvoicesTable, jobReportsTable, subcontractorsTable, jobsTable } from "@workspace/db";
+import {
+  weeklyInvoicesTable,
+  jobReportsTable,
+  subcontractorsTable,
+  jobsTable,
+  xeroSettingsTable,
+} from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import {
   ListWeeklyInvoicesQueryParams,
@@ -11,8 +17,36 @@ import {
   SubmitWeeklyInvoiceParams,
 } from "@workspace/api-zod";
 import { dateOnlyOrToday } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
+const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
+const XERO_INVOICES_URL = "https://api.xero.com/api.xro/2.0/Invoices";
+
+type WeeklyInvoiceLineItem = {
+  jobId?: number | null;
+  jobTitle?: string | null;
+  jobAddress?: string | null;
+  dispatchDate?: string | null;
+  metersCompleted?: number | string | null;
+  ratePerMetre?: number | string | null;
+  amount?: number | string | null;
+  reportId?: number | null;
+};
+
+type XeroTokenResponse = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+};
+
+type XeroInvoiceResponse = {
+  Invoices?: Array<{
+    InvoiceID?: string;
+    InvoiceNumber?: string;
+  }>;
+};
 
 function serializeInvoice(inv: typeof weeklyInvoicesTable.$inferSelect, subName: string | null = null) {
   return {
@@ -26,6 +60,208 @@ function serializeInvoice(inv: typeof weeklyInvoicesTable.$inferSelect, subName:
   };
 }
 
+function getInvoiceNumber(inv: typeof weeklyInvoicesTable.$inferSelect) {
+  return `WI-${String(inv.id).padStart(5, "0")}`;
+}
+
+function addDays(date: string, days: number) {
+  const result = new Date(`${date}T00:00:00`);
+  result.setDate(result.getDate() + days);
+  return result.toISOString().split("T")[0];
+}
+
+function formatXeroCsvDate(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  return parsed.toLocaleDateString("en-AU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function csvEscape(value: unknown) {
+  const text = value == null ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function lineItems(inv: typeof weeklyInvoicesTable.$inferSelect) {
+  return Array.isArray(inv.lineItems) ? (inv.lineItems as WeeklyInvoiceLineItem[]) : [];
+}
+
+function getXeroClientId(settings: typeof xeroSettingsTable.$inferSelect) {
+  return process.env.XERO_CLIENT_ID?.trim() || settings.clientId?.trim() || "";
+}
+
+function getXeroClientSecret() {
+  return process.env.XERO_CLIENT_SECRET?.trim() || "";
+}
+
+function getXeroTaxType() {
+  return process.env.XERO_TAX_TYPE?.trim() || "INPUT";
+}
+
+async function getStoredXeroSettings(tenantId: number) {
+  const [settings] = await db
+    .select()
+    .from(xeroSettingsTable)
+    .where(eq(xeroSettingsTable.companyId, tenantId));
+  return settings ?? null;
+}
+
+async function refreshXeroAccessToken(settings: typeof xeroSettingsTable.$inferSelect) {
+  const tenantId = settings.companyId ?? 0;
+  const clientId = getXeroClientId(settings);
+  const clientSecret = getXeroClientSecret();
+  if (!clientId || !clientSecret || !settings.refreshToken) {
+    throw new Error("Xero is not connected. Use the CSV export, or configure Xero OAuth credentials and connect again.");
+  }
+
+  const response = await fetch(XERO_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: settings.refreshToken,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Xero token refresh failed: ${text}`);
+  }
+
+  const token = (await response.json()) as XeroTokenResponse;
+  const [updated] = await db
+    .update(xeroSettingsTable)
+    .set({
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? settings.refreshToken,
+      tokenExpiresAt: new Date(Date.now() + (token.expires_in ?? 1800) * 1000),
+      tokenScope: token.scope ?? settings.tokenScope ?? null,
+    })
+    .where(and(eq(xeroSettingsTable.id, settings.id), eq(xeroSettingsTable.companyId, tenantId)))
+    .returning();
+
+  return updated;
+}
+
+async function getUsableXeroSettings(tenantId: number) {
+  let settings = await getStoredXeroSettings(tenantId);
+  if (!settings?.connected || !settings.tenantId) {
+    throw new Error("Xero is not connected. Download the Xero CSV instead, or connect Xero from Settings.");
+  }
+
+  const expiresAt = settings.tokenExpiresAt?.getTime() ?? 0;
+  if (!settings.accessToken || expiresAt < Date.now() + 120_000) {
+    settings = await refreshXeroAccessToken(settings);
+  }
+
+  if (!settings.accessToken || !settings.tenantId) {
+    throw new Error("Xero connection is missing an access token or tenant.");
+  }
+
+  return settings;
+}
+
+async function buildXeroCsv(inv: typeof weeklyInvoicesTable.$inferSelect, subName: string | null) {
+  const settings = await getStoredXeroSettings(inv.companyId ?? 0);
+  const accountCode = settings?.defaultAccountCode || process.env.XERO_DEFAULT_ACCOUNT_CODE || "310";
+  const taxType = getXeroTaxType();
+  const invoiceNumber = getInvoiceNumber(inv);
+  const invoiceDate = formatXeroCsvDate(inv.weekEndDate);
+  const dueDate = formatXeroCsvDate(addDays(inv.weekEndDate, 7));
+  const rows = [
+    [
+      "Contact Name",
+      "Invoice Number",
+      "Invoice Date",
+      "Due Date",
+      "Description",
+      "Quantity",
+      "Unit Amount",
+      "Account Code",
+      "Tax Type",
+    ],
+  ];
+
+  for (const item of lineItems(inv)) {
+    rows.push([
+      subName || `Subcontractor ${inv.subcontractorId}`,
+      invoiceNumber,
+      invoiceDate,
+      dueDate,
+      `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`,
+      String(Number(item.metersCompleted ?? 0).toFixed(2)),
+      String(Number(item.ratePerMetre ?? 0).toFixed(2)),
+      accountCode,
+      taxType,
+    ]);
+  }
+
+  return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+}
+
+async function createXeroDraftBill(inv: typeof weeklyInvoicesTable.$inferSelect, subName: string | null) {
+  const settings = await getUsableXeroSettings(inv.companyId ?? 0);
+  const accessToken = settings.accessToken;
+  const tenantId = settings.tenantId;
+  const accountCode = settings.defaultAccountCode || process.env.XERO_DEFAULT_ACCOUNT_CODE || "310";
+  const invoiceLines = lineItems(inv);
+
+  if (!accessToken || !tenantId) {
+    throw new Error("Xero connection is missing an access token or tenant.");
+  }
+
+  if (invoiceLines.length === 0) {
+    throw new Error("This invoice has no line items to send to Xero.");
+  }
+
+  const response = await fetch(XERO_INVOICES_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "xero-tenant-id": tenantId,
+    },
+    body: JSON.stringify({
+      Invoices: [
+        {
+          Type: "ACCPAY",
+          Contact: {
+            Name: subName || `Subcontractor ${inv.subcontractorId}`,
+          },
+          Date: inv.weekEndDate,
+          DueDate: addDays(inv.weekEndDate, 7),
+          InvoiceNumber: getInvoiceNumber(inv),
+          Reference: `Weekly invoice ${inv.weekStartDate} to ${inv.weekEndDate}`,
+          Status: "DRAFT",
+          LineAmountTypes: "Exclusive",
+          LineItems: invoiceLines.map((item) => ({
+            Description: `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`,
+            Quantity: Number(item.metersCompleted ?? 0),
+            UnitAmount: Number(item.ratePerMetre ?? 0),
+            AccountCode: accountCode,
+            TaxType: getXeroTaxType(),
+          })),
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Xero rejected the invoice: ${text}`);
+  }
+
+  const data = (await response.json()) as XeroInvoiceResponse;
+  const xeroInvoice = data.Invoices?.[0];
+  return xeroInvoice?.InvoiceID || xeroInvoice?.InvoiceNumber || getInvoiceNumber(inv);
+}
+
 router.get("/weekly-invoices", async (req, res) => {
   const parsed = ListWeeklyInvoicesQueryParams.safeParse({
     ...req.query,
@@ -33,7 +269,7 @@ router.get("/weekly-invoices", async (req, res) => {
   });
   if (!parsed.success) return res.status(400).json({ error: "Invalid query" });
 
-  const conditions = [];
+  const conditions = [eq(weeklyInvoicesTable.companyId, companyId(req))];
   if (parsed.data.subcontractorId) conditions.push(eq(weeklyInvoicesTable.subcontractorId, parsed.data.subcontractorId));
   if (parsed.data.status) conditions.push(eq(weeklyInvoicesTable.status, parsed.data.status));
 
@@ -41,7 +277,7 @@ router.get("/weekly-invoices", async (req, res) => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(weeklyInvoicesTable.weekStartDate);
 
-  const subs = await db.select().from(subcontractorsTable);
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, companyId(req)));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   return res.json(invoices.map((i) => serializeInvoice(i, subMap.get(i.subcontractorId) ?? null)));
@@ -52,18 +288,20 @@ router.post("/weekly-invoices/generate", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
   const weekStart = dateOnlyOrToday(parsed.data.weekStartDate);
+  const tenantId = companyId(req);
   const weekStartDate = new Date(weekStart);
   const weekEndDate = new Date(weekStartDate);
   weekEndDate.setDate(weekEndDate.getDate() + 6);
   const weekEnd = weekEndDate.toISOString().split("T")[0];
 
   const subConditions = [];
+  subConditions.push(eq(subcontractorsTable.companyId, tenantId));
   if (parsed.data.subcontractorId) subConditions.push(eq(subcontractorsTable.id, parsed.data.subcontractorId));
   const subs = await db.select().from(subcontractorsTable)
-    .where(subConditions.length ? and(...subConditions) : eq(subcontractorsTable.active, true));
+    .where(and(...subConditions, eq(subcontractorsTable.active, true)));
 
   const reports = await db.select().from(jobReportsTable)
-    .where(and(gte(jobReportsTable.dispatchDate, weekStart), lte(jobReportsTable.dispatchDate, weekEnd)));
+    .where(and(eq(jobReportsTable.companyId, tenantId), gte(jobReportsTable.dispatchDate, weekStart), lte(jobReportsTable.dispatchDate, weekEnd)));
 
   const created: (typeof weeklyInvoicesTable.$inferSelect)[] = [];
 
@@ -72,14 +310,16 @@ router.post("/weekly-invoices/generate", async (req, res) => {
     if (subReports.length === 0) continue;
 
     const existing = await db.select().from(weeklyInvoicesTable).where(
-      and(eq(weeklyInvoicesTable.subcontractorId, sub.id), eq(weeklyInvoicesTable.weekStartDate, weekStart))
+      and(eq(weeklyInvoicesTable.companyId, tenantId), eq(weeklyInvoicesTable.subcontractorId, sub.id), eq(weeklyInvoicesTable.weekStartDate, weekStart))
     );
     if (existing[0]) continue;
 
     const ratePerMetre = sub.ratePerMetre ? Number(sub.ratePerMetre) : 0;
 
     const lineItems = await Promise.all(subReports.map(async (r) => {
-      const [job] = r.jobId ? await db.select().from(jobsTable).where(eq(jobsTable.id, r.jobId)) : [null];
+      const [job] = r.jobId
+        ? await db.select().from(jobsTable).where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
+        : [null];
       const metres = Number(r.metersCompleted);
       const amount = metres * ratePerMetre;
       return {
@@ -102,6 +342,7 @@ router.post("/weekly-invoices/generate", async (req, res) => {
 
     const [inv] = await db.insert(weeklyInvoicesTable).values({
       subcontractorId: sub.id,
+      companyId: tenantId,
       weekStartDate: weekStart,
       weekEndDate: weekEnd,
       status: "draft",
@@ -122,11 +363,32 @@ router.get("/weekly-invoices/:id", async (req, res) => {
   const parsed = GetWeeklyInvoiceParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
 
-  const [inv] = await db.select().from(weeklyInvoicesTable).where(eq(weeklyInvoicesTable.id, parsed.data.id));
+  const [inv] = await db
+    .select()
+    .from(weeklyInvoicesTable)
+    .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
   if (!inv) return res.status(404).json({ error: "Not found" });
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, inv.subcontractorId));
+  const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, inv.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(serializeInvoice(inv, sub?.name ?? null));
+});
+
+router.get("/weekly-invoices/:id/xero-csv", async (req, res) => {
+  const parsed = GetWeeklyInvoiceParams.safeParse({ id: Number(req.params.id) });
+  if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
+
+  const [inv] = await db
+    .select()
+    .from(weeklyInvoicesTable)
+    .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
+  if (!inv) return res.status(404).json({ error: "Not found" });
+
+  const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, inv.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
+  const csv = await buildXeroCsv(inv, sub?.name ?? null);
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${getInvoiceNumber(inv)}-xero-bill.csv"`);
+  return res.send(csv);
 });
 
 router.patch("/weekly-invoices/:id", async (req, res) => {
@@ -138,10 +400,14 @@ router.patch("/weekly-invoices/:id", async (req, res) => {
   if (body.data.notes !== undefined) updates.notes = body.data.notes;
   if (body.data.status !== undefined) updates.status = body.data.status;
 
-  const [inv] = await db.update(weeklyInvoicesTable).set(updates).where(eq(weeklyInvoicesTable.id, params.data.id)).returning();
+  const [inv] = await db
+    .update(weeklyInvoicesTable)
+    .set(updates)
+    .where(and(eq(weeklyInvoicesTable.id, params.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))))
+    .returning();
   if (!inv) return res.status(404).json({ error: "Not found" });
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, inv.subcontractorId));
+  const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, inv.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(serializeInvoice(inv, sub?.name ?? null));
 });
 
@@ -149,14 +415,32 @@ router.post("/weekly-invoices/:id/submit", async (req, res) => {
   const parsed = SubmitWeeklyInvoiceParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
 
+  const [existing] = await db
+    .select()
+    .from(weeklyInvoicesTable)
+    .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
+  if (!existing) return res.status(404).json({ error: "Not found" });
+
+  const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, existing.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
+
+  let xeroInvoiceId: string;
+  try {
+    xeroInvoiceId = await createXeroDraftBill(existing, sub?.name ?? null);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not submit invoice to Xero";
+    return res.status(400).json({
+      error: "Xero submission failed",
+      message,
+      csvDownloadUrl: `/api/weekly-invoices/${existing.id}/xero-csv`,
+    });
+  }
+
   const [inv] = await db.update(weeklyInvoicesTable).set({
     status: "submitted",
     submittedAt: new Date(),
-    xeroInvoiceId: `XERO-PENDING-${Date.now()}`,
-  }).where(eq(weeklyInvoicesTable.id, parsed.data.id)).returning();
-  if (!inv) return res.status(404).json({ error: "Not found" });
+    xeroInvoiceId,
+  }).where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req)))).returning();
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, inv.subcontractorId));
   return res.json(serializeInvoice(inv, sub?.name ?? null));
 });
 

@@ -1,9 +1,11 @@
 import { pgTable, serial, integer, numeric, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 import { bonusRulesTable } from "./bonus-rules";
 
 export const bonusCalculationsTable = pgTable("bonus_calculations", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   weekStart: text("week_start").notNull(),
   totalMetres: numeric("total_metres", { precision: 10, scale: 2 }).notNull().default("0"),

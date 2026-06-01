@@ -1,10 +1,12 @@
 import { pgTable, serial, integer, numeric, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 import { stockItemsTable } from "./stock-items";
 import { jobAssignmentsTable } from "./job-assignments";
 
 export const subInventoryTable = pgTable("sub_inventory", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   stockItemId: integer("stock_item_id").notNull().references(() => stockItemsTable.id),
   currentQuantity: numeric("current_quantity", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -14,6 +16,7 @@ export const subInventoryTable = pgTable("sub_inventory", {
 
 export const inventoryTransactionsTable = pgTable("inventory_transactions", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   stockItemId: integer("stock_item_id").notNull().references(() => stockItemsTable.id),
   transactionType: text("transaction_type", {
@@ -28,6 +31,7 @@ export const inventoryTransactionsTable = pgTable("inventory_transactions", {
 
 export const restockRequestsTable = pgTable("restock_requests", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   stockItemId: integer("stock_item_id").notNull().references(() => stockItemsTable.id),
   quantityRequested: numeric("quantity_requested", { precision: 10, scale: 2 }).notNull(),

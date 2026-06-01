@@ -5,16 +5,18 @@ import {
   jobReportsTable, gpsTracksTable, jobsTable
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
 router.get("/admin/live", async (req, res) => {
   const today = new Date().toISOString().split("T")[0];
+  const tenantId = companyId(req);
 
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
-  const sessions = await db.select().from(workSessionsTable).where(eq(workSessionsTable.date, today));
-  const assignments = await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.dispatchDate, today));
-  const reports = await db.select().from(jobReportsTable).where(eq(jobReportsTable.dispatchDate, today));
+  const subs = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
+  const sessions = await db.select().from(workSessionsTable).where(and(eq(workSessionsTable.companyId, tenantId), eq(workSessionsTable.date, today)));
+  const assignments = await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.companyId, tenantId), eq(jobAssignmentsTable.dispatchDate, today)));
+  const reports = await db.select().from(jobReportsTable).where(and(eq(jobReportsTable.companyId, tenantId), eq(jobReportsTable.dispatchDate, today)));
 
   const result = await Promise.all(subs.map(async (sub) => {
     const session = sessions.find((s) => s.subcontractorId === sub.id);
@@ -30,7 +32,7 @@ router.get("/admin/live", async (req, res) => {
     let currentJobTitle: string | null = null;
     let currentJobAddress: string | null = null;
     if (activeAssignment?.jobId) {
-      const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, activeAssignment.jobId));
+      const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.id, activeAssignment.jobId), eq(jobsTable.companyId, tenantId)));
       currentJobTitle = job?.title ?? null;
       currentJobAddress = job?.address ?? null;
     }
@@ -38,7 +40,7 @@ router.get("/admin/live", async (req, res) => {
     let lastLocation = null;
     if (session) {
       const [track] = await db.select().from(gpsTracksTable)
-        .where(eq(gpsTracksTable.workSessionId, session.id))
+        .where(and(eq(gpsTracksTable.companyId, tenantId), eq(gpsTracksTable.workSessionId, session.id)))
         .orderBy(desc(gpsTracksTable.recordedAt))
         .limit(1);
       if (track) {
@@ -72,6 +74,7 @@ router.get("/admin/live", async (req, res) => {
 router.get("/admin/timesheets", async (req, res) => {
   const weekStart = req.query.weekStart as string | undefined;
   const subcontractorId = req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined;
+  const tenantId = companyId(req);
 
   const today = new Date().toISOString().split("T")[0];
   const startDate = weekStart ?? (() => {
@@ -86,17 +89,18 @@ router.get("/admin/timesheets", async (req, res) => {
   })();
 
   const conditions = [
+    eq(workSessionsTable.companyId, tenantId),
     gte(workSessionsTable.date, startDate),
     lte(workSessionsTable.date, endDate),
   ];
   if (subcontractorId) conditions.push(eq(workSessionsTable.subcontractorId, subcontractorId));
 
   const sessions = await db.select().from(workSessionsTable).where(and(...conditions)).orderBy(workSessionsTable.date);
-  const subs = await db.select().from(subcontractorsTable);
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   const reports = await db.select().from(jobReportsTable)
-    .where(and(gte(jobReportsTable.dispatchDate, startDate), lte(jobReportsTable.dispatchDate, endDate)));
+    .where(and(eq(jobReportsTable.companyId, tenantId), gte(jobReportsTable.dispatchDate, startDate), lte(jobReportsTable.dispatchDate, endDate)));
 
   const result = sessions.map((session) => {
     const dayReports = reports.filter(

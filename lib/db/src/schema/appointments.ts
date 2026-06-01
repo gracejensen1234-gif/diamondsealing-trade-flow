@@ -1,6 +1,7 @@
 import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companyAccountsTable } from "./company-accounts";
 import { customersTable } from "./customers";
 import { jobsTable } from "./jobs";
 
@@ -8,6 +9,7 @@ export const appointmentStatusValues = ["scheduled", "completed", "cancelled"] a
 
 export const appointmentsTable = pgTable("appointments", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   title: text("title").notNull(),
   description: text("description"),
   jobId: integer("job_id").references(() => jobsTable.id),

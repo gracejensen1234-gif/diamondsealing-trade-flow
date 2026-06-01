@@ -11,17 +11,22 @@ import {
   ListJobReportsQueryParams,
 } from "@workspace/api-zod";
 import { dateOnlyOrToday } from "../lib/date-utils.js";
+import { canAccessSubcontractor, companyId, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
 
 async function enrichReport(r: typeof jobReportsTable.$inferSelect) {
+  const tenantId = r.companyId ?? 0;
   const [job] = r.jobId
-    ? await db.select({ title: jobsTable.title }).from(jobsTable).where(eq(jobsTable.id, r.jobId))
+    ? await db
+      .select({ title: jobsTable.title })
+      .from(jobsTable)
+      .where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
     : [null];
   const [sub] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, r.subcontractorId));
+    .where(and(eq(subcontractorsTable.id, r.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
 
   const rawStock = Array.isArray(r.stockUsed)
     ? (r.stockUsed as Array<{ stockItemId: number; quantityUsed: number }>)
@@ -32,7 +37,7 @@ async function enrichReport(r: typeof jobReportsTable.$inferSelect) {
       const [item] = await db
         .select()
         .from(stockItemsTable)
-        .where(eq(stockItemsTable.id, s.stockItemId));
+        .where(and(eq(stockItemsTable.id, s.stockItemId), eq(stockItemsTable.companyId, tenantId)));
       return {
         stockItemId: s.stockItemId,
         stockItemName: item?.name ?? "Unknown",
@@ -67,10 +72,11 @@ router.get("/job-reports", async (req, res) => {
   });
   if (!parsed.success) return res.status(400).json({ error: "Invalid query" });
 
-  const conditions = [];
+  const conditions = [eq(jobReportsTable.companyId, companyId(req))];
   if (parsed.data.jobId) conditions.push(eq(jobReportsTable.jobId, parsed.data.jobId));
-  if (parsed.data.subcontractorId)
-    conditions.push(eq(jobReportsTable.subcontractorId, parsed.data.subcontractorId));
+  const ownSubcontractorId = workerSubcontractorId(req);
+  const subcontractorId = ownSubcontractorId ?? parsed.data.subcontractorId;
+  if (subcontractorId) conditions.push(eq(jobReportsTable.subcontractorId, subcontractorId));
   if (parsed.data.date) conditions.push(eq(jobReportsTable.dispatchDate, dateOnlyOrToday(parsed.data.date)));
 
   let reports = await db
@@ -92,8 +98,27 @@ router.post("/job-reports", async (req, res) => {
   if (!parsed.success)
     return res.status(400).json({ error: "Invalid body", details: parsed.error.issues });
 
+  if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
+
   if (!parsed.data.photos || parsed.data.photos.length === 0) {
     return res.status(400).json({ error: "At least one photo is required" });
+  }
+
+  const [job] = await db
+    .select({ id: jobsTable.id })
+    .from(jobsTable)
+    .where(and(eq(jobsTable.id, parsed.data.jobId), eq(jobsTable.companyId, companyId(req))));
+  if (!job) return res.status(404).json({ error: "Job not found" });
+
+  if (parsed.data.jobAssignmentId) {
+    const [assignment] = await db
+      .select()
+      .from(jobAssignmentsTable)
+      .where(and(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
+    if (!assignment) return res.status(404).json({ error: "Job assignment not found" });
+    if (assignment.subcontractorId !== parsed.data.subcontractorId) {
+      return res.status(403).json({ error: "This report must match the assigned worker" });
+    }
   }
 
   const stockUsed = (parsed.data.stockUsed ?? []).map((s) => ({
@@ -104,6 +129,7 @@ router.post("/job-reports", async (req, res) => {
   const [report] = await db
     .insert(jobReportsTable)
     .values({
+      companyId: companyId(req),
       jobId: parsed.data.jobId,
       jobAssignmentId: parsed.data.jobAssignmentId ?? null,
       subcontractorId: parsed.data.subcontractorId,
@@ -122,10 +148,11 @@ router.post("/job-reports", async (req, res) => {
     await db
       .update(jobAssignmentsTable)
       .set({ status: "completed", departedAt: new Date() })
-      .where(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId));
+      .where(and(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
   }
 
   await db.insert(activityTable).values({
+    companyId: companyId(req),
     type: "job_report_submitted",
     description: `Job report submitted — ${parsed.data.metersCompleted}m completed`,
     entityId: report.id,
@@ -142,8 +169,11 @@ router.get("/job-reports/:id", async (req, res) => {
   const [report] = await db
     .select()
     .from(jobReportsTable)
-    .where(eq(jobReportsTable.id, parsed.data.id));
+    .where(and(eq(jobReportsTable.id, parsed.data.id), eq(jobReportsTable.companyId, companyId(req))));
   if (!report) return res.status(404).json({ error: "Not found" });
+  if (!canAccessSubcontractor(req, report.subcontractorId)) {
+    return res.status(403).json({ error: "You can only view your own job reports" });
+  }
 
   return res.json(await enrichReport(report));
 });

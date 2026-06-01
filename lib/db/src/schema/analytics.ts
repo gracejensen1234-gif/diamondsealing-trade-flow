@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, numeric, text, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const productivitySnapshotsTable = pgTable("productivity_snapshots", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   date: text("date").notNull(),
   totalMetres: numeric("total_metres", { precision: 10, scale: 2 }).notNull().default("0"),

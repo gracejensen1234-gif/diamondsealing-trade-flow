@@ -1,7 +1,9 @@
 import { pgTable, serial, integer, text, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 
 export const builderProfilesTable = pgTable("builder_profiles", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   // Link to existing customer or standalone
   customerId: integer("customer_id"),
   name: text("name").notNull(),
@@ -32,6 +34,7 @@ export const builderProfilesTable = pgTable("builder_profiles", {
 
 export const builderRatingsTable = pgTable("builder_ratings", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   builderProfileId: integer("builder_profile_id").notNull().references(() => builderProfilesTable.id),
   subcontractorId: integer("subcontractor_id").notNull(),
   jobAssignmentId: integer("job_assignment_id"),

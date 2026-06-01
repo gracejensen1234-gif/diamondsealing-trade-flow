@@ -1,6 +1,7 @@
 import { pgTable, serial, text, timestamp, integer, jsonb, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companyAccountsTable } from "./company-accounts";
 import { customersTable } from "./customers";
 
 export const jobStatusValues = ["pending", "in_progress", "completed", "invoiced", "cancelled"] as const;
@@ -8,6 +9,7 @@ export const jobPriorityValues = ["low", "medium", "high"] as const;
 
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").notNull().default("pending"),

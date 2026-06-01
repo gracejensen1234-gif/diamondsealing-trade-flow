@@ -7,11 +7,16 @@ import {
   jobsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
 async function enrichDocket(d: typeof docketsTable.$inferSelect) {
-  const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, d.subcontractorId));
+  const tenantId = d.companyId ?? 0;
+  const [sub] = await db
+    .select({ name: subcontractorsTable.name })
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, d.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
   return {
     ...d,
     metresCompleted: d.metresCompleted ? Number(d.metresCompleted) : null,
@@ -24,12 +29,15 @@ async function enrichDocket(d: typeof docketsTable.$inferSelect) {
 // GET /dockets
 router.get("/dockets", async (req, res) => {
   const { subcontractorId, jobAssignmentId } = req.query;
-  let query = db.select().from(docketsTable).orderBy(desc(docketsTable.createdAt));
+  const conditions = [eq(docketsTable.companyId, companyId(req))];
+  if (subcontractorId) conditions.push(eq(docketsTable.subcontractorId, Number(subcontractorId)));
+  if (jobAssignmentId) conditions.push(eq(docketsTable.jobAssignmentId, Number(jobAssignmentId)));
 
-  const rows = await query;
-  let filtered = rows;
-  if (subcontractorId) filtered = filtered.filter((d) => d.subcontractorId === Number(subcontractorId));
-  if (jobAssignmentId) filtered = filtered.filter((d) => d.jobAssignmentId === Number(jobAssignmentId));
+  const filtered = await db
+    .select()
+    .from(docketsTable)
+    .where(and(...conditions))
+    .orderBy(desc(docketsTable.createdAt));
 
   return res.json(await Promise.all(filtered.map(enrichDocket)));
 });
@@ -42,12 +50,27 @@ router.post("/dockets", async (req, res) => {
   } = req.body;
 
   if (!subcontractorId) return res.status(400).json({ error: "subcontractorId required" });
+  const tenantId = companyId(req);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
+  if (!sub) return res.status(400).json({ error: "Subcontractor not found for this company" });
+
+  if (jobAssignmentId) {
+    const [assignment] = await db
+      .select()
+      .from(jobAssignmentsTable)
+      .where(and(eq(jobAssignmentsTable.id, Number(jobAssignmentId)), eq(jobAssignmentsTable.companyId, tenantId)));
+    if (!assignment) return res.status(400).json({ error: "Job assignment not found for this company" });
+  }
 
   // Generate docket number
-  const count = await db.select().from(docketsTable);
-  const docketNumber = `DS-${String(count.length + 1).padStart(4, "0")}`;
+  const count = await db.select().from(docketsTable).where(eq(docketsTable.companyId, tenantId));
+  const docketNumber = `DKT-${String(count.length + 1).padStart(4, "0")}`;
 
   const [docket] = await db.insert(docketsTable).values({
+    companyId: tenantId,
     subcontractorId: Number(subcontractorId),
     jobAssignmentId: jobAssignmentId ? Number(jobAssignmentId) : null,
     docketNumber,
@@ -68,7 +91,10 @@ router.post("/dockets", async (req, res) => {
 
 // GET /dockets/:id
 router.get("/dockets/:id", async (req, res) => {
-  const [docket] = await db.select().from(docketsTable).where(eq(docketsTable.id, Number(req.params.id)));
+  const [docket] = await db
+    .select()
+    .from(docketsTable)
+    .where(and(eq(docketsTable.id, Number(req.params.id)), eq(docketsTable.companyId, companyId(req))));
   if (!docket) return res.status(404).json({ error: "Not found" });
   return res.json(await enrichDocket(docket));
 });
@@ -101,7 +127,11 @@ router.patch("/dockets/:id", async (req, res) => {
     if (status === "complete") updates.completedAt = new Date();
   }
 
-  const [docket] = await db.update(docketsTable).set(updates).where(eq(docketsTable.id, Number(req.params.id))).returning();
+  const [docket] = await db
+    .update(docketsTable)
+    .set(updates)
+    .where(and(eq(docketsTable.id, Number(req.params.id)), eq(docketsTable.companyId, companyId(req))))
+    .returning();
   if (!docket) return res.status(404).json({ error: "Not found" });
   return res.json(await enrichDocket(docket));
 });

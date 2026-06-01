@@ -11,6 +11,13 @@ import {
   UpdateWorkSessionParams,
   UpdateWorkSessionBody,
 } from "@workspace/api-zod";
+import {
+  canAccessSubcontractor,
+  companyId,
+  requireAdmin,
+  requireSubcontractorAccess,
+  workerSubcontractorId,
+} from "../lib/auth.js";
 
 const router = Router();
 
@@ -32,18 +39,27 @@ function enrichSession(session: typeof workSessionsTable.$inferSelect, subName: 
 router.post("/work-sessions/clock-on", async (req, res) => {
   const parsed = ClockOnBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+  if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
 
   const today = new Date().toISOString().split("T")[0];
   const existing = await db.select().from(workSessionsTable).where(
-    and(eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId), eq(workSessionsTable.date, today)),
+    and(
+      eq(workSessionsTable.companyId, companyId(req)),
+      eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
+      eq(workSessionsTable.date, today),
+    ),
   );
   if (existing[0]) return res.status(400).json({ error: "Already clocked on today" });
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, parsed.data.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   if (!sub) return res.status(404).json({ error: "Subcontractor not found" });
 
   const [session] = await db.insert(workSessionsTable).values({
     subcontractorId: parsed.data.subcontractorId,
+    companyId: companyId(req),
     date: today,
     status: "active",
     gpsEnabled: parsed.data.gpsEnabled ?? true,
@@ -52,6 +68,7 @@ router.post("/work-sessions/clock-on", async (req, res) => {
   }).returning();
 
   await db.insert(activityTable).values({
+    companyId: companyId(req),
     type: "clocked_on",
     description: `${sub.name} clocked on`,
     entityId: session.id,
@@ -64,10 +81,15 @@ router.post("/work-sessions/clock-on", async (req, res) => {
 router.post("/work-sessions/clock-off", async (req, res) => {
   const parsed = ClockOffBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+  if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
 
   const today = new Date().toISOString().split("T")[0];
   const [session] = await db.select().from(workSessionsTable).where(
-    and(eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId), eq(workSessionsTable.date, today)),
+    and(
+      eq(workSessionsTable.companyId, companyId(req)),
+      eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
+      eq(workSessionsTable.date, today),
+    ),
   );
   if (!session) return res.status(404).json({ error: "No active session today" });
 
@@ -84,9 +106,13 @@ router.post("/work-sessions/clock-off", async (req, res) => {
     breakEndAt: session.status === "on_break" ? new Date() : session.breakEndAt,
   }).where(eq(workSessionsTable.id, session.id)).returning();
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, parsed.data.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
 
   await db.insert(activityTable).values({
+    companyId: companyId(req),
     type: "clocked_off",
     description: `${sub?.name ?? "Subcontractor"} clocked off`,
     entityId: session.id,
@@ -99,10 +125,15 @@ router.post("/work-sessions/clock-off", async (req, res) => {
 router.post("/work-sessions/break-start", async (req, res) => {
   const parsed = StartBreakBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+  if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
 
   const today = new Date().toISOString().split("T")[0];
   const [session] = await db.select().from(workSessionsTable).where(
-    and(eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId), eq(workSessionsTable.date, today)),
+    and(
+      eq(workSessionsTable.companyId, companyId(req)),
+      eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
+      eq(workSessionsTable.date, today),
+    ),
   );
   if (!session || session.status !== "active") return res.status(400).json({ error: "No active session" });
 
@@ -111,17 +142,25 @@ router.post("/work-sessions/break-start", async (req, res) => {
     breakStartAt: new Date(),
   }).where(eq(workSessionsTable.id, session.id)).returning();
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, parsed.data.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(enrichSession(updated, sub?.name ?? ""));
 });
 
 router.post("/work-sessions/break-end", async (req, res) => {
   const parsed = EndBreakBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+  if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
 
   const today = new Date().toISOString().split("T")[0];
   const [session] = await db.select().from(workSessionsTable).where(
-    and(eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId), eq(workSessionsTable.date, today)),
+    and(
+      eq(workSessionsTable.companyId, companyId(req)),
+      eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
+      eq(workSessionsTable.date, today),
+    ),
   );
   if (!session || session.status !== "on_break") return res.status(400).json({ error: "Not on break" });
 
@@ -136,30 +175,38 @@ router.post("/work-sessions/break-end", async (req, res) => {
     totalBreakMinutes: session.totalBreakMinutes + extraMinutes,
   }).where(eq(workSessionsTable.id, session.id)).returning();
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, parsed.data.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(enrichSession(updated, sub?.name ?? ""));
 });
 
 router.get("/work-sessions/today", async (req, res) => {
   const subcontractorId = Number(req.query.subcontractorId);
   if (!subcontractorId) return res.status(400).json({ error: "subcontractorId required" });
+  if (!requireSubcontractorAccess(req, res, subcontractorId)) return;
 
   const today = new Date().toISOString().split("T")[0];
   const [session] = await db.select().from(workSessionsTable).where(
-    and(eq(workSessionsTable.subcontractorId, subcontractorId), eq(workSessionsTable.date, today)),
+    and(eq(workSessionsTable.companyId, companyId(req)), eq(workSessionsTable.subcontractorId, subcontractorId), eq(workSessionsTable.date, today)),
   );
   if (!session) return res.status(404).json({ error: "No session today" });
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(enrichSession(session, sub?.name ?? ""));
 });
 
 router.get("/work-sessions", async (req, res) => {
-  const subcontractorId = req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined;
+  const ownSubcontractorId = workerSubcontractorId(req);
+  const subcontractorId = ownSubcontractorId ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
   const date = req.query.date as string | undefined;
   const weekStart = req.query.weekStart as string | undefined;
 
-  const conditions = [];
+  const conditions = [eq(workSessionsTable.companyId, companyId(req))];
   if (subcontractorId) conditions.push(eq(workSessionsTable.subcontractorId, subcontractorId));
   if (date) conditions.push(eq(workSessionsTable.date, date));
   if (weekStart) {
@@ -173,7 +220,7 @@ router.get("/work-sessions", async (req, res) => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(workSessionsTable.date));
 
-  const subs = await db.select().from(subcontractorsTable);
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, companyId(req)));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   return res.json(sessions.map((s) => enrichSession(s, subMap.get(s.subcontractorId) ?? "")));
@@ -183,12 +230,21 @@ router.get("/work-sessions/:id", async (req, res) => {
   const parsed = GetWorkSessionParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
 
-  const [session] = await db.select().from(workSessionsTable).where(eq(workSessionsTable.id, parsed.data.id));
+  const [session] = await db
+    .select()
+    .from(workSessionsTable)
+    .where(and(eq(workSessionsTable.id, parsed.data.id), eq(workSessionsTable.companyId, companyId(req))));
   if (!session) return res.status(404).json({ error: "Not found" });
+  if (!canAccessSubcontractor(req, session.subcontractorId)) {
+    return res.status(403).json({ error: "You can only view your own timesheets" });
+  }
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, session.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, session.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   const gpsTrack = await db.select().from(gpsTracksTable)
-    .where(eq(gpsTracksTable.workSessionId, session.id))
+    .where(and(eq(gpsTracksTable.companyId, companyId(req)), eq(gpsTracksTable.workSessionId, session.id)))
     .orderBy(gpsTracksTable.recordedAt);
 
   return res.json({
@@ -202,7 +258,7 @@ router.get("/work-sessions/:id", async (req, res) => {
   });
 });
 
-router.patch("/work-sessions/:id", async (req, res) => {
+router.patch("/work-sessions/:id", requireAdmin, async (req, res) => {
   const params = UpdateWorkSessionParams.safeParse({ id: Number(req.params.id) });
   const body = UpdateWorkSessionBody.safeParse(req.body);
   if (!params.success || !body.success) return res.status(400).json({ error: "Invalid request" });
@@ -214,10 +270,17 @@ router.patch("/work-sessions/:id", async (req, res) => {
   if (body.data.gpsEnabled !== undefined) updates.gpsEnabled = body.data.gpsEnabled;
   if (body.data.gpsDisabledOnBreak !== undefined) updates.gpsDisabledOnBreak = body.data.gpsDisabledOnBreak;
 
-  const [session] = await db.update(workSessionsTable).set(updates).where(eq(workSessionsTable.id, params.data.id)).returning();
+  const [session] = await db
+    .update(workSessionsTable)
+    .set(updates)
+    .where(and(eq(workSessionsTable.id, params.data.id), eq(workSessionsTable.companyId, companyId(req))))
+    .returning();
   if (!session) return res.status(404).json({ error: "Not found" });
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, session.subcontractorId));
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, session.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(enrichSession(session, sub?.name ?? ""));
 });
 

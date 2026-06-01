@@ -1,9 +1,11 @@
 import { pgTable, serial, integer, text, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { jobAssignmentsTable } from "./job-assignments";
 import { subcontractorsTable } from "./subcontractors";
 
 export const docketsTable = pgTable("dockets", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   jobAssignmentId: integer("job_assignment_id").references(() => jobAssignmentsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   docketNumber: text("docket_number").notNull(),

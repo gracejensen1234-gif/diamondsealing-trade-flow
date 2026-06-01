@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/lib/auth";
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
@@ -117,10 +118,13 @@ async function postLocationVerification(payload: Record<string, unknown>) {
 
 export default function FieldView() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const isWorker = user?.role === "worker";
 
   const [subId, setSubId] = useState<number | undefined>(() => {
+    if (user?.role === "worker") return user.subcontractorId ?? undefined;
     const saved = localStorage.getItem("ds_selected_subcontractor_id");
     return saved ? parseInt(saved) : undefined;
   });
@@ -135,12 +139,19 @@ export default function FieldView() {
   const [vapidKey, setVapidKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isWorker) {
+      setSubId(user?.subcontractorId ?? undefined);
+    }
+  }, [isWorker, user?.subcontractorId]);
+
+  useEffect(() => {
+    if (isWorker) return;
     if (subId) {
       localStorage.setItem("ds_selected_subcontractor_id", subId.toString());
     } else {
       localStorage.removeItem("ds_selected_subcontractor_id");
     }
-  }, [subId]);
+  }, [isWorker, subId]);
 
   // Check push status on mount
   useEffect(() => {
@@ -562,8 +573,12 @@ export default function FieldView() {
       <Card>
         <CardContent className="p-4 space-y-4">
           <div className="space-y-2">
-            <Label>Who are you?</Label>
-            {loadingSubs ? (
+            <Label>{isWorker ? "Signed in as" : "Who are you?"}</Label>
+            {isWorker ? (
+              <div className="rounded-md border bg-muted px-3 py-2 text-sm font-medium">
+                {user?.name ?? "Worker"}
+              </div>
+            ) : loadingSubs ? (
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select value={subId?.toString() || ""} onValueChange={(v) => setSubId(parseInt(v))}>

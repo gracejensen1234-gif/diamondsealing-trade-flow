@@ -33,6 +33,21 @@ export default function XeroSettings() {
     }
   }, [settings]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const xero = params.get("xero");
+    if (xero === "connected") {
+      toast({ title: "Xero connected" });
+      window.history.replaceState(null, "", "/settings/xero");
+    }
+    if (xero === "error") {
+      const message = params.get("message") || "Xero connection failed.";
+      setConnectionMessage(message);
+      toast({ title: "Xero connection failed", description: message, variant: "destructive" });
+      window.history.replaceState(null, "", "/settings/xero");
+    }
+  }, [toast]);
+
   const updateSettings = useUpdateXeroSettings({
     mutation: {
       onSuccess: () => {
@@ -95,6 +110,7 @@ export default function XeroSettings() {
   };
 
   const handleConnect = () => {
+    const xeroReady = Boolean((settings as any)?.xeroOAuthReady);
     const savedClientId = settings?.clientId?.trim();
     const typedClientId = clientId.trim();
 
@@ -112,6 +128,14 @@ export default function XeroSettings() {
       return;
     }
 
+    if (!xeroReady) {
+      const redirectUri = (settings as any)?.redirectUri || "https://diamond-sealing-operations.onrender.com/api/xero/callback";
+      const message = `Set XERO_CLIENT_SECRET and XERO_REDIRECT_URI in Render first. Redirect URI: ${redirectUri}`;
+      setConnectionMessage(message);
+      toast({ title: "Xero server setup required", description: message, variant: "destructive" });
+      return;
+    }
+
     connectXero.mutate();
   };
 
@@ -119,18 +143,18 @@ export default function XeroSettings() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Xero Integration</h1>
-        <p className="text-muted-foreground mt-2">Connect Diamond Sealing to Xero to sync subcontractor invoices.</p>
+        <p className="text-muted-foreground mt-2">Connect this company account to Xero to sync subcontractor invoices.</p>
       </div>
 
       <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
         <Info className="h-5 w-5 shrink-0" />
-        <p>Diamond Sealing invoices are automatically prepared every Thursday evening, based on completed job reports for the week. Review and submit them from the Weekly Invoices page.</p>
+        <p>Invoices are automatically prepared every Thursday evening, based on completed job reports for the week. Review and submit them from the Weekly Invoices page.</p>
       </div>
 
       {!isLoading && !settings?.connected && (
         <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 p-4 rounded-lg flex gap-3 text-sm border border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-5 w-5 shrink-0" />
-          <p>{connectionMessage || "Xero is not connected yet. Save your Xero Client ID, then connect once the server redirect URI is configured."}</p>
+          <p>{connectionMessage || "Xero is not connected yet. Save your Xero Client ID, then connect once XERO_CLIENT_SECRET and XERO_REDIRECT_URI are configured in Render."}</p>
         </div>
       )}
 
@@ -183,13 +207,13 @@ export default function XeroSettings() {
             
             <div className="space-y-2">
               <Label>Tenant Name</Label>
-              <Input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="e.g. Diamond Sealing PTY LTD" />
+              <Input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="e.g. Your Company Pty Ltd" />
             </div>
 
             <div className="space-y-2">
               <Label>Invoice Prefix</Label>
               <Input value={invoicePrefix} onChange={e => setInvoicePrefix(e.target.value)} placeholder="DS" />
-              <p className="text-xs text-muted-foreground">Invoices will be created as DS-0001, etc.</p>
+              <p className="text-xs text-muted-foreground">Invoices will use this company account's prefix.</p>
             </div>
 
             <div className="space-y-2">

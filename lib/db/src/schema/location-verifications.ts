@@ -1,10 +1,12 @@
 import { pgTable, serial, integer, numeric, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 import { workSessionsTable } from "./work-sessions";
 import { jobAssignmentsTable } from "./job-assignments";
 
 export const locationVerificationsTable = pgTable("location_verifications", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   workSessionId: integer("work_session_id").references(() => workSessionsTable.id),
   jobAssignmentId: integer("job_assignment_id").references(() => jobAssignmentsTable.id),

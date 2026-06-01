@@ -13,6 +13,7 @@ import {
   PayInvoiceParams,
 } from "@workspace/api-zod";
 import { dateOnly } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -23,15 +24,23 @@ function calcTotals(lineItems: Array<{ quantity: number; unitPrice: number }>, t
   return { subtotal: subtotal.toFixed(2), tax: tax.toFixed(2), total: total.toFixed(2) };
 }
 
-async function getNextInvoiceNumber(): Promise<string> {
-  const invoices = await db.select({ id: invoicesTable.id }).from(invoicesTable).orderBy(invoicesTable.id);
+async function getNextInvoiceNumber(tenantId: number): Promise<string> {
+  const invoices = await db
+    .select({ id: invoicesTable.id })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.companyId, tenantId))
+    .orderBy(invoicesTable.id);
   return `INV-${String(invoices.length + 1).padStart(4, "0")}`;
 }
 
 async function enrichInvoice(invoice: typeof invoicesTable.$inferSelect) {
+  const tenantId = invoice.companyId ?? 0;
   let customerName: string | null = null;
   if (invoice.customerId) {
-    const [c] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, invoice.customerId));
+    const [c] = await db
+      .select({ name: customersTable.name })
+      .from(customersTable)
+      .where(and(eq(customersTable.id, invoice.customerId), eq(customersTable.companyId, tenantId)));
     customerName = c?.name ?? null;
   }
   const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems as Array<{ id: number; description: string; quantity: number; unitPrice: number; total: number }> : [];
@@ -54,7 +63,7 @@ router.get("/invoices", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid query" });
 
   const { status, customerId } = parsed.data;
-  const conditions = [];
+  const conditions = [eq(invoicesTable.companyId, companyId(req))];
   if (status) conditions.push(eq(invoicesTable.status, status));
   if (customerId) conditions.push(eq(invoicesTable.customerId, customerId));
 
@@ -70,7 +79,8 @@ router.post("/invoices", async (req, res) => {
   const parsed = CreateInvoiceBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
-  const invoiceNumber = await getNextInvoiceNumber();
+  const tenantId = companyId(req);
+  const invoiceNumber = await getNextInvoiceNumber(tenantId);
   const lineItems = (parsed.data.lineItems ?? []).map((item, i) => ({
     id: i + 1,
     description: item.description,
@@ -82,6 +92,7 @@ router.post("/invoices", async (req, res) => {
   const totals = calcTotals(lineItems, taxRate);
 
   const [invoice] = await db.insert(invoicesTable).values({
+    companyId: tenantId,
     invoiceNumber,
     status: "draft",
     customerId: parsed.data.customerId ?? null,
@@ -105,7 +116,10 @@ router.get("/invoices/:id", async (req, res) => {
   const parsed = GetInvoiceParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
 
-  const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, parsed.data.id));
+  const [invoice] = await db
+    .select()
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, parsed.data.id), eq(invoicesTable.companyId, companyId(req))));
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   return res.json(await enrichInvoice(invoice));
@@ -116,7 +130,10 @@ router.patch("/invoices/:id", async (req, res) => {
   const body = UpdateInvoiceBody.safeParse(req.body);
   if (!params.success || !body.success) return res.status(400).json({ error: "Invalid request" });
 
-  const existing = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
+  const existing = await db
+    .select()
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.id, params.data.id), eq(invoicesTable.companyId, companyId(req))));
   if (!existing[0]) return res.status(404).json({ error: "Not found" });
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -143,7 +160,11 @@ router.patch("/invoices/:id", async (req, res) => {
     updates.total = totals.total;
   }
 
-  const [invoice] = await db.update(invoicesTable).set(updates).where(eq(invoicesTable.id, params.data.id)).returning();
+  const [invoice] = await db
+    .update(invoicesTable)
+    .set(updates)
+    .where(and(eq(invoicesTable.id, params.data.id), eq(invoicesTable.companyId, companyId(req))))
+    .returning();
   return res.json(await enrichInvoice(invoice));
 });
 
@@ -151,7 +172,7 @@ router.delete("/invoices/:id", async (req, res) => {
   const parsed = DeleteInvoiceParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
 
-  await db.delete(invoicesTable).where(eq(invoicesTable.id, parsed.data.id));
+  await db.delete(invoicesTable).where(and(eq(invoicesTable.id, parsed.data.id), eq(invoicesTable.companyId, companyId(req))));
   return res.status(204).send();
 });
 
@@ -161,11 +182,12 @@ router.post("/invoices/:id/send", async (req, res) => {
 
   const [invoice] = await db.update(invoicesTable)
     .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
-    .where(eq(invoicesTable.id, parsed.data.id))
+    .where(and(eq(invoicesTable.id, parsed.data.id), eq(invoicesTable.companyId, companyId(req))))
     .returning();
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   await db.insert(activityTable).values({
+    companyId: companyId(req),
     type: "invoice_sent",
     description: `Invoice ${invoice.invoiceNumber} sent to client`,
     entityId: invoice.id,
@@ -181,11 +203,12 @@ router.post("/invoices/:id/pay", async (req, res) => {
 
   const [invoice] = await db.update(invoicesTable)
     .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
-    .where(eq(invoicesTable.id, parsed.data.id))
+    .where(and(eq(invoicesTable.id, parsed.data.id), eq(invoicesTable.companyId, companyId(req))))
     .returning();
   if (!invoice) return res.status(404).json({ error: "Not found" });
 
   await db.insert(activityTable).values({
+    companyId: companyId(req),
     type: "invoice_paid",
     description: `Invoice ${invoice.invoiceNumber} marked as paid`,
     entityId: invoice.id,

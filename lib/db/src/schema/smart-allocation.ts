@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, numeric, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const allocationRecommendationsTable = pgTable("allocation_recommendations", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   jobAssignmentId: integer("job_assignment_id"),
   jobId: integer("job_id").notNull(),
   requestedDate: text("requested_date").notNull(),
@@ -17,6 +19,7 @@ export const allocationRecommendationsTable = pgTable("allocation_recommendation
 
 export const weeklyPlannerProposalsTable = pgTable("weekly_planner_proposals", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   weekStart: text("week_start").notNull(),
   status: text("status", { enum: ["draft", "pending_approval", "approved", "rejected"] }).default("draft"),
   proposedSchedule: jsonb("proposed_schedule").notNull().default("[]"),

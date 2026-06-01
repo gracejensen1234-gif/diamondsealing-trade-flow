@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, asc } from "drizzle-orm";
 import { workSessionMinutes } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -22,13 +23,14 @@ function n(v: unknown): number {
 // GET /monthly-rankings
 router.get("/monthly-rankings", async (req, res) => {
   const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+  const tenantId = companyId(req);
   const rows = await db
     .select()
     .from(monthlyRankingsTable)
-    .where(eq(monthlyRankingsTable.month, month))
+    .where(and(eq(monthlyRankingsTable.companyId, tenantId), eq(monthlyRankingsTable.month, month)))
     .orderBy(asc(monthlyRankingsTable.rank));
 
-  const subs = await db.select().from(subcontractorsTable);
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   return res.json(
@@ -53,6 +55,7 @@ router.get("/monthly-rankings", async (req, res) => {
 router.post("/monthly-rankings/calculate", async (req, res) => {
   const { month } = req.body;
   if (!month) return res.status(400).json({ error: "month required (YYYY-MM)" });
+  const tenantId = companyId(req);
 
   const monthStart = `${month}-01`;
   const nextMonth = new Date(`${month}-01`);
@@ -62,7 +65,7 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
   const [weights] = await db
     .select()
     .from(scoringWeightsTable)
-    .where(eq(scoringWeightsTable.active, true))
+    .where(and(eq(scoringWeightsTable.companyId, tenantId), eq(scoringWeightsTable.active, true)))
     .limit(1);
 
   const w = {
@@ -75,29 +78,52 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
     attendance: n(weights?.attendanceWeight ?? 5),
   };
 
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const rankings = await Promise.all(
     subs.map(async (sub) => {
       const sessions = await db
         .select()
         .from(workSessionsTable)
-        .where(and(eq(workSessionsTable.subcontractorId, sub.id), gte(workSessionsTable.date, monthStart), lte(workSessionsTable.date, monthEnd)));
+        .where(and(
+          eq(workSessionsTable.companyId, tenantId),
+          eq(workSessionsTable.subcontractorId, sub.id),
+          gte(workSessionsTable.date, monthStart),
+          lte(workSessionsTable.date, monthEnd),
+        ));
 
       const reports = await db
         .select()
         .from(jobReportsTable)
-        .where(and(eq(jobReportsTable.subcontractorId, sub.id), gte(jobReportsTable.dispatchDate, monthStart), lte(jobReportsTable.dispatchDate, monthEnd)));
+        .where(and(
+          eq(jobReportsTable.companyId, tenantId),
+          eq(jobReportsTable.subcontractorId, sub.id),
+          gte(jobReportsTable.dispatchDate, monthStart),
+          lte(jobReportsTable.dispatchDate, monthEnd),
+        ));
 
       const flags = await db
         .select()
         .from(auditFlagsTable)
-        .where(and(eq(auditFlagsTable.subcontractorId, sub.id), gte(auditFlagsTable.createdAt, new Date(monthStart)), lte(auditFlagsTable.createdAt, new Date(monthEnd))));
+        .where(and(
+          eq(auditFlagsTable.companyId, tenantId),
+          eq(auditFlagsTable.subcontractorId, sub.id),
+          gte(auditFlagsTable.createdAt, new Date(monthStart)),
+          lte(auditFlagsTable.createdAt, new Date(monthEnd)),
+        ));
 
       const [auditScore] = await db
         .select()
         .from(auditScoresTable)
-        .where(and(eq(auditScoresTable.subcontractorId, sub.id), eq(auditScoresTable.periodType, "monthly"), eq(auditScoresTable.periodStart, monthStart)))
+        .where(and(
+          eq(auditScoresTable.companyId, tenantId),
+          eq(auditScoresTable.subcontractorId, sub.id),
+          eq(auditScoresTable.periodType, "monthly"),
+          eq(auditScoresTable.periodStart, monthStart),
+        ))
         .limit(1);
 
       const totalMetres = reports.reduce((a, r) => a + n(r.metersCompleted), 0);
@@ -132,6 +158,7 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
         totalWeights;
 
       const values = {
+        companyId: tenantId,
         subcontractorId: sub.id,
         month,
         totalScore: totalScore.toString(),
@@ -156,11 +183,19 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
       const existing = await db
         .select()
         .from(monthlyRankingsTable)
-        .where(and(eq(monthlyRankingsTable.subcontractorId, sub.id), eq(monthlyRankingsTable.month, month)))
+        .where(and(
+          eq(monthlyRankingsTable.companyId, tenantId),
+          eq(monthlyRankingsTable.subcontractorId, sub.id),
+          eq(monthlyRankingsTable.month, month),
+        ))
         .limit(1);
 
       const [row] = existing.length
-        ? await db.update(monthlyRankingsTable).set(values).where(eq(monthlyRankingsTable.id, existing[0].id)).returning()
+        ? await db
+            .update(monthlyRankingsTable)
+            .set(values)
+            .where(and(eq(monthlyRankingsTable.id, existing[0].id), eq(monthlyRankingsTable.companyId, tenantId)))
+            .returning()
         : await db.insert(monthlyRankingsTable).values(values).returning();
 
       return { ...row, subcontractorName: sub.name, totalScore: n(row.totalScore) };
@@ -173,7 +208,7 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
       const [updated] = await db
         .update(monthlyRankingsTable)
         .set({ rank: i + 1 })
-        .where(eq(monthlyRankingsTable.id, r.id))
+        .where(and(eq(monthlyRankingsTable.id, r.id), eq(monthlyRankingsTable.companyId, tenantId)))
         .returning();
       return { ...r, rank: i + 1, totalScore: n(updated.totalScore) };
     }),
@@ -183,10 +218,15 @@ router.post("/monthly-rankings/calculate", async (req, res) => {
 });
 
 // GET /scoring-weights
-router.get("/scoring-weights", async (_req, res) => {
-  let [weights] = await db.select().from(scoringWeightsTable).where(eq(scoringWeightsTable.active, true)).limit(1);
+router.get("/scoring-weights", async (req, res) => {
+  const tenantId = companyId(req);
+  let [weights] = await db
+    .select()
+    .from(scoringWeightsTable)
+    .where(and(eq(scoringWeightsTable.companyId, tenantId), eq(scoringWeightsTable.active, true)))
+    .limit(1);
   if (!weights) {
-    [weights] = await db.insert(scoringWeightsTable).values({ name: "default" }).returning();
+    [weights] = await db.insert(scoringWeightsTable).values({ companyId: tenantId, name: "default" }).returning();
   }
   return res.json({
     ...weights,
@@ -211,11 +251,20 @@ router.patch("/scoring-weights", async (req, res) => {
     if (req.body[f] !== undefined) updates[f] = req.body[f].toString();
   }
 
-  let [weights] = await db.select().from(scoringWeightsTable).where(eq(scoringWeightsTable.active, true)).limit(1);
+  const tenantId = companyId(req);
+  let [weights] = await db
+    .select()
+    .from(scoringWeightsTable)
+    .where(and(eq(scoringWeightsTable.companyId, tenantId), eq(scoringWeightsTable.active, true)))
+    .limit(1);
   if (!weights) {
-    [weights] = await db.insert(scoringWeightsTable).values({ name: "default" }).returning();
+    [weights] = await db.insert(scoringWeightsTable).values({ companyId: tenantId, name: "default" }).returning();
   }
-  const [updated] = await db.update(scoringWeightsTable).set(updates).where(eq(scoringWeightsTable.id, weights.id)).returning();
+  const [updated] = await db
+    .update(scoringWeightsTable)
+    .set(updates)
+    .where(and(eq(scoringWeightsTable.id, weights.id), eq(scoringWeightsTable.companyId, tenantId)))
+    .returning();
   return res.json({
     ...updated,
     metresWeight: n(updated.metresWeight),
@@ -229,9 +278,14 @@ router.patch("/scoring-weights", async (req, res) => {
 });
 
 // GET /monthly-awards
-router.get("/monthly-awards", async (_req, res) => {
-  const awards = await db.select().from(monthlyAwardsTable).orderBy(desc(monthlyAwardsTable.createdAt));
-  const subs = await db.select().from(subcontractorsTable);
+router.get("/monthly-awards", async (req, res) => {
+  const tenantId = companyId(req);
+  const awards = await db
+    .select()
+    .from(monthlyAwardsTable)
+    .where(eq(monthlyAwardsTable.companyId, tenantId))
+    .orderBy(desc(monthlyAwardsTable.createdAt));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
   return res.json(
     awards.map((a) => ({
@@ -249,9 +303,16 @@ router.post("/monthly-awards", async (req, res) => {
   if (!month || !winnerId || !awardType || !awardTitle || !reasonText) {
     return res.status(400).json({ error: "month, winnerId, awardType, awardTitle, reasonText required" });
   }
+  const tenantId = companyId(req);
+  const [winner] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, Number(winnerId)), eq(subcontractorsTable.companyId, tenantId)));
+  if (!winner) return res.status(400).json({ error: "Winner not found for this company" });
   const [award] = await db
     .insert(monthlyAwardsTable)
     .values({
+      companyId: tenantId,
       month,
       winnerId: Number(winnerId),
       awardType,
@@ -263,20 +324,23 @@ router.post("/monthly-awards", async (req, res) => {
       totalScore: totalScore?.toString(),
     })
     .returning();
-  const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, award.winnerId));
-  return res.status(201).json({ ...award, winnerName: sub?.name ?? "", awardValue: award.awardValue ? n(award.awardValue) : null });
+  return res.status(201).json({ ...award, winnerName: winner.name, awardValue: award.awardValue ? n(award.awardValue) : null });
 });
 
 // GET /monthly-awards/current — must be before /:id
-router.get("/monthly-awards/current", async (_req, res) => {
+router.get("/monthly-awards/current", async (req, res) => {
+  const tenantId = companyId(req);
   const [award] = await db
     .select()
     .from(monthlyAwardsTable)
-    .where(eq(monthlyAwardsTable.publishedToStaff, true))
+    .where(and(eq(monthlyAwardsTable.companyId, tenantId), eq(monthlyAwardsTable.publishedToStaff, true)))
     .orderBy(desc(monthlyAwardsTable.publishedAt))
     .limit(1);
   if (!award) return res.status(404).json({ error: "No published award" });
-  const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, award.winnerId));
+  const [sub] = await db
+    .select({ name: subcontractorsTable.name })
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, award.winnerId), eq(subcontractorsTable.companyId, tenantId)));
   return res.json({ ...award, winnerName: sub?.name ?? "", awardValue: award.awardValue ? n(award.awardValue) : null });
 });
 
@@ -294,9 +358,17 @@ router.patch("/monthly-awards/:id", async (req, res) => {
     if (req.body.publishedToStaff === true) updates.publishedAt = new Date();
   }
 
-  const [award] = await db.update(monthlyAwardsTable).set(updates).where(eq(monthlyAwardsTable.id, Number(req.params.id))).returning();
+  const tenantId = companyId(req);
+  const [award] = await db
+    .update(monthlyAwardsTable)
+    .set(updates)
+    .where(and(eq(monthlyAwardsTable.id, Number(req.params.id)), eq(monthlyAwardsTable.companyId, tenantId)))
+    .returning();
   if (!award) return res.status(404).json({ error: "Not found" });
-  const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, award.winnerId));
+  const [sub] = await db
+    .select({ name: subcontractorsTable.name })
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, award.winnerId), eq(subcontractorsTable.companyId, tenantId)));
   return res.json({ ...award, winnerName: sub?.name ?? "", awardValue: award.awardValue ? n(award.awardValue) : null });
 });
 

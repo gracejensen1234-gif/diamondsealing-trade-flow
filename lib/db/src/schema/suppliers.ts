@@ -1,7 +1,9 @@
 import { pgTable, serial, integer, text, numeric, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 
 export const supplierProfilesTable = pgTable("supplier_profiles", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   name: text("name").notNull(),
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
@@ -17,6 +19,7 @@ export const supplierProfilesTable = pgTable("supplier_profiles", {
 
 export const supplierOrdersTable = pgTable("supplier_orders", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   supplierId: integer("supplier_id").notNull().references(() => supplierProfilesTable.id),
   subcontractorId: integer("subcontractor_id").notNull(),
   orderNumber: text("order_number").notNull(),
@@ -39,6 +42,7 @@ export const supplierOrdersTable = pgTable("supplier_orders", {
 
 export const supplierOrderItemsTable = pgTable("supplier_order_items", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   orderId: integer("order_id").notNull().references(() => supplierOrdersTable.id),
   stockItemId: integer("stock_item_id"),
   productName: text("product_name").notNull(),
@@ -51,6 +55,7 @@ export const supplierOrderItemsTable = pgTable("supplier_order_items", {
 
 export const stockItemSupplierPrefsTable = pgTable("stock_item_supplier_prefs", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   stockItemId: integer("stock_item_id").notNull(),
   supplierId: integer("supplier_id").notNull().references(() => supplierProfilesTable.id),
   isPreferred: boolean("is_preferred").notNull().default(true),

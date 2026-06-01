@@ -1,6 +1,7 @@
 import { pgTable, serial, text, timestamp, integer, numeric, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companyAccountsTable } from "./company-accounts";
 import { customersTable } from "./customers";
 import { jobsTable } from "./jobs";
 import { quotesTable } from "./quotes";
@@ -9,6 +10,7 @@ export const invoiceStatusValues = ["draft", "sent", "paid", "overdue", "cancell
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   invoiceNumber: text("invoice_number").notNull(),
   status: text("status").notNull().default("draft"),
   customerId: integer("customer_id").references(() => customersTable.id),

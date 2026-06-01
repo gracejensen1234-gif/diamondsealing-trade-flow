@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, numeric, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const weeklyInvoicesTable = pgTable("weekly_invoices", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   weekStartDate: text("week_start_date").notNull(),
   weekEndDate: text("week_end_date").notNull(),

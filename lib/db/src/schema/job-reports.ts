@@ -1,10 +1,12 @@
 import { pgTable, serial, integer, text, numeric, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { jobsTable } from "./jobs";
 import { subcontractorsTable } from "./subcontractors";
 import { jobAssignmentsTable } from "./job-assignments";
 
 export const jobReportsTable = pgTable("job_reports", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   jobId: integer("job_id").notNull().references(() => jobsTable.id),
   jobAssignmentId: integer("job_assignment_id").references(() => jobAssignmentsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),

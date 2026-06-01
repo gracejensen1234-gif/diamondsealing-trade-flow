@@ -1,4 +1,5 @@
 import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +10,7 @@ export const activityTypeValues = [
 
 export const activityTable = pgTable("activity", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   type: text("type").notNull(),
   description: text("description").notNull(),
   entityId: integer("entity_id"),

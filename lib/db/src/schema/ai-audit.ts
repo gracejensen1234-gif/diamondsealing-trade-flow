@@ -1,10 +1,12 @@
 import { pgTable, serial, integer, text, numeric, jsonb, boolean, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 import { jobReportsTable } from "./job-reports";
 import { jobAssignmentsTable } from "./job-assignments";
 
 export const auditFlagsTable = pgTable("audit_flags", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   jobReportId: integer("job_report_id").references(() => jobReportsTable.id),
   jobAssignmentId: integer("job_assignment_id").references(() => jobAssignmentsTable.id),
@@ -46,6 +48,7 @@ export const auditFlagsTable = pgTable("audit_flags", {
 
 export const auditScoresTable = pgTable("audit_scores", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   periodType: text("period_type", { enum: ["daily", "weekly", "monthly"] }).notNull(),
   periodStart: text("period_start").notNull(),

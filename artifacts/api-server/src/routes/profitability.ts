@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { workSessionMinutes } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -22,6 +23,7 @@ function n(v: unknown): number { return Number(v ?? 0); }
 router.post("/profitability/calculate", async (req, res) => {
   const { periodType, periodStart, subcontractorId } = req.body;
   if (!periodType || !periodStart) return res.status(400).json({ error: "periodType and periodStart required" });
+  const tenantId = companyId(req);
 
   let periodEnd = periodStart;
   if (periodType === "weekly") {
@@ -33,22 +35,43 @@ router.post("/profitability/calculate", async (req, res) => {
   }
 
   const subs = subcontractorId
-    ? await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, Number(subcontractorId)))
-    : await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+    ? await db
+        .select()
+        .from(subcontractorsTable)
+        .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)))
+    : await db
+        .select()
+        .from(subcontractorsTable)
+        .where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const results = await Promise.all(
     subs.map(async (sub) => {
       const sessions = await db.select().from(workSessionsTable).where(
-        and(eq(workSessionsTable.subcontractorId, sub.id), gte(workSessionsTable.date, periodStart), lte(workSessionsTable.date, periodEnd)),
+        and(
+          eq(workSessionsTable.companyId, tenantId),
+          eq(workSessionsTable.subcontractorId, sub.id),
+          gte(workSessionsTable.date, periodStart),
+          lte(workSessionsTable.date, periodEnd),
+        ),
       );
       const reports = await db.select().from(jobReportsTable).where(
-        and(eq(jobReportsTable.subcontractorId, sub.id), gte(jobReportsTable.dispatchDate, periodStart), lte(jobReportsTable.dispatchDate, periodEnd)),
+        and(
+          eq(jobReportsTable.companyId, tenantId),
+          eq(jobReportsTable.subcontractorId, sub.id),
+          gte(jobReportsTable.dispatchDate, periodStart),
+          lte(jobReportsTable.dispatchDate, periodEnd),
+        ),
       );
       const flags = await db.select().from(auditFlagsTable).where(
-        and(eq(auditFlagsTable.subcontractorId, sub.id), gte(auditFlagsTable.createdAt, new Date(periodStart))),
+        and(
+          eq(auditFlagsTable.companyId, tenantId),
+          eq(auditFlagsTable.subcontractorId, sub.id),
+          gte(auditFlagsTable.createdAt, new Date(periodStart)),
+        ),
       );
       const invTxns = await db.select().from(inventoryTransactionsTable).where(
         and(
+          eq(inventoryTransactionsTable.companyId, tenantId),
           eq(inventoryTransactionsTable.subcontractorId, sub.id),
           eq(inventoryTransactionsTable.transactionType, "used_on_job"),
           gte(inventoryTransactionsTable.createdAt, new Date(periodStart)),
@@ -70,7 +93,7 @@ router.post("/profitability/calculate", async (req, res) => {
       const labourCost = (totalWorkMinutes / 60) * hourlyRate;
 
       // Product cost: sum of stock used × estimated unit cost
-      const stockItems = await db.select().from(stockItemsTable);
+      const stockItems = await db.select().from(stockItemsTable).where(eq(stockItemsTable.companyId, tenantId));
       const priceMap = new Map(stockItems.map((s) => [s.id, n((s as any).unitCost ?? 8)]));
       const productCost = invTxns.reduce((a, t) => a + n(t.quantity) * (priceMap.get(t.stockItemId) ?? 8), 0);
 
@@ -82,6 +105,7 @@ router.post("/profitability/calculate", async (req, res) => {
       const marginPct = revenueGenerated > 0 ? (grossProfit / revenueGenerated) * 100 : 0;
 
       const values = {
+        companyId: tenantId,
         subcontractorId: sub.id,
         periodType,
         periodStart,
@@ -100,11 +124,20 @@ router.post("/profitability/calculate", async (req, res) => {
       };
 
       const existing = await db.select().from(profitabilityScoresTable).where(
-        and(eq(profitabilityScoresTable.subcontractorId, sub.id), eq(profitabilityScoresTable.periodType, periodType), eq(profitabilityScoresTable.periodStart, periodStart)),
+        and(
+          eq(profitabilityScoresTable.companyId, tenantId),
+          eq(profitabilityScoresTable.subcontractorId, sub.id),
+          eq(profitabilityScoresTable.periodType, periodType),
+          eq(profitabilityScoresTable.periodStart, periodStart),
+        ),
       ).limit(1);
 
       const [row] = existing.length
-        ? await db.update(profitabilityScoresTable).set(values).where(eq(profitabilityScoresTable.id, existing[0].id)).returning()
+        ? await db
+            .update(profitabilityScoresTable)
+            .set(values)
+            .where(and(eq(profitabilityScoresTable.id, existing[0].id), eq(profitabilityScoresTable.companyId, tenantId)))
+            .returning()
         : await db.insert(profitabilityScoresTable).values(values).returning();
 
       return { ...row, subcontractorName: sub.name, revenueGenerated: n(row.revenueGenerated), totalMetres: n(row.totalMetres), grossProfit: n(row.grossProfit), marginPct: n(row.marginPct) };
@@ -114,7 +147,10 @@ router.post("/profitability/calculate", async (req, res) => {
   // Assign profit ranks
   const sorted = results.sort((a, b) => b.grossProfit - a.grossProfit);
   await Promise.all(sorted.map((r, i) =>
-    db.update(profitabilityScoresTable).set({ profitRank: i + 1 }).where(eq(profitabilityScoresTable.id, r.id)),
+    db
+      .update(profitabilityScoresTable)
+      .set({ profitRank: i + 1 })
+      .where(and(eq(profitabilityScoresTable.id, r.id), eq(profitabilityScoresTable.companyId, tenantId))),
   ));
 
   return res.json(sorted.map((r, i) => ({ ...r, profitRank: i + 1 })));
@@ -122,8 +158,13 @@ router.post("/profitability/calculate", async (req, res) => {
 
 // GET /profitability
 router.get("/profitability", async (req, res) => {
-  const rows = await db.select().from(profitabilityScoresTable).orderBy(desc(profitabilityScoresTable.calculatedAt));
-  const subs = await db.select().from(subcontractorsTable);
+  const tenantId = companyId(req);
+  const rows = await db
+    .select()
+    .from(profitabilityScoresTable)
+    .where(eq(profitabilityScoresTable.companyId, tenantId))
+    .orderBy(desc(profitabilityScoresTable.calculatedAt));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = rows;

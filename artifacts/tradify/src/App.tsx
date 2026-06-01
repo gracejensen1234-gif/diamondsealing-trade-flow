@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import Login from "@/pages/login";
 
 import Dashboard from "@/pages/dashboard";
 import Jobs from "@/pages/jobs";
@@ -46,7 +48,7 @@ import NotificationCentre from "@/pages/notifications";
 
 const queryClient = new QueryClient();
 
-function Router() {
+function AdminRoutes() {
   return (
     <AppLayout>
       <Switch>
@@ -105,13 +107,49 @@ function Router() {
   );
 }
 
+function WorkerRoutes() {
+  return (
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={FieldView} />
+        <Route path="/field" component={FieldView} />
+        <Route path="/field/jobs/:id" component={FieldJobDetail} />
+        <Route path="/notifications" component={NotificationCentre} />
+        <Route component={FieldView} />
+      </Switch>
+    </AppLayout>
+  );
+}
+
+function AuthenticatedRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-sidebar text-sidebar-foreground">
+        <div className="flex items-center gap-3 text-sm text-white/70">
+          <div className="h-10 w-10 overflow-hidden rounded-md border border-white/15 bg-black">
+            <img src="/diamond-sealing-logo.jpeg" alt="Company logo" className="h-full w-full object-cover" />
+          </div>
+          Loading operations...
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) return <Login />;
+  return user.role === "worker" ? <WorkerRoutes /> : <AdminRoutes />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <AuthProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AuthenticatedRoutes />
+          </WouterRouter>
+        </AuthProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

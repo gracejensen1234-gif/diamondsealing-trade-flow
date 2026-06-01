@@ -17,6 +17,7 @@ import {
   supplierProfilesTable,
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -38,12 +39,22 @@ interface SubInfo {
   assignedSuburbs: string[];
 }
 
-async function loadSubInfo(date: string): Promise<SubInfo[]> {
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+async function loadSubInfo(companyAccountId: number, date: string): Promise<SubInfo[]> {
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.companyId, companyAccountId), eq(subcontractorsTable.active, true)));
   return Promise.all(
     subs.map(async (sub) => {
-      const [skills] = await db.select().from(workerSkillsTable).where(eq(workerSkillsTable.subcontractorId, sub.id)).limit(1);
-      const invRows = await db.select().from(subInventoryTable).where(eq(subInventoryTable.subcontractorId, sub.id));
+      const [skills] = await db
+        .select()
+        .from(workerSkillsTable)
+        .where(and(eq(workerSkillsTable.companyId, companyAccountId), eq(workerSkillsTable.subcontractorId, sub.id)))
+        .limit(1);
+      const invRows = await db
+        .select()
+        .from(subInventoryTable)
+        .where(and(eq(subInventoryTable.companyId, companyAccountId), eq(subInventoryTable.subcontractorId, sub.id)));
       const inventory = new Map(invRows.map((r) => [r.stockItemId, Number(r.currentQuantity)]));
 
       // Get existing assignments for proximity calculation
@@ -53,6 +64,7 @@ async function loadSubInfo(date: string): Promise<SubInfo[]> {
         .where(
           and(
             eq(jobAssignmentsTable.subcontractorId, sub.id),
+            eq(jobAssignmentsTable.companyId, companyAccountId),
             gte(jobAssignmentsTable.dispatchDate, (() => {
               const d = new Date(date);
               d.setDate(d.getDate() - 3);
@@ -70,9 +82,17 @@ async function loadSubInfo(date: string): Promise<SubInfo[]> {
       const jobIds = assignments.map((a) => a.jobId).filter((jobId): jobId is number => jobId !== null);
       const assignedSuburbs: string[] = [];
       for (const jid of jobIds) {
-        const [j] = await db.select({ customerId: jobsTable.customerId, address: jobsTable.address }).from(jobsTable).where(eq(jobsTable.id, jid)).limit(1);
+        const [j] = await db
+          .select({ customerId: jobsTable.customerId, address: jobsTable.address })
+          .from(jobsTable)
+          .where(and(eq(jobsTable.id, jid), eq(jobsTable.companyId, companyAccountId)))
+          .limit(1);
         if (j?.customerId) {
-          const [customer] = await db.select({ suburb: customersTable.suburb }).from(customersTable).where(eq(customersTable.id, j.customerId)).limit(1);
+          const [customer] = await db
+            .select({ suburb: customersTable.suburb })
+            .from(customersTable)
+            .where(and(eq(customersTable.id, j.customerId), eq(customersTable.companyId, companyAccountId)))
+            .limit(1);
           if (customer?.suburb) assignedSuburbs.push(customer.suburb);
         } else if (j?.address) {
           assignedSuburbs.push(j.address);
@@ -182,16 +202,33 @@ function proximityScore(suburb: string, assignedSuburbs: string[]): { score: num
 router.post("/allocation/recommend", async (req, res) => {
   const { jobId, date, productType, colour, estimatedMetres, jobType, suburb, builderProfileId, requiredSkills, stockItemId } = req.body;
   if (!jobId || !date) return res.status(400).json({ error: "jobId and date required" });
+  const tenantId = companyId(req);
+
+  const [job] = await db
+    .select()
+    .from(jobsTable)
+    .where(and(eq(jobsTable.id, Number(jobId)), eq(jobsTable.companyId, tenantId)));
+  if (!job) return res.status(400).json({ error: "Job not found for this company" });
+  if (stockItemId) {
+    const [stockItem] = await db
+      .select()
+      .from(stockItemsTable)
+      .where(and(eq(stockItemsTable.id, Number(stockItemId)), eq(stockItemsTable.companyId, tenantId)));
+    if (!stockItem) return res.status(400).json({ error: "Stock item not found for this company" });
+  }
 
   let builderTierMinQuality = 0;
   let builderProfile: typeof builderProfilesTable.$inferSelect | null = null;
   if (builderProfileId) {
-    const [bp] = await db.select().from(builderProfilesTable).where(eq(builderProfilesTable.id, Number(builderProfileId)));
+    const [bp] = await db
+      .select()
+      .from(builderProfilesTable)
+      .where(and(eq(builderProfilesTable.id, Number(builderProfileId)), eq(builderProfilesTable.companyId, tenantId)));
     builderProfile = bp ?? null;
     if (bp) builderTierMinQuality = TIER_QUALITY_MIN[bp.qualityTier] ?? 0;
   }
 
-  const subs = await loadSubInfo(date);
+  const subs = await loadSubInfo(tenantId, date);
   const recommendations = subs.map((sub) => {
     const reasons: string[] = [];
     const warnings: string[] = [];
@@ -282,6 +319,7 @@ router.post("/allocation/recommend", async (req, res) => {
 
   // Save recommendation
   const [saved] = await db.insert(allocationRecommendationsTable).values({
+    companyId: tenantId,
     jobId: Number(jobId),
     requestedDate: date,
     recommendations: sorted,
@@ -302,6 +340,12 @@ router.post("/allocation/recommend", async (req, res) => {
 router.post("/allocation/confirm", async (req, res) => {
   const { recommendationId, subcontractorId, overrideReason } = req.body;
   if (!recommendationId || !subcontractorId) return res.status(400).json({ error: "recommendationId and subcontractorId required" });
+  const tenantId = companyId(req);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
+  if (!sub) return res.status(400).json({ error: "Worker not found for this company" });
 
   const [saved] = await db
     .update(allocationRecommendationsTable)
@@ -310,7 +354,7 @@ router.post("/allocation/confirm", async (req, res) => {
       selectionMethod: overrideReason ? "manual_override" : "auto",
       overrideReason,
     })
-    .where(eq(allocationRecommendationsTable.id, Number(recommendationId)))
+    .where(and(eq(allocationRecommendationsTable.id, Number(recommendationId)), eq(allocationRecommendationsTable.companyId, tenantId)))
     .returning();
 
   return res.json(saved);
@@ -320,19 +364,20 @@ router.post("/allocation/confirm", async (req, res) => {
 router.post("/weekly-planner/generate", async (req, res) => {
   const { weekStart } = req.body;
   if (!weekStart) return res.status(400).json({ error: "weekStart required" });
+  const tenantId = companyId(req);
 
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 4); // Mon-Fri
   const weekEndStr = weekEnd.toISOString().split("T")[0];
 
   // Get all unassigned jobs for the week
-  const allJobs = await db.select().from(jobsTable);
+  const allJobs = await db.select().from(jobsTable).where(eq(jobsTable.companyId, tenantId));
   const weekJobs = allJobs.filter((j) => {
     const d = (j as any).scheduledDate ?? (j as any).dueDate;
     return d >= weekStart && d <= weekEndStr;
   });
 
-  const subs = await loadSubInfo(weekStart);
+  const subs = await loadSubInfo(tenantId, weekStart);
   const schedule = subs.map((sub) => ({
     subcontractorId: sub.id,
     subcontractorName: sub.name,
@@ -368,6 +413,7 @@ router.post("/weekly-planner/generate", async (req, res) => {
   if (unallocated.length > 0) notes.push(`${unallocated.length} jobs could not be auto-assigned — review needed`);
 
   const proposal = {
+    companyId: tenantId,
     weekStart,
     status: "draft" as const,
     proposedSchedule: schedule,
@@ -388,7 +434,8 @@ router.post("/weekly-planner/generate", async (req, res) => {
 
 // GET /weekly-planner
 router.get("/weekly-planner", async (req, res) => {
-  const rows = await db.select().from(weeklyPlannerProposalsTable);
+  const tenantId = companyId(req);
+  const rows = await db.select().from(weeklyPlannerProposalsTable).where(eq(weeklyPlannerProposalsTable.companyId, tenantId));
   const weekStart = req.query.weekStart as string;
   const filtered = weekStart ? rows.filter((r) => r.weekStart === weekStart) : rows;
   return res.json(filtered.map((r) => ({
@@ -406,7 +453,11 @@ router.patch("/weekly-planner/:id", async (req, res) => {
   if (adminNotes !== undefined) updates.adminNotes = adminNotes;
   if (status === "approved") updates.approvedAt = new Date();
 
-  const [row] = await db.update(weeklyPlannerProposalsTable).set(updates).where(eq(weeklyPlannerProposalsTable.id, Number(req.params.id))).returning();
+  const [row] = await db
+    .update(weeklyPlannerProposalsTable)
+    .set(updates)
+    .where(and(eq(weeklyPlannerProposalsTable.id, Number(req.params.id)), eq(weeklyPlannerProposalsTable.companyId, companyId(req))))
+    .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
   return res.json(row);
 });

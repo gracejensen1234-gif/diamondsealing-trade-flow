@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { jobsTable, quotesTable, invoicesTable, customersTable, activityTable } from "@workspace/db";
 import { eq, and, gte, sql } from "drizzle-orm";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -10,12 +11,13 @@ router.get("/dashboard/summary", async (req, res) => {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  const tenantId = companyId(req);
 
   const [jobs, customers, quotes, invoices] = await Promise.all([
-    db.select().from(jobsTable),
-    db.select({ count: sql<number>`count(*)` }).from(customersTable),
-    db.select().from(quotesTable),
-    db.select().from(invoicesTable),
+    db.select().from(jobsTable).where(eq(jobsTable.companyId, tenantId)),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, tenantId)),
+    db.select().from(quotesTable).where(eq(quotesTable.companyId, tenantId)),
+    db.select().from(invoicesTable).where(eq(invoicesTable.companyId, tenantId)),
   ]);
 
   const activeJobs = jobs.filter((j) => j.status === "in_progress").length;
@@ -59,7 +61,12 @@ router.get("/dashboard/summary", async (req, res) => {
 });
 
 router.get("/dashboard/activity", async (req, res) => {
-  const activity = await db.select().from(activityTable).orderBy(sql`${activityTable.createdAt} desc`).limit(20);
+  const activity = await db
+    .select()
+    .from(activityTable)
+    .where(eq(activityTable.companyId, companyId(req)))
+    .orderBy(sql`${activityTable.createdAt} desc`)
+    .limit(20);
   return res.json(activity);
 });
 

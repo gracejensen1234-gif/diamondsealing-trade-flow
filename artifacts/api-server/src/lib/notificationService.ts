@@ -3,9 +3,10 @@ import { db } from "@workspace/db";
 import {
   notificationsTable,
   pushSubscriptionsTable,
+  subcontractorsTable,
   vapidConfigTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 let vapidInitialised = false;
@@ -19,7 +20,7 @@ export async function ensureVapid(): Promise<string> {
 
   const envPublicKey = process.env.VAPID_PUBLIC_KEY?.trim();
   const envPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
-  const envSubject = process.env.VAPID_SUBJECT?.trim() || "mailto:admin@diamondsealing.com.au";
+  const envSubject = process.env.VAPID_SUBJECT?.trim() || "mailto:admin@example.com";
 
   if (envPublicKey && envPrivateKey) {
     webpush.setVapidDetails(envSubject, envPublicKey, envPrivateKey);
@@ -85,10 +86,18 @@ export interface CreateNotificationOptions {
 
 export async function createAndSendNotification(opts: CreateNotificationOptions) {
   await ensureVapid();
+  const [worker] = await db
+    .select({ companyId: subcontractorsTable.companyId })
+    .from(subcontractorsTable)
+    .where(eq(subcontractorsTable.id, opts.subcontractorId));
+  if (!worker?.companyId) {
+    throw new Error("Cannot send notification without a company-scoped subcontractor");
+  }
 
   const [notification] = await db
     .insert(notificationsTable)
     .values({
+      companyId: worker.companyId,
       subcontractorId: opts.subcontractorId,
       type: opts.type,
       title: opts.title,
@@ -104,7 +113,10 @@ export async function createAndSendNotification(opts: CreateNotificationOptions)
   const subscriptions = await db
     .select()
     .from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.subcontractorId, opts.subcontractorId));
+    .where(and(
+      eq(pushSubscriptionsTable.companyId, worker.companyId),
+      eq(pushSubscriptionsTable.subcontractorId, opts.subcontractorId),
+    ));
 
   const pushPayload = JSON.stringify({
     title: opts.title,

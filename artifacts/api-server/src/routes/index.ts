@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import customersRouter from "./customers";
 import jobsRouter from "./jobs";
 import quotesRouter from "./quotes";
@@ -28,10 +29,15 @@ import suppliersRouter from "./suppliers";
 import profitabilityRouter from "./profitability";
 import notificationsRouter from "./notifications";
 import locationVerificationsRouter from "./location-verifications";
+import { requireAuth, requireCompany, workerApiScope } from "../lib/auth.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
+router.use(requireAuth);
+router.use(requireCompany);
+router.use(workerApiScope);
 router.use(dashboardRouter);
 router.use(customersRouter);
 router.use(jobsRouter);

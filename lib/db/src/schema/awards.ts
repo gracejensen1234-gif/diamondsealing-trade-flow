@@ -1,8 +1,10 @@
 import { pgTable, serial, integer, text, numeric, jsonb, boolean, timestamp } from "drizzle-orm/pg-core";
+import { companyAccountsTable } from "./company-accounts";
 import { subcontractorsTable } from "./subcontractors";
 
 export const monthlyRankingsTable = pgTable("monthly_rankings", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   month: text("month").notNull(),
   rank: integer("rank"),
@@ -27,6 +29,7 @@ export const monthlyRankingsTable = pgTable("monthly_rankings", {
 
 export const scoringWeightsTable = pgTable("scoring_weights", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   name: text("name").notNull().default("default"),
   metresWeight: numeric("metres_weight", { precision: 5, scale: 2 }).notNull().default("25"),
   metresPerHourWeight: numeric("metres_per_hour_weight", { precision: 5, scale: 2 }).notNull().default("20"),
@@ -41,6 +44,7 @@ export const scoringWeightsTable = pgTable("scoring_weights", {
 
 export const monthlyAwardsTable = pgTable("monthly_awards", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companyAccountsTable.id),
   month: text("month").notNull(),
   winnerId: integer("winner_id").notNull().references(() => subcontractorsTable.id),
   awardType: text("award_type", {

@@ -11,18 +11,55 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Upload, X, MapPin } from "lucide-react";
+
+function compressPhoto(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const maxEdge = 1600;
+      const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Could not prepare photo"));
+        return;
+      }
+
+      ctx.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not read photo"));
+    };
+
+    image.src = objectUrl;
+  });
+}
 
 export default function FieldJobDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const subcontractorId = user?.role === "worker" ? user.subcontractorId ?? undefined : undefined;
 
   const today = new Date().toISOString().split('T')[0];
   const { data: dispatchList, isLoading: loadingAssignment } = useListDispatch(
-    { date: today },
-    { query: { queryKey: getListDispatchQueryKey({ date: today }), enabled: !!id } }
+    { date: today, subcontractorId },
+    { query: { queryKey: getListDispatchQueryKey({ date: today, subcontractorId }), enabled: !!id } }
   );
   const assignment = dispatchList?.find(a => a.id === Number(id));
   const { data: stockItems, isLoading: loadingStock } = useListStockItems();
@@ -47,17 +84,16 @@ export default function FieldJobDetail() {
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
-    
-    // Keep local previews responsive; production can replace this with object storage uploads.
-    Array.from(e.target.files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setPhotos(prev => [...prev, event.target!.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
+
+    Array.from(e.target.files).forEach(async (file) => {
+      try {
+        const photo = await compressPhoto(file);
+        setPhotos(prev => [...prev, photo]);
+      } catch {
+        toast({ title: "Photo could not be added", variant: "destructive" });
+      }
     });
+    e.currentTarget.value = "";
   };
 
   const removePhoto = (index: number) => {

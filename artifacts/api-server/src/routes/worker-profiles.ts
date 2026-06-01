@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { workerSkillsTable, subcontractorsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { companyId } from "../lib/auth.js";
 
 const router = Router();
 
@@ -21,9 +22,10 @@ function formatSkills(row: typeof workerSkillsTable.$inferSelect, subName: strin
 }
 
 // GET /worker-skills
-router.get("/worker-skills", async (_req, res) => {
-  const rows = await db.select().from(workerSkillsTable);
-  const subs = await db.select().from(subcontractorsTable);
+router.get("/worker-skills", async (req, res) => {
+  const tenantId = companyId(req);
+  const rows = await db.select().from(workerSkillsTable).where(eq(workerSkillsTable.companyId, tenantId));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
   return res.json(rows.map((r) => formatSkills(r, subMap.get(r.subcontractorId) ?? "")));
 });
@@ -31,12 +33,19 @@ router.get("/worker-skills", async (_req, res) => {
 // GET /worker-skills/:subcontractorId
 router.get("/worker-skills/:subcontractorId", async (req, res) => {
   const subId = Number(req.params.subcontractorId);
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, subId));
+  const tenantId = companyId(req);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subId), eq(subcontractorsTable.companyId, tenantId)));
   if (!sub) return res.status(404).json({ error: "Subcontractor not found" });
 
-  let [row] = await db.select().from(workerSkillsTable).where(eq(workerSkillsTable.subcontractorId, subId));
+  let [row] = await db
+    .select()
+    .from(workerSkillsTable)
+    .where(and(eq(workerSkillsTable.companyId, tenantId), eq(workerSkillsTable.subcontractorId, subId)));
   if (!row) {
-    [row] = await db.insert(workerSkillsTable).values({ subcontractorId: subId }).returning();
+    [row] = await db.insert(workerSkillsTable).values({ companyId: tenantId, subcontractorId: subId }).returning();
   }
   return res.json(formatSkills(row, sub.name));
 });
@@ -44,7 +53,11 @@ router.get("/worker-skills/:subcontractorId", async (req, res) => {
 // PUT /worker-skills/:subcontractorId
 router.put("/worker-skills/:subcontractorId", async (req, res) => {
   const subId = Number(req.params.subcontractorId);
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, subId));
+  const tenantId = companyId(req);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subId), eq(subcontractorsTable.companyId, tenantId)));
   if (!sub) return res.status(404).json({ error: "Subcontractor not found" });
 
   const allowed = [
@@ -61,10 +74,18 @@ router.put("/worker-skills/:subcontractorId", async (req, res) => {
     }
   }
 
-  const existing = await db.select().from(workerSkillsTable).where(eq(workerSkillsTable.subcontractorId, subId)).limit(1);
+  const existing = await db
+    .select()
+    .from(workerSkillsTable)
+    .where(and(eq(workerSkillsTable.companyId, tenantId), eq(workerSkillsTable.subcontractorId, subId)))
+    .limit(1);
   let [row] = existing.length
-    ? await db.update(workerSkillsTable).set(updates).where(eq(workerSkillsTable.subcontractorId, subId)).returning()
-    : await db.insert(workerSkillsTable).values({ subcontractorId: subId, ...updates }).returning();
+    ? await db
+        .update(workerSkillsTable)
+        .set(updates)
+        .where(and(eq(workerSkillsTable.companyId, tenantId), eq(workerSkillsTable.subcontractorId, subId)))
+        .returning()
+    : await db.insert(workerSkillsTable).values({ companyId: tenantId, subcontractorId: subId, ...updates }).returning();
 
   return res.json(formatSkills(row, sub.name));
 });

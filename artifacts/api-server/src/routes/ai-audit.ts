@@ -14,6 +14,7 @@ import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { createAndSendNotification } from "../lib/notificationService.js";
 import { getAuditModel, getOpenAIClient, hasOpenAIConfig } from "../lib/openai-client.js";
 import { workSessionMinutes } from "../lib/date-utils.js";
+import { companyId } from "../lib/auth.js";
 import type OpenAI from "openai";
 
 const router = Router();
@@ -172,7 +173,7 @@ async function runAIAnalysis(
     throw new Error("OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.");
   }
 
-  const systemPrompt = `You are a quality audit assistant for Diamond Sealing, an Australian silicone and sealing subcontractor company.
+  const systemPrompt = `You are a quality audit assistant for a joint sealing subcontractor company.
 Analyse the job report data and completion photos provided and flag genuine quality, safety, or compliance concerns for admin review.
 You do NOT penalise workers automatically — your flags are suggestions for a human admin to review.
 Only flag real concerns. Do not invent issues. If everything looks fine, return an empty array.
@@ -277,12 +278,13 @@ router.get("/audit/ai-status", (_req, res) => {
 // POST /audit/run  (rule-based)
 router.post("/audit/run", async (req, res) => {
   const { subcontractorId, date } = req.body;
+  const tenantId = companyId(req);
   const targetDate = date || new Date().toISOString().split("T")[0];
   const targetSubId = subcontractorId ? Number(subcontractorId) : null;
 
   const subs = targetSubId
-    ? await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, targetSubId))
-    : await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, targetSubId), eq(subcontractorsTable.companyId, tenantId)))
+    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const allFlags: (typeof auditFlagsTable.$inferSelect & { subcontractorName: string })[] = [];
 
@@ -290,17 +292,17 @@ router.post("/audit/run", async (req, res) => {
     const reports = await db
       .select()
       .from(jobReportsTable)
-      .where(and(eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate)));
+      .where(and(eq(jobReportsTable.companyId, tenantId), eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate)));
 
     const sessions = await db
       .select()
       .from(workSessionsTable)
-      .where(and(eq(workSessionsTable.subcontractorId, sub.id), eq(workSessionsTable.date, targetDate)));
+      .where(and(eq(workSessionsTable.companyId, tenantId), eq(workSessionsTable.subcontractorId, sub.id), eq(workSessionsTable.date, targetDate)));
 
     const dockets = await db
       .select()
       .from(docketsTable)
-      .where(eq(docketsTable.subcontractorId, sub.id));
+      .where(and(eq(docketsTable.companyId, tenantId), eq(docketsTable.subcontractorId, sub.id)));
 
     if (sessions.length === 0 && reports.length === 0) continue;
 
@@ -311,6 +313,7 @@ router.post("/audit/run", async (req, res) => {
       if (!result.triggered) continue;
 
       const [flag] = await db.insert(auditFlagsTable).values({
+        companyId: tenantId,
         subcontractorId: sub.id,
         flagType: rule.type as FlagType,
         severity: rule.severity,
@@ -339,12 +342,13 @@ router.post("/audit/ai-run", async (req, res) => {
   }
 
   const { subcontractorId, date } = req.body;
+  const tenantId = companyId(req);
   const targetDate = (date as string | undefined) || new Date().toISOString().split("T")[0];
   const targetSubId = subcontractorId ? Number(subcontractorId) : null;
 
   const subs = targetSubId
-    ? await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, targetSubId))
-    : await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, targetSubId), eq(subcontractorsTable.companyId, tenantId)))
+    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const results: {
     subcontractorId: number;
@@ -357,10 +361,11 @@ router.post("/audit/ai-run", async (req, res) => {
   for (const sub of subs) {
     const [reports, locationVerifications] = await Promise.all([
       db.select().from(jobReportsTable).where(
-        and(eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate))
+        and(eq(jobReportsTable.companyId, tenantId), eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate))
       ),
       db.select().from(locationVerificationsTable).where(
         and(
+          eq(locationVerificationsTable.companyId, tenantId),
           eq(locationVerificationsTable.subcontractorId, sub.id),
           gte(locationVerificationsTable.createdAt, new Date(`${targetDate}T00:00:00`)),
           lte(locationVerificationsTable.createdAt, new Date(`${targetDate}T23:59:59`)),
@@ -391,6 +396,7 @@ router.post("/audit/ai-run", async (req, res) => {
         : undefined;
 
       const [flag] = await db.insert(auditFlagsTable).values({
+        companyId: tenantId,
         subcontractorId: sub.id,
         jobReportId: reportId ?? null,
         flagType: aiFlag.flagType,
@@ -420,8 +426,13 @@ router.post("/audit/ai-run", async (req, res) => {
 
 // GET /audit/flags
 router.get("/audit/flags", async (req, res) => {
-  const flags = await db.select().from(auditFlagsTable).orderBy(desc(auditFlagsTable.createdAt));
-  const subs = await db.select().from(subcontractorsTable);
+  const tenantId = companyId(req);
+  const flags = await db
+    .select()
+    .from(auditFlagsTable)
+    .where(eq(auditFlagsTable.companyId, tenantId))
+    .orderBy(desc(auditFlagsTable.createdAt));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = flags;
@@ -443,10 +454,17 @@ router.patch("/audit/flags/:id", async (req, res) => {
   if (workerFeedback !== undefined) updates.workerFeedback = workerFeedback;
   if (showToWorker !== undefined) updates.showToWorker = showToWorker;
 
-  const [flag] = await db.update(auditFlagsTable).set(updates).where(eq(auditFlagsTable.id, Number(req.params.id))).returning();
+  const [flag] = await db
+    .update(auditFlagsTable)
+    .set(updates)
+    .where(and(eq(auditFlagsTable.id, Number(req.params.id)), eq(auditFlagsTable.companyId, companyId(req))))
+    .returning();
   if (!flag) return res.status(404).json({ error: "Not found" });
 
-  const [sub] = await db.select({ name: subcontractorsTable.name }).from(subcontractorsTable).where(eq(subcontractorsTable.id, flag.subcontractorId));
+  const [sub] = await db
+    .select({ name: subcontractorsTable.name })
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, flag.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
 
   if (status === "fix_requested" || showToWorker === true) {
     try {
@@ -470,8 +488,13 @@ router.patch("/audit/flags/:id", async (req, res) => {
 
 // GET /audit/scores
 router.get("/audit/scores", async (req, res) => {
-  const scores = await db.select().from(auditScoresTable).orderBy(desc(auditScoresTable.calculatedAt));
-  const subs = await db.select().from(subcontractorsTable);
+  const tenantId = companyId(req);
+  const scores = await db
+    .select()
+    .from(auditScoresTable)
+    .where(eq(auditScoresTable.companyId, tenantId))
+    .orderBy(desc(auditScoresTable.calculatedAt));
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = scores;
@@ -497,6 +520,7 @@ router.get("/audit/scores", async (req, res) => {
 // POST /audit/scores/calculate
 router.post("/audit/scores/calculate", async (req, res) => {
   const { periodType, periodStart, subcontractorId } = req.body;
+  const tenantId = companyId(req);
   if (!periodType || !periodStart) return res.status(400).json({ error: "periodType and periodStart required" });
 
   let periodEnd = periodStart;
@@ -512,8 +536,8 @@ router.post("/audit/scores/calculate", async (req, res) => {
   }
 
   const subs = subcontractorId
-    ? await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, Number(subcontractorId)))
-    : await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.active, true));
+    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)))
+    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
 
   const results = await Promise.all(
     subs.map(async (sub) => {
@@ -522,6 +546,7 @@ router.post("/audit/scores/calculate", async (req, res) => {
         .from(auditFlagsTable)
         .where(
           and(
+            eq(auditFlagsTable.companyId, tenantId),
             eq(auditFlagsTable.subcontractorId, sub.id),
             gte(auditFlagsTable.createdAt, new Date(periodStart)),
             lte(auditFlagsTable.createdAt, new Date(`${periodEnd}T23:59:59`)),
@@ -545,6 +570,7 @@ router.post("/audit/scores/calculate", async (req, res) => {
       const overallScore = calcScoreFromFlags(flags);
 
       const values = {
+        companyId: tenantId,
         subcontractorId: sub.id,
         periodType,
         periodStart,
@@ -564,6 +590,7 @@ router.post("/audit/scores/calculate", async (req, res) => {
         .from(auditScoresTable)
         .where(
           and(
+            eq(auditScoresTable.companyId, tenantId),
             eq(auditScoresTable.subcontractorId, sub.id),
             eq(auditScoresTable.periodType, periodType),
             eq(auditScoresTable.periodStart, periodStart),
@@ -572,7 +599,7 @@ router.post("/audit/scores/calculate", async (req, res) => {
         .limit(1);
 
       const [score] = existing.length
-        ? await db.update(auditScoresTable).set(values).where(eq(auditScoresTable.id, existing[0].id)).returning()
+        ? await db.update(auditScoresTable).set(values).where(and(eq(auditScoresTable.id, existing[0].id), eq(auditScoresTable.companyId, tenantId))).returning()
         : await db.insert(auditScoresTable).values(values).returning();
 
       return { ...score, subcontractorName: sub.name, overallScore: Number(score.overallScore) };
