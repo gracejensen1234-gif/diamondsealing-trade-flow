@@ -100,7 +100,7 @@ export function PhoneSetupCard({ className, compact = false }: { className?: str
           )}
           <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-white/60 px-3 py-2 text-xs dark:border-orange-900 dark:bg-black/20">
             {platform === "ios" ? <Share2 className="h-4 w-4 shrink-0" /> : <Bell className="h-4 w-4 shrink-0" />}
-            <span>Notifications need the employee to tap Allow after opening Field View.</span>
+            <span>Notifications need the employee to tap Enable notifications, then Allow.</span>
           </div>
         </div>
       </CardContent>

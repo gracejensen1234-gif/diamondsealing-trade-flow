@@ -10,6 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { NotificationPermissionPrompt } from "@/components/notification-permission-prompt";
 import {
   Sheet,
   SheetContent,
@@ -194,6 +195,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <NotificationPermissionPrompt subcontractorId={subId} />
       <nav className="hidden w-60 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex-shrink-0 md:flex flex-col">
         {sidebarContent()}
       </nav>

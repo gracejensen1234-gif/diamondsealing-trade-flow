@@ -20,69 +20,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { PhoneSetupCard } from "@/components/phone-setup-card";
+import { currentPushPermission, type PushPermissionState } from "@/lib/push-notifications";
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
 } from "lucide-react";
-
-// ─── Push notification helpers ───────────────────────────────────────────────
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = window.atob(base64);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
-}
-
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
-  try {
-    const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-    const reg = await navigator.serviceWorker.register(`${base}/sw.js`, { scope: `${base}/` });
-    return reg;
-  } catch {
-    return null;
-  }
-}
-
-async function subscribeToPush(subcontractorId: number, vapidPublicKey: string) {
-  const reg = await registerServiceWorker();
-  if (!reg) return false;
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
-
-  try {
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) await existing.unsubscribe();
-
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource,
-    });
-
-    const json = sub.toJSON();
-    const response = await fetch("/api/push-subscriptions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subcontractorId,
-        endpoint: json.endpoint,
-        p256dh: (json.keys as any).p256dh,
-        auth: (json.keys as any).auth,
-        userAgent: navigator.userAgent,
-      }),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
 
 // ─── Location verification ────────────────────────────────────────────────────
 
@@ -135,10 +81,7 @@ export default function FieldView() {
   const [locationPrompt, setLocationPrompt] = useState<LocationPrompt | null>(null);
 
   // Push notification state
-  const [pushStatus, setPushStatus] = useState<"unknown" | "granted" | "denied" | "unsupported" | "default">("unknown");
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [showPushPrompt, setShowPushPrompt] = useState(false);
-  const [vapidKey, setVapidKey] = useState<string | null>(null);
+  const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
 
   useEffect(() => {
     if (isWorker) {
@@ -155,48 +98,10 @@ export default function FieldView() {
     }
   }, [isWorker, subId]);
 
-  // Check push status on mount
+  // Check push status for Field View status messaging. The app-wide prompt handles enabling.
   useEffect(() => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setPushStatus("unsupported");
-      return;
-    }
-    const perm = Notification.permission;
-    setPushStatus(perm as "granted" | "denied" | "unknown");
-
-    fetch("/api/push-subscriptions/vapid-public-key")
-      .then((r) => r.json())
-      .then((d) => {
-        setVapidKey(d.publicKey);
-        if (perm === "default") setShowPushPrompt(true);
-      })
-      .catch(() => {});
-
-    navigator.serviceWorker.ready
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setPushSubscribed(!!sub))
-      .catch(() => {});
+    setPushStatus(currentPushPermission());
   }, []);
-
-  useEffect(() => {
-    if (subId && pushStatus === "default") setShowPushPrompt(true);
-  }, [subId, pushStatus]);
-
-  const handleEnablePush = useCallback(async () => {
-    if (!subId || !vapidKey) return;
-    const ok = await subscribeToPush(subId, vapidKey);
-    if (ok) {
-      setPushSubscribed(true);
-      setPushStatus("granted");
-      setShowPushPrompt(false);
-      queryClient.invalidateQueries({ queryKey: ["push-subscription-status", subId] });
-      toast({ title: "Notifications enabled", description: "You'll get alerts for new jobs, reminders, and updates." });
-    } else {
-      setPushStatus("denied");
-      setShowPushPrompt(false);
-      toast({ title: "Notifications blocked", description: "You can enable them in your browser settings.", variant: "destructive" });
-    }
-  }, [subId, vapidKey, queryClient, toast]);
 
   // ─── Location verification helper ────────────────────────────────────────
   const requestLocationVerification = useCallback(
@@ -416,7 +321,7 @@ export default function FieldView() {
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
   const isOnBreak = session?.status === "on_break";
   const unreadCount = unreadData?.count ?? 0;
-  const pushEnabled = pushSubscribed || Boolean(pushServerStatus?.enabled);
+  const pushEnabled = Boolean(pushServerStatus?.enabled);
 
   return (
     <div className="max-w-md mx-auto space-y-4 pb-20">
@@ -447,33 +352,6 @@ export default function FieldView() {
       {!pushEnabled && (
         <PhoneSetupCard compact />
       )}
-
-      <Dialog
-        open={showPushPrompt && !!subId && !pushEnabled && pushStatus !== "granted" && pushStatus !== "unsupported"}
-        onOpenChange={(open) => {
-          if (!open) setShowPushPrompt(false);
-        }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-md bg-orange-500 text-white">
-              <Bell className="h-5 w-5" />
-            </div>
-            <DialogTitle>Turn on job notifications?</DialogTitle>
-            <DialogDescription>
-              SealFlow can alert you about new jobs, job changes, missing photos, stock pickups and urgent admin messages.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setShowPushPrompt(false)}>
-              Not now
-            </Button>
-            <Button onClick={handleEnablePush}>
-              Allow notifications
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Location consent prompt */}
       {locationPrompt && (
@@ -507,31 +385,6 @@ export default function FieldView() {
                     onClick={locationPrompt.onSkip}
                   >
                     <XCircle className="h-3.5 w-3.5" /> Skip
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Push notification permission prompt */}
-      {showPushPrompt && subId && !pushEnabled && pushStatus !== "granted" && pushStatus !== "unsupported" && (
-        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-800">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <Bell className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-orange-950 dark:text-orange-100">Enable push notifications</p>
-                <p className="text-xs text-orange-800 dark:text-orange-300 mt-0.5">
-                  Get instant alerts for new jobs, clock-on reminders, stock pickups, and more — even when the app is closed.
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button size="sm" className="h-7 text-xs" onClick={handleEnablePush}>
-                    Enable notifications
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowPushPrompt(false)}>
-                    Not now
                   </Button>
                 </div>
               </div>
