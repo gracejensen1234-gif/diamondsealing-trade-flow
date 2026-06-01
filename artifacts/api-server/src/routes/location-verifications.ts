@@ -30,7 +30,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=au`;
     const res = await fetch(url, {
-      headers: { "User-Agent": "DiamondSealing/1.0 (ops-app)" },
+      headers: { "User-Agent": "SealFlow/1.0 (ops-app)" },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;

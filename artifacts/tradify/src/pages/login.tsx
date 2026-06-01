@@ -54,8 +54,8 @@ export default function Login() {
             <img src="/diamond-sealing-logo.jpeg" alt="Company logo" className="h-full w-full object-cover" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Operations App</h1>
-            <p className="text-sm text-white/65">Operations login</p>
+            <h1 className="text-2xl font-bold tracking-tight">SealFlow</h1>
+            <p className="text-sm text-white/65">Operations platform</p>
           </div>
         </div>
 

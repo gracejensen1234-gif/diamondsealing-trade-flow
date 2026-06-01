@@ -1,4 +1,4 @@
-# Diamond Sealing Deployment
+# SealFlow Deployment
 
 The app needs a hosted Node web service and a PostgreSQL database.
 

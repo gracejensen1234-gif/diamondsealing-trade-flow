@@ -1,4 +1,4 @@
-# Diamond Sealing
+# SealFlow
 
 A sealing/silicone subcontractor operations management platform for managing field crews, job dispatch, timesheets, and weekly invoicing.
 

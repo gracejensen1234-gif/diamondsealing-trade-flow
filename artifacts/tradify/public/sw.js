@@ -1,4 +1,4 @@
-/* Diamond Sealing — Service Worker for Web Push Notifications */
+/* SealFlow — Service Worker for Web Push Notifications */
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -10,10 +10,10 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Diamond Sealing", body: event.data.text(), actionUrl: "/field" };
+    payload = { title: "SealFlow", body: event.data.text(), actionUrl: "/field" };
   }
 
-  const title = payload.title || "Diamond Sealing";
+  const title = payload.title || "SealFlow";
   const options = {
     body: payload.body || "",
     icon: "/diamond-sealing-logo.jpeg",

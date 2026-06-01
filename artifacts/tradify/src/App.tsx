@@ -131,7 +131,7 @@ function AuthenticatedRoutes() {
           <div className="h-10 w-10 overflow-hidden rounded-md border border-white/15 bg-black">
             <img src="/diamond-sealing-logo.jpeg" alt="Company logo" className="h-full w-full object-cover" />
           </div>
-          Loading operations...
+          Loading SealFlow...
         </div>
       </main>
     );
