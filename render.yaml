@@ -2,7 +2,7 @@ services:
   - type: web
     name: diamond-sealing-operations
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build:deploy
     startCommand: pnpm run start:deploy
     healthCheckPath: /api/healthz
@@ -20,4 +20,4 @@ services:
 
 databases:
   - name: diamond-sealing-db
-    plan: starter
+    plan: free

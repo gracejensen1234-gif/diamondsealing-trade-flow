@@ -17,6 +17,8 @@ The app needs a hosted Node web service and a PostgreSQL database.
 
 The start command pushes the current Drizzle schema to the database, then starts the API server. The API server serves `/api/*` and the built React app from the same domain.
 
+The first deployment uses Render free instance types so you can test the app live before adding billing details. Free web services can sleep after inactivity, and free Postgres databases are for short trial use rather than long-term business records.
+
 ## Required Environment
 
 - `DATABASE_URL`
