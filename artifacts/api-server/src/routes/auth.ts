@@ -19,6 +19,14 @@ function signupsEnabled() {
   return process.env.SIGNUPS_ENABLED?.toLowerCase() !== "false";
 }
 
+function adminSignupCode() {
+  return process.env.ADMIN_SIGNUP_CODE?.trim() || "";
+}
+
+function adminSignupsEnabled() {
+  return process.env.ADMIN_SIGNUPS_ENABLED?.toLowerCase() === "true" && Boolean(adminSignupCode());
+}
+
 function slugifyCompany(value: string) {
   return value
     .trim()
@@ -64,9 +72,14 @@ router.post("/auth/register", async (req, res) => {
   const accountType = req.body?.accountType === "worker" ? "worker" : "admin";
   const companyName = typeof req.body?.companyName === "string" ? req.body.companyName.trim() : "";
   const companyCode = typeof req.body?.companyCode === "string" ? req.body.companyCode.trim() : "";
+  const submittedAdminSignupCode = typeof req.body?.adminSignupCode === "string" ? req.body.adminSignupCode.trim() : "";
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
+
+  if (accountType === "admin" && (!adminSignupsEnabled() || submittedAdminSignupCode !== adminSignupCode())) {
+    return res.status(403).json({ error: "Admin account creation is invite-only" });
+  }
 
   if (accountType === "admin" && (companyName.length < 2 || companyName.length > 120)) {
     return res.status(400).json({ error: "Company name is required" });
