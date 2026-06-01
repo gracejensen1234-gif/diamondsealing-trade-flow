@@ -400,7 +400,7 @@ export default function FieldView() {
   const markArrived = useMarkArrived({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Marked as arrived" });
+        toast({ title: "Checked in to job" });
         if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
       },
     },
@@ -409,7 +409,7 @@ export default function FieldView() {
   const markDeparted = useMarkDeparted({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Marked as departed" });
+        toast({ title: "Checked out of job" });
         if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
       },
     },
@@ -439,29 +439,59 @@ export default function FieldView() {
 
   const handleClockOff = useCallback(async () => {
     if (!subId) return;
+    const unfinishedJobs = dispatchList?.filter((assignment) => assignment.status !== "completed") ?? [];
+    if (unfinishedJobs.length > 0) {
+      toast({
+        title: "Check out of today's jobs first",
+        description: "Each assigned job must be checked out before clocking off for the day.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const locationJob = [...(dispatchList ?? [])]
+      .filter((assignment) => assignment.status === "completed" && Boolean(assignment.jobAddress))
+      .sort((a, b) => b.scheduledOrder - a.scheduledOrder)[0];
     await requestLocationVerification("clock_off", "clock-off", {
+      jobAssignmentId: locationJob?.id,
+      jobAddress: locationJob?.jobAddress ?? undefined,
       workSessionId: session?.id,
     });
     clockOff.mutate({ data: { subcontractorId: subId } });
-  }, [subId, session?.id, requestLocationVerification, clockOff]);
+  }, [subId, dispatchList, session?.id, requestLocationVerification, clockOff, toast]);
 
   const handleMarkArrived = useCallback(async (assignmentId: number, jobAddress?: string) => {
-    await requestLocationVerification("job_arrived", "marking arrived", {
+    if (session?.status !== "active" && session?.status !== "on_break") {
+      toast({
+        title: "Clock on for the day first",
+        description: "Start the workday before checking in to a job.",
+        variant: "destructive",
+      });
+      return;
+    }
+    await requestLocationVerification("job_arrived", "job check-in", {
       jobAssignmentId: assignmentId,
       jobAddress,
       workSessionId: session?.id,
     });
     markArrived.mutate({ id: assignmentId });
-  }, [requestLocationVerification, session?.id, markArrived]);
+  }, [requestLocationVerification, session?.id, session?.status, markArrived, toast]);
 
   const handleMarkDeparted = useCallback(async (assignmentId: number, jobAddress?: string) => {
-    await requestLocationVerification("job_departed", "marking departed", {
+    if (session?.status !== "active" && session?.status !== "on_break") {
+      toast({
+        title: "Clock on for the day first",
+        description: "Start the workday before checking out of a job.",
+        variant: "destructive",
+      });
+      return;
+    }
+    await requestLocationVerification("job_departed", "job check-out", {
       jobAssignmentId: assignmentId,
       jobAddress,
       workSessionId: session?.id,
     });
     markDeparted.mutate({ id: assignmentId });
-  }, [requestLocationVerification, session?.id, markDeparted]);
+  }, [requestLocationVerification, session?.id, session?.status, markDeparted, toast]);
 
   const today = new Date().toISOString().split("T")[0];
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
@@ -644,7 +674,7 @@ export default function FieldView() {
                   onClick={handleClockOn}
                   disabled={clockOn.isPending || !!locationPrompt}
                 >
-                  <Play className="mr-2 h-6 w-6" /> CLOCK ON
+                  <Play className="mr-2 h-6 w-6" /> CLOCK ON FOR DAY
                 </Button>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
@@ -673,7 +703,7 @@ export default function FieldView() {
                     onClick={handleClockOff}
                     disabled={clockOff.isPending || !!locationPrompt}
                   >
-                    <Square className="mr-2 h-5 w-5" /> CLOCK OFF
+                    <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
                   </Button>
                 </div>
               )}
@@ -874,7 +904,7 @@ export default function FieldView() {
       {/* Today's jobs */}
       {subId && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Today's Jobs</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Today's Job Check-Ins</h2>
           {loadingDispatch ? (
             <div className="space-y-3">
               <Skeleton className="h-32 w-full" />
@@ -940,7 +970,7 @@ export default function FieldView() {
                         onClick={() => handleMarkArrived(assignment.id, assignment.jobAddress ?? undefined)}
                         disabled={markArrived.isPending || !!locationPrompt}
                       >
-                        Mark Arrived
+                        Check In to Job
                       </Button>
                     )}
                     {(assignment.status === "arrived" || assignment.status === "in_progress") && (
@@ -960,7 +990,7 @@ export default function FieldView() {
                           onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
                           disabled={markDeparted.isPending || !!locationPrompt}
                         >
-                          Mark Departed
+                          Check Out of Job
                         </Button>
                       </div>
                     )}

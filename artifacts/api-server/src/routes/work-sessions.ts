@@ -92,6 +92,9 @@ router.post("/work-sessions/clock-off", async (req, res) => {
     ),
   );
   if (!session) return res.status(404).json({ error: "No active session today" });
+  if (session.status === "clocked_off") {
+    return res.status(400).json({ error: "Already clocked off today" });
+  }
 
   let totalBreakMinutes = session.totalBreakMinutes;
   if (session.status === "on_break" && session.breakStartAt) {

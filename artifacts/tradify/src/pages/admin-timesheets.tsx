@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { format, subDays, addDays, startOfWeek, endOfWeek } from "date-fns";
-import { useGetAdminTimesheets, useUpdateWorkSession, useListSubcontractors } from "@workspace/api-client-react";
+import {
+  useClockOff,
+  useClockOn,
+  useGetAdminTimesheets,
+  useGetTodaySession,
+  useUpdateWorkSession,
+  useListSubcontractors,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,18 +19,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Edit2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Edit2, Play, Square } from "lucide-react";
 
 export default function AdminTimesheets() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [subId, setSubId] = useState<string>("all");
+  const [manualSubId, setManualSubId] = useState<string>("");
   
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
 
   const { data: subs } = useListSubcontractors();
+  const manualSubcontractorId = manualSubId ? parseInt(manualSubId) : undefined;
+  const { data: manualSession, isFetching: loadingManualSession } = useGetTodaySession(
+    { subcontractorId: manualSubcontractorId ?? 0 },
+    {
+      query: {
+        enabled: Boolean(manualSubcontractorId),
+        retry: false,
+      },
+    },
+  );
   const { data: timesheets, isLoading } = useGetAdminTimesheets({
     weekStart: format(weekStart, 'yyyy-MM-dd'),
     subcontractorId: subId !== "all" ? parseInt(subId) : undefined
@@ -41,6 +60,38 @@ export default function AdminTimesheets() {
         setEditSessionId(null);
       }
     }
+  });
+
+  const manualClockOn = useClockOn({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Employee/subcontractor clocked on" });
+        queryClient.invalidateQueries();
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not clock on",
+          description: error instanceof Error ? error.message : "Try again.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const manualClockOff = useClockOff({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Employee/subcontractor clocked off" });
+        queryClient.invalidateQueries();
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not clock off",
+          description: error instanceof Error ? error.message : "Try again.",
+          variant: "destructive",
+        });
+      },
+    },
   });
 
   const formatHours = (mins: number | null | undefined) => {
@@ -81,6 +132,21 @@ export default function AdminTimesheets() {
     return acc;
   }, {} as Record<number, any>);
 
+  const canManualClockOn = Boolean(manualSubcontractorId && !manualSession && !loadingManualSession);
+  const canManualClockOff = Boolean(
+    manualSubcontractorId &&
+    manualSession &&
+    manualSession.status !== "clocked_off" &&
+    !loadingManualSession,
+  );
+  const manualStatusLabel = !manualSubcontractorId
+    ? "Select employee/subcontractor"
+    : loadingManualSession
+    ? "Checking..."
+    : manualSession
+    ? manualSession.status.replace("_", " ")
+    : "not clocked on";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -91,9 +157,9 @@ export default function AdminTimesheets() {
         
         <div className="flex items-center gap-4">
           <Select value={subId} onValueChange={setSubId}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Subcontractors" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="All employees/subcontractors" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Subcontractors</SelectItem>
+              <SelectItem value="all">All employees/subcontractors</SelectItem>
               {subs?.map(s => (
                 <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
               ))}
@@ -113,6 +179,55 @@ export default function AdminTimesheets() {
           </div>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Admin Clock Controls</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] md:items-end">
+          <div className="space-y-2">
+            <Label>Employee/Subcontractor</Label>
+            <Select value={manualSubId} onValueChange={setManualSubId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select employee/subcontractor..." />
+              </SelectTrigger>
+              <SelectContent>
+                {subs?.map((s) => (
+                  <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Today</Label>
+            <div>
+              <Badge variant={manualSession?.status === "clocked_off" ? "secondary" : manualSession ? "default" : "outline"}>
+                {manualStatusLabel}
+              </Badge>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => manualSubcontractorId && manualClockOn.mutate({ data: { subcontractorId: manualSubcontractorId } })}
+            disabled={!canManualClockOn || manualClockOn.isPending || manualClockOff.isPending}
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Clock On Now
+          </Button>
+
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => manualSubcontractorId && manualClockOff.mutate({ data: { subcontractorId: manualSubcontractorId } })}
+            disabled={!canManualClockOff || manualClockOn.isPending || manualClockOff.isPending}
+          >
+            <Square className="mr-2 h-4 w-4" />
+            Clock Off Now
+          </Button>
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>

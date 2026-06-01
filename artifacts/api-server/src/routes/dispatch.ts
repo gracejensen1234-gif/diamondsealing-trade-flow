@@ -1,6 +1,6 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { jobAssignmentsTable, jobsTable, subcontractorsTable } from "@workspace/db";
+import { jobAssignmentsTable, jobsTable, subcontractorsTable, workSessionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   CreateDispatchBody,
@@ -15,6 +15,33 @@ import { createAndSendNotification } from "../lib/notificationService.js";
 import { canAccessSubcontractor, companyId, isAdmin, requireAdmin, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
+
+async function requireOpenWorkdayForWorker(req: Request, res: Response, subcontractorId: number | null | undefined) {
+  if (isAdmin(req)) return true;
+  if (!subcontractorId) {
+    res.status(400).json({ error: "Assigned employee/subcontractor is required" });
+    return false;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const [session] = await db
+    .select()
+    .from(workSessionsTable)
+    .where(
+      and(
+        eq(workSessionsTable.companyId, companyId(req)),
+        eq(workSessionsTable.subcontractorId, subcontractorId),
+        eq(workSessionsTable.date, today),
+      ),
+    );
+
+  if (!session || session.status === "clocked_off") {
+    res.status(400).json({ error: "Clock on for the day before checking in to jobs" });
+    return false;
+  }
+
+  return true;
+}
 
 async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
   const tenantId = a.companyId ?? 0;
@@ -135,6 +162,10 @@ router.patch("/dispatch/:id", async (req, res) => {
     if (changedKeys.length !== 1 || body.data.status !== "in_progress") {
       return res.status(403).json({ error: "Employees/subcontractors can only start their assigned job from the field view" });
     }
+    if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
+    if (existing.status !== "arrived") {
+      return res.status(400).json({ error: "Check in to this job before starting work" });
+    }
   }
 
   const updates: Record<string, unknown> = {};
@@ -196,6 +227,7 @@ router.post("/dispatch/:id/arrive", async (req, res) => {
   if (!canAccessSubcontractor(req, existing.subcontractorId)) {
     return res.status(403).json({ error: "You can only mark your own assigned jobs" });
   }
+  if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
 
   const [a] = await db.update(jobAssignmentsTable).set({
     status: "arrived",
@@ -216,6 +248,7 @@ router.post("/dispatch/:id/depart", async (req, res) => {
   if (!canAccessSubcontractor(req, existing.subcontractorId)) {
     return res.status(403).json({ error: "You can only mark your own assigned jobs" });
   }
+  if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
 
   const [a] = await db.update(jobAssignmentsTable).set({
     status: "completed",
