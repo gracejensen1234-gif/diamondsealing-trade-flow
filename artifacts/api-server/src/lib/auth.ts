@@ -58,6 +58,7 @@ export interface AuthUser {
   id: number;
   companyId: number;
   companyName: string;
+  companySlug: string;
   name: string;
   email: string;
   role: AppRole;
@@ -86,6 +87,7 @@ function toPublicUser(user: AppUser): AuthUser {
     id: user.id,
     companyId: user.companyId,
     companyName: "",
+    companySlug: "",
     name: user.name,
     email: user.email,
     role: user.role as AppRole,
@@ -95,13 +97,14 @@ function toPublicUser(user: AppUser): AuthUser {
 
 async function toPublicUserWithCompany(user: AppUser): Promise<AuthUser> {
   const [company] = await db
-    .select({ name: companyAccountsTable.name })
+    .select({ name: companyAccountsTable.name, slug: companyAccountsTable.slug })
     .from(companyAccountsTable)
     .where(eq(companyAccountsTable.id, user.companyId));
 
   return {
     ...toPublicUser(user),
     companyName: company?.name ?? "Company",
+    companySlug: company?.slug ?? "",
   };
 }
 

@@ -4,6 +4,7 @@ export type AuthUser = {
   id: number;
   companyId: number;
   companyName: string;
+  companySlug: string;
   name: string;
   email: string;
   role: "admin" | "worker";

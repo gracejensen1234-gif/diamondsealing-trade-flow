@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronUp, HardHat, Star, UserPlus } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
   { key: "canSilicone", label: "Silicone", group: "Products" },
@@ -28,6 +29,7 @@ const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
 
 export default function WorkerProfiles() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
@@ -98,6 +100,11 @@ export default function WorkerProfiles() {
           <div>
             <h1 className="text-2xl font-bold">Worker Profiles</h1>
             <p className="text-muted-foreground mt-1">Skill sets, competencies, experience and performance scores</p>
+            {user?.companySlug ? (
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
+                Company code: <span className="text-foreground">{user.companySlug}</span>
+              </p>
+            ) : null}
           </div>
           <Button onClick={() => setShowNewWorker((value) => !value)}>
             <UserPlus className="mr-2 h-4 w-4" />
