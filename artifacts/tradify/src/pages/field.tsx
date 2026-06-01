@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { PhoneSetupCard } from "@/components/phone-setup-card";
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
@@ -441,6 +442,10 @@ export default function FieldView() {
           </Button>
         </div>
       </div>
+
+      {!pushEnabled && (
+        <PhoneSetupCard compact />
+      )}
 
       {/* Location consent prompt */}
       {locationPrompt && (
