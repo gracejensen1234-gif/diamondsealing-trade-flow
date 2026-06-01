@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Building2, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { Building2, HardHat, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,11 @@ import { useAuth } from "@/lib/auth";
 export default function Login() {
   const { login, register, setupStatus } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [accountType, setAccountType] = useState<"admin" | "worker">("admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
   const [name, setName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
@@ -32,7 +34,9 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     const result = await register({
-      companyName,
+      accountType,
+      companyName: accountType === "admin" ? companyName : undefined,
+      companyCode: accountType === "worker" ? companyCode : undefined,
       name,
       email: registerEmail,
       password: registerPassword,
@@ -64,10 +68,12 @@ export default function Login() {
             <CardTitle className="flex items-center gap-2 text-xl">
               {mode === "login" ? (
                 <ShieldCheck className="h-5 w-5 text-primary" />
+              ) : accountType === "worker" ? (
+                <HardHat className="h-5 w-5 text-primary" />
               ) : (
                 <Building2 className="h-5 w-5 text-primary" />
               )}
-              {mode === "login" ? "Sign in" : "Create account"}
+              {mode === "login" ? "Sign in" : accountType === "worker" ? "Create worker account" : "Create admin account"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -92,6 +98,35 @@ export default function Login() {
               </Button>
             </div>
 
+            {mode === "register" ? (
+              <div className="mb-5 grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-1">
+                <Button
+                  type="button"
+                  variant={accountType === "admin" ? "default" : "ghost"}
+                  className="h-9"
+                  onClick={() => {
+                    setAccountType("admin");
+                    setError("");
+                  }}
+                >
+                  <Building2 className="mr-2 h-4 w-4" />
+                  Admin
+                </Button>
+                <Button
+                  type="button"
+                  variant={accountType === "worker" ? "default" : "ghost"}
+                  className="h-9"
+                  onClick={() => {
+                    setAccountType("worker");
+                    setError("");
+                  }}
+                >
+                  <HardHat className="mr-2 h-4 w-4" />
+                  Worker
+                </Button>
+              </div>
+            ) : null}
+
             {setupStatus && !setupStatus.configured ? (
               <div className="mb-4 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-950">
                 Login needs admin environment variables on Render before the app can be used live.
@@ -102,15 +137,31 @@ export default function Login() {
               {mode === "register" ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="companyName">Company name</Label>
-                    <Input
-                      id="companyName"
-                      type="text"
-                      autoComplete="organization"
-                      value={companyName}
-                      onChange={(event) => setCompanyName(event.target.value)}
-                      required
-                    />
+                    {accountType === "admin" ? (
+                      <>
+                        <Label htmlFor="companyName">Company name</Label>
+                        <Input
+                          id="companyName"
+                          type="text"
+                          autoComplete="organization"
+                          value={companyName}
+                          onChange={(event) => setCompanyName(event.target.value)}
+                          required
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label htmlFor="companyCode">Company code</Label>
+                        <Input
+                          id="companyCode"
+                          type="text"
+                          autoComplete="organization"
+                          value={companyCode}
+                          onChange={(event) => setCompanyCode(event.target.value)}
+                          required
+                        />
+                      </>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="name">Your name</Label>
@@ -161,7 +212,7 @@ export default function Login() {
                 {mode === "login" ? <LogIn className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
                 {submitting
                   ? mode === "login" ? "Signing in..." : "Creating account..."
-                  : mode === "login" ? "Sign in" : "Create account"}
+                  : mode === "login" ? "Sign in" : accountType === "worker" ? "Create worker account" : "Create admin account"}
               </Button>
             </form>
           </CardContent>

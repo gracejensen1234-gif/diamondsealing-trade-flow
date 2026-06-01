@@ -22,7 +22,14 @@ type AuthContextValue = {
   setupStatus: SetupStatus | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (input: { companyName: string; name: string; email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  register: (input: {
+    accountType: "admin" | "worker";
+    companyName?: string;
+    companyCode?: string;
+    name: string;
+    email: string;
+    password: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -82,7 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true };
   }, []);
 
-  const register = useCallback(async (input: { companyName: string; name: string; email: string; password: string }) => {
+  const register = useCallback(async (input: {
+    accountType: "admin" | "worker";
+    companyName?: string;
+    companyCode?: string;
+    name: string;
+    email: string;
+    password: string;
+  }) => {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       credentials: "include",

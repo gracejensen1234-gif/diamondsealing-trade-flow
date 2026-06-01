@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { appUsersTable, companyAccountsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { appUsersTable, companyAccountsTable, subcontractorsTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import {
   authenticateByEmailPassword,
   authSetupStatus,
@@ -37,6 +37,15 @@ async function nextCompanySlug(companyName: string) {
   return `${base}-${Date.now()}`;
 }
 
+async function findCompanyByCode(companyCode: string) {
+  const slug = slugifyCompany(companyCode);
+  const [company] = await db
+    .select()
+    .from(companyAccountsTable)
+    .where(eq(companyAccountsTable.slug, slug));
+  return company ?? null;
+}
+
 router.get("/auth/setup-status", async (_req, res) => {
   try {
     await ensureEnvUsers();
@@ -52,18 +61,69 @@ router.post("/auth/register", async (req, res) => {
     return res.status(403).json({ error: "Account creation is not enabled" });
   }
 
+  const accountType = req.body?.accountType === "worker" ? "worker" : "admin";
   const companyName = typeof req.body?.companyName === "string" ? req.body.companyName.trim() : "";
+  const companyCode = typeof req.body?.companyCode === "string" ? req.body.companyCode.trim() : "";
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
 
-  if (companyName.length < 2 || companyName.length > 120) return res.status(400).json({ error: "Company name is required" });
+  if (accountType === "admin" && (companyName.length < 2 || companyName.length > 120)) {
+    return res.status(400).json({ error: "Company name is required" });
+  }
+  if (accountType === "worker" && (companyCode.length < 2 || companyCode.length > 120)) {
+    return res.status(400).json({ error: "Company code is required" });
+  }
   if (name.length < 2 || name.length > 120) return res.status(400).json({ error: "Your name is required" });
   if (!EMAIL_PATTERN.test(email)) return res.status(400).json({ error: "A valid email is required" });
   if (password.length < 6 || password.length > 128) return res.status(400).json({ error: "Password must be at least 6 characters" });
   const [existingUser] = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(eq(appUsersTable.email, email));
   if (existingUser) {
     return res.status(409).json({ error: "An account already exists for this email" });
+  }
+
+  if (accountType === "worker") {
+    const company = await findCompanyByCode(companyCode);
+    if (!company) return res.status(404).json({ error: "Company code not found" });
+
+    const [subcontractor] = await db
+      .select()
+      .from(subcontractorsTable)
+      .where(and(
+        eq(subcontractorsTable.companyId, company.id),
+        eq(subcontractorsTable.email, email),
+        eq(subcontractorsTable.active, true),
+      ));
+
+    if (!subcontractor) {
+      return res.status(403).json({
+        error: "Ask an admin to add your worker profile with this email before creating a worker account",
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const [createdWorker] = await db.insert(appUsersTable).values({
+      companyId: company.id,
+      name,
+      email,
+      role: "worker",
+      subcontractorId: subcontractor.id,
+      passwordHash,
+      active: true,
+    }).returning();
+
+    const user = {
+      id: createdWorker.id,
+      companyId: company.id,
+      companyName: company.name,
+      name: createdWorker.name,
+      email: createdWorker.email,
+      role: "worker" as const,
+      subcontractorId: subcontractor.id,
+    };
+
+    setSessionCookie(res, user);
+    return res.status(201).json({ user });
   }
 
   const slug = await nextCompanySlug(companyName);
