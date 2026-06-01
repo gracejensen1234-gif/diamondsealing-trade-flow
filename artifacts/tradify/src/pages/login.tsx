@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { HardHat, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { Building2, HardHat, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,10 @@ import { useAuth } from "@/lib/auth";
 
 export default function Login() {
   const { login, register, setupStatus } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "company" | "employee">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [companyCode, setCompanyCode] = useState("");
   const [name, setName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
@@ -32,8 +33,9 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     const result = await register({
-      accountType: "worker",
-      companyCode,
+      accountType: mode === "company" ? "company" : "worker",
+      companyName: mode === "company" ? companyName : undefined,
+      companyCode: mode === "employee" ? companyCode : undefined,
       name,
       email: registerEmail,
       password: registerPassword,
@@ -42,10 +44,14 @@ export default function Login() {
     if (!result.ok) setError(result.error ?? "Could not create account");
   };
 
-  const switchMode = (nextMode: "login" | "register") => {
+  const switchMode = (nextMode: "login" | "company" | "employee") => {
     setMode(nextMode);
     setError("");
   };
+
+  const isRegistering = mode === "company" || mode === "employee";
+  const registerTitle = mode === "company" ? "Create company account" : "Create employee/subcontractor account";
+  const submitText = mode === "login" ? "Sign in" : registerTitle;
 
   return (
     <main className="min-h-screen bg-sidebar text-sidebar-foreground sm:bg-[radial-gradient(circle_at_top_left,_rgba(255,122,0,0.25),_transparent_30%),linear-gradient(135deg,#050505,#2a2a2a_58%,#050505)]">
@@ -65,14 +71,16 @@ export default function Login() {
             <CardTitle className="flex items-center gap-2 text-xl">
               {mode === "login" ? (
                 <ShieldCheck className="h-5 w-5 text-primary" />
+              ) : mode === "company" ? (
+                <Building2 className="h-5 w-5 text-primary" />
               ) : (
                 <HardHat className="h-5 w-5 text-primary" />
               )}
-              {mode === "login" ? "Sign in" : "Create employee/subcontractor account"}
+              {mode === "login" ? "Sign in" : registerTitle}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-5 grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-1">
+            <div className="mb-5 grid grid-cols-3 gap-2 rounded-md border bg-muted/40 p-1">
               <Button
                 type="button"
                 variant={mode === "login" ? "default" : "ghost"}
@@ -84,37 +92,61 @@ export default function Login() {
               </Button>
               <Button
                 type="button"
-                variant={mode === "register" ? "default" : "ghost"}
+                variant={mode === "company" ? "default" : "ghost"}
                 className="h-9"
-                onClick={() => switchMode("register")}
+                onClick={() => switchMode("company")}
+              >
+                <Building2 className="mr-2 h-4 w-4" />
+                Company
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "employee" ? "default" : "ghost"}
+                className="h-9"
+                onClick={() => switchMode("employee")}
               >
                 <UserPlus className="mr-2 h-4 w-4" />
-                Create
+                Employee
               </Button>
             </div>
 
             {setupStatus && !setupStatus.configured ? (
               <div className="mb-4 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-950">
-                Login needs admin environment variables on Render before the app can be used live.
+                Login needs a session secret on Render before the app can be used live.
               </div>
             ) : null}
 
             <form className="space-y-4" onSubmit={mode === "login" ? handleLogin : handleRegister}>
-              {mode === "register" ? (
+              {isRegistering ? (
                 <>
+                  {mode === "company" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company name</Label>
+                      <Input
+                        id="companyName"
+                        type="text"
+                        autoComplete="organization"
+                        value={companyName}
+                        onChange={(event) => setCompanyName(event.target.value)}
+                        required
+                      />
+                    </div>
+                  ) : null}
+                  {mode === "employee" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="companyCode">Company code</Label>
+                      <Input
+                        id="companyCode"
+                        type="text"
+                        autoComplete="organization"
+                        value={companyCode}
+                        onChange={(event) => setCompanyCode(event.target.value)}
+                        required
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-2">
-                    <Label htmlFor="companyCode">Company code</Label>
-                    <Input
-                      id="companyCode"
-                      type="text"
-                      autoComplete="organization"
-                      value={companyCode}
-                      onChange={(event) => setCompanyCode(event.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Your name</Label>
+                    <Label htmlFor="name">{mode === "company" ? "Owner name" : "Your name"}</Label>
                     <Input
                       id="name"
                       type="text"
@@ -147,7 +179,7 @@ export default function Login() {
                   value={mode === "login" ? password : registerPassword}
                   onChange={(event) => (mode === "login" ? setPassword(event.target.value) : setRegisterPassword(event.target.value))}
                   required
-                  minLength={mode === "register" ? 6 : undefined}
+                  minLength={isRegistering ? 6 : undefined}
                 />
               </div>
 
@@ -162,7 +194,7 @@ export default function Login() {
                 {mode === "login" ? <LogIn className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
                 {submitting
                   ? mode === "login" ? "Signing in..." : "Creating account..."
-                  : mode === "login" ? "Sign in" : "Create employee/subcontractor account"}
+                  : submitText}
               </Button>
             </form>
           </CardContent>

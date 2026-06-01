@@ -68,8 +68,14 @@ router.post("/auth/register", async (req, res) => {
   if (!signupsEnabled()) {
     return res.status(403).json({ error: "Account creation is not enabled" });
   }
+  if (!authSetupStatus().configured) {
+    return res.status(503).json({
+      error: "Login is not configured yet",
+      setup: authSetupStatus(),
+    });
+  }
 
-  const accountType = req.body?.accountType === "worker" ? "worker" : "admin";
+  const accountType = req.body?.accountType === "worker" ? "worker" : req.body?.accountType === "company" ? "company" : "admin";
   const companyName = typeof req.body?.companyName === "string" ? req.body.companyName.trim() : "";
   const companyCode = typeof req.body?.companyCode === "string" ? req.body.companyCode.trim() : "";
   const submittedAdminSignupCode = typeof req.body?.adminSignupCode === "string" ? req.body.adminSignupCode.trim() : "";
@@ -81,7 +87,7 @@ router.post("/auth/register", async (req, res) => {
     return res.status(403).json({ error: "Admin account creation is invite-only" });
   }
 
-  if (accountType === "admin" && (companyName.length < 2 || companyName.length > 120)) {
+  if ((accountType === "admin" || accountType === "company") && (companyName.length < 2 || companyName.length > 120)) {
     return res.status(400).json({ error: "Company name is required" });
   }
   if (accountType === "worker" && (companyCode.length < 2 || companyCode.length > 120)) {

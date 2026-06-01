@@ -343,9 +343,8 @@ export async function ensureEnvUsers() {
 
 export function authSetupStatus() {
   const hasSessionSecret = Boolean(authSecret());
-  const hasAdmin = Boolean(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD);
   return {
-    configured: hasSessionSecret && hasAdmin,
+    configured: hasSessionSecret,
     adminEmailConfigured: Boolean(process.env.ADMIN_EMAIL),
     adminPasswordConfigured: Boolean(process.env.ADMIN_PASSWORD),
     workerConfigured: Boolean(process.env.TEST_WORKER_EMAIL && process.env.TEST_WORKER_PASSWORD),
