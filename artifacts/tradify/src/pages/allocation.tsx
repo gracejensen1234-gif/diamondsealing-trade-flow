@@ -33,7 +33,7 @@ export default function Allocation() {
 
   const confirmMutation = useMutation({
     mutationFn: (data: any) => fetch("/api/allocation/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then((r) => r.json()),
-    onSuccess: () => toast({ title: "Worker allocated successfully" }),
+    onSuccess: () => toast({ title: "Employee/subcontractor allocated successfully" }),
   });
 
   function run() {
@@ -48,7 +48,7 @@ export default function Allocation() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Smart Job Allocation</h1>
-        <p className="text-muted-foreground mt-1">AI-powered worker recommendations based on skills, stock, proximity and builder tier</p>
+        <p className="text-muted-foreground mt-1">AI-powered employee/subcontractor recommendations based on skills, stock, proximity and builder tier</p>
       </div>
 
       {/* Request form */}
@@ -130,7 +130,7 @@ export default function Allocation() {
             </div>
           )}
 
-          <h2 className="text-lg font-semibold">Worker Recommendations</h2>
+          <h2 className="text-lg font-semibold">Employee/Subcontractor Recommendations</h2>
 
           {result.recommendations?.map((r: any) => {
             const cfg = REC_CONFIG[r.recommendation] ?? REC_CONFIG.possible;

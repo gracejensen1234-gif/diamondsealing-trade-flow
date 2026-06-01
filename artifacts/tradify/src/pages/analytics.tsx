@@ -101,7 +101,7 @@ export default function Analytics() {
                 <Users className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Active Workers</p>
+                <p className="text-xs text-muted-foreground">Active Employees/Subcontractors</p>
                 <p className="text-2xl font-bold">{subs.filter((s) => s.daysWorked > 0).length}</p>
               </div>
             </div>
@@ -109,7 +109,7 @@ export default function Analytics() {
         </Card>
       </div>
 
-      {/* Per-worker breakdown */}
+      {/* Per-employee/subcontractor breakdown */}
       <div className="space-y-4">
         {subs.map((sub: any) => (
           <Card key={sub.subcontractorId}>

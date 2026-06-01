@@ -280,7 +280,7 @@ async function resolveWorkerSubcontractorId(companyId: number) {
   }
 
   const workerEmail = process.env.TEST_WORKER_EMAIL?.trim().toLowerCase();
-  const workerName = process.env.TEST_WORKER_NAME?.trim() || "Test Worker";
+  const workerName = process.env.TEST_WORKER_NAME?.trim() || "Test Employee/Subcontractor";
 
   if (workerEmail) {
     const [byEmail] = await db
@@ -329,7 +329,7 @@ export async function ensureEnvUsers() {
     if (workerEmail && workerPassword) {
       await upsertEnvUser({
         companyId: company.id,
-        name: process.env.TEST_WORKER_NAME || "Test Worker",
+        name: process.env.TEST_WORKER_NAME || "Test Employee/Subcontractor",
         email: workerEmail,
         password: workerPassword,
         role: "worker",
@@ -434,7 +434,7 @@ export function canAccessSubcontractor(req: Request, subcontractorId: number | n
 
 export function requireSubcontractorAccess(req: Request, res: Response, subcontractorId: number | null | undefined) {
   if (canAccessSubcontractor(req, subcontractorId)) return true;
-  res.status(403).json({ error: "You can only access your own worker records" });
+  res.status(403).json({ error: "You can only access your own employee/subcontractor records" });
   return false;
 }
 
@@ -454,7 +454,7 @@ export function workerApiScope(req: Request, res: Response, next: NextFunction) 
     (path.startsWith("/location-verifications") && method !== "PATCH");
 
   if (!allowed) {
-    return res.status(403).json({ error: "Worker access is limited to field operations" });
+    return res.status(403).json({ error: "Employee/subcontractor access is limited to field operations" });
   }
 
   return next();

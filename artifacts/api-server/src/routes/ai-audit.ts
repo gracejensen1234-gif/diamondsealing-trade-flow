@@ -175,7 +175,7 @@ async function runAIAnalysis(
 
   const systemPrompt = `You are a quality audit assistant for a joint sealing subcontractor company.
 Analyse the job report data and completion photos provided and flag genuine quality, safety, or compliance concerns for admin review.
-You do NOT penalise workers automatically — your flags are suggestions for a human admin to review.
+You do NOT penalise employees/subcontractors automatically — your flags are suggestions for a human admin to review.
 Only flag real concerns. Do not invent issues. If everything looks fine, return an empty array.
 
 Return a JSON object with a single key "flags" containing an array. Each flag must have:
@@ -187,7 +187,7 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
 - jobReportId: (optional) the id of the specific job report this flag relates to`;
 
   const summaryParts: string[] = [
-    `Worker: ${sub.name}`,
+    `Employee/Subcontractor: ${sub.name}`,
     `Date: ${date}`,
     `Job reports submitted: ${reports.length}`,
   ];

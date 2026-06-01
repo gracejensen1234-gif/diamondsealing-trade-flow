@@ -123,7 +123,7 @@ function checkSkills(
   const prod = productType?.toLowerCase() ?? "";
   if (prod.includes("sikaflex") && !skills.canSikaflex) {
     match = false;
-    warnings.push("Worker cannot apply Sikaflex");
+    warnings.push("Employee/subcontractor cannot apply Sikaflex");
   } else if (prod.includes("sikaflex") && skills.canSikaflex) {
     reasons.push("✓ Sikaflex certified");
   }
@@ -132,28 +132,28 @@ function checkSkills(
   }
   if (prod.includes("fire") && !skills.canFireRated) {
     match = false;
-    warnings.push("Worker not certified for fire-rated sealing");
+    warnings.push("Employee/subcontractor not certified for fire-rated sealing");
   }
   if (prod.includes("waterproof") && !skills.canWaterproofing) {
     match = false;
-    warnings.push("Worker not certified for waterproofing");
+    warnings.push("Employee/subcontractor not certified for waterproofing");
   }
 
   // Job type check
   const jt = jobType?.toLowerCase() ?? "";
   if (jt.includes("pool") && !skills.canPools) {
     match = false;
-    warnings.push("Worker not certified for pool work");
+    warnings.push("Employee/subcontractor not certified for pool work");
   } else if (jt.includes("pool") && skills.canPools) {
     reasons.push("✓ Pool certified");
   }
   if (jt.includes("commercial") && !skills.canCommercial) {
-    warnings.push("Worker not experienced in commercial work");
+    warnings.push("Employee/subcontractor not experienced in commercial work");
   } else if (jt.includes("commercial") && skills.canCommercial) {
     reasons.push("✓ Commercial experience");
   }
   if (jt.includes("car park") && !skills.canCarParks) {
-    warnings.push("Worker not experienced in car parks");
+    warnings.push("Employee/subcontractor not experienced in car parks");
   }
 
   // Custom required skills
@@ -273,8 +273,8 @@ router.post("/allocation/recommend", async (req, res) => {
     // Builder preferences
     const preferred = builderProfile && (builderProfile.preferredWorkerIds as number[])?.includes(sub.id);
     const avoided = builderProfile && (builderProfile.avoidedWorkerIds as number[])?.includes(sub.id);
-    if (preferred) { score += 10; reasons.push("✓ Builder's preferred worker"); }
-    if (avoided) { score -= 25; warnings.push("⚠ Builder has requested to avoid this worker"); }
+    if (preferred) { score += 10; reasons.push("✓ Builder's preferred employee/subcontractor"); }
+    if (avoided) { score -= 25; warnings.push("⚠ Builder has requested to avoid this employee/subcontractor"); }
 
     const callbackRate = sub.skills ? Number(sub.skills.callbackRate) : 0;
     if (callbackRate > 15) warnings.push(`High callback rate: ${callbackRate}%`);
@@ -314,8 +314,8 @@ router.post("/allocation/recommend", async (req, res) => {
 
   const autoSelected = sorted[0] ?? null;
   const globalWarnings: string[] = [];
-  if (sorted.every((r) => !r.scheduleFit)) globalWarnings.push("All workers already scheduled on this date");
-  if (sorted.every((r) => !r.stockMatch)) globalWarnings.push("No worker has sufficient stock — supplier order may be needed");
+  if (sorted.every((r) => !r.scheduleFit)) globalWarnings.push("All employees/subcontractors already scheduled on this date");
+  if (sorted.every((r) => !r.stockMatch)) globalWarnings.push("No employee/subcontractor has sufficient stock — supplier order may be needed");
 
   // Save recommendation
   const [saved] = await db.insert(allocationRecommendationsTable).values({
@@ -345,7 +345,7 @@ router.post("/allocation/confirm", async (req, res) => {
     .select()
     .from(subcontractorsTable)
     .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
-  if (!sub) return res.status(400).json({ error: "Worker not found for this company" });
+  if (!sub) return res.status(400).json({ error: "Employee/subcontractor not found for this company" });
 
   const [saved] = await db
     .update(allocationRecommendationsTable)
@@ -388,7 +388,7 @@ router.post("/weekly-planner/generate", async (req, res) => {
   let stockWarnings = 0;
   const unallocated: number[] = [];
 
-  // Simple grouping: sort jobs by suburb, assign to available workers with proximity match
+  // Simple grouping: sort jobs by suburb, assign to available employees/subcontractors with proximity match
   for (const job of weekJobs) {
     const suburb = (job as any).suburb ?? "";
     const bestSub = subs.find((s) => !s.assignedDates.includes((job as any).scheduledDate ?? weekStart) && s.assignedSuburbs.includes(suburb));

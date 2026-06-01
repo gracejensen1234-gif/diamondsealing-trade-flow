@@ -90,7 +90,7 @@ export default function AuditFlags() {
       const total = Array.isArray(data) ? data.reduce((a, r) => a + (r.flagsCreated ?? 0), 0) : 0;
       const errors = Array.isArray(data) ? data.filter((r) => r.error) : [];
       if (errors.length > 0) {
-        toast({ title: `AI audit done — ${total} flag(s), ${errors.length} worker(s) failed`, variant: "destructive" });
+        toast({ title: `AI audit done — ${total} flag(s), ${errors.length} employee/subcontractor(s) failed`, variant: "destructive" });
       } else {
         toast({ title: `AI audit complete — ${total} flag(s) raised` });
       }
@@ -155,7 +155,7 @@ export default function AuditFlags() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">AI Audit</h1>
-          <p className="text-muted-foreground mt-0.5">Quality flags, AI photo analysis, and worker scores</p>
+          <p className="text-muted-foreground mt-0.5">Quality flags, AI photo analysis, and employee/subcontractor scores</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -238,12 +238,12 @@ export default function AuditFlags() {
         </Card>
       </div>
 
-      {/* Worker scores */}
+      {/* Employee/subcontractor scores */}
       {(scores as { overallScore: number }[]).length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Worker Audit Scores
+              <ShieldCheck className="w-4 h-4" /> Employee/Subcontractor Audit Scores
             </CardTitle>
           </CardHeader>
           <CardContent>

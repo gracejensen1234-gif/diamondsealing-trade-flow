@@ -128,7 +128,7 @@ router.post("/builder-ratings", async (req, res) => {
     .select()
     .from(subcontractorsTable)
     .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
-  if (!builderProfile || !worker) return res.status(400).json({ error: "Builder profile or worker not found for this company" });
+  if (!builderProfile || !worker) return res.status(400).json({ error: "Builder profile or employee/subcontractor not found for this company" });
 
   const [row] = await db.insert(builderRatingsTable).values({
     companyId: tenantId,
@@ -151,7 +151,7 @@ router.post("/builder-ratings", async (req, res) => {
     .set({ averageRatingGiven: avg })
     .where(and(eq(builderProfilesTable.id, Number(builderProfileId)), eq(builderProfilesTable.companyId, tenantId)));
 
-  // Update worker's builder rating average in worker_skills
+  // Update employee/subcontractor builder rating average in worker_skills
   const workerRatings = await db
     .select()
     .from(builderRatingsTable)

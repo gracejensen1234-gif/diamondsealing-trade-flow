@@ -519,7 +519,7 @@ export default function FieldView() {
       {pushEnabled && subId && pushStatus !== "unsupported" && (
         <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
           <Bell className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>Push notifications are enabled for this worker.</span>
+          <span>Push notifications are enabled for this employee/subcontractor.</span>
         </div>
       )}
 
@@ -576,7 +576,7 @@ export default function FieldView() {
             <Label>{isWorker ? "Signed in as" : "Who are you?"}</Label>
             {isWorker ? (
               <div className="rounded-md border bg-muted px-3 py-2 text-sm font-medium">
-                {user?.name ?? "Worker"}
+                {user?.name ?? "Employee/Subcontractor"}
               </div>
             ) : loadingSubs ? (
               <Skeleton className="h-10 w-full" />

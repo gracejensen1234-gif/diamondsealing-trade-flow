@@ -66,7 +66,7 @@ router.post("/location-verifications", async (req, res) => {
     return res.status(400).json({ error: "Invalid eventType" });
   }
 
-  // Worker skipped or browser errored — just record the skip/error
+  // Employee/subcontractor skipped or browser errored — just record the skip/error
   if (clientStatus === "skipped" || clientStatus === "location_error") {
     const [record] = await db
       .insert(locationVerificationsTable)
@@ -99,7 +99,7 @@ router.post("/location-verifications", async (req, res) => {
       .where(and(eq(jobAssignmentsTable.id, jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
     if (!assignedWorker) return res.status(404).json({ error: "Job assignment not found" });
     if (assignedWorker.subcontractorId !== Number(subcontractorId)) {
-      return res.status(403).json({ error: "Location verification must match the assigned worker" });
+      return res.status(403).json({ error: "Location verification must match the assigned employee/subcontractor" });
     }
 
     // Fetch the associated job address

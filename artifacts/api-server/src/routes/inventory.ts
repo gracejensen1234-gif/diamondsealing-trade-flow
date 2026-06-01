@@ -127,7 +127,7 @@ router.post("/inventory-transactions", async (req, res) => {
     .select()
     .from(stockItemsTable)
     .where(and(eq(stockItemsTable.id, Number(stockItemId)), eq(stockItemsTable.companyId, tenantId)));
-  if (!sub || !stockItem) return res.status(400).json({ error: "Worker or stock item not found for this company" });
+  if (!sub || !stockItem) return res.status(400).json({ error: "Employee/subcontractor or stock item not found for this company" });
   if (jobAssignmentId) {
     const { jobAssignmentsTable } = await import("@workspace/db");
     const [assignment] = await db
@@ -212,7 +212,7 @@ router.post("/restock-requests", async (req, res) => {
     .select()
     .from(stockItemsTable)
     .where(and(eq(stockItemsTable.id, Number(stockItemId)), eq(stockItemsTable.companyId, tenantId)));
-  if (!sub || !stockItem) return res.status(400).json({ error: "Worker or stock item not found for this company" });
+  if (!sub || !stockItem) return res.status(400).json({ error: "Employee/subcontractor or stock item not found for this company" });
   const [req_] = await db.insert(restockRequestsTable).values({
     companyId: tenantId,
     subcontractorId: Number(subcontractorId),

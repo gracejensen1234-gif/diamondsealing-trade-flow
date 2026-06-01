@@ -75,7 +75,7 @@ export default function BuilderProfiles() {
                 <Select value={form.qualityTier} onValueChange={(v) => setForm((p) => ({ ...p, qualityTier: v }))}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="premium">Premium — highest quality, best workers</SelectItem>
+                    <SelectItem value="premium">Premium — highest quality, best employees/subcontractors</SelectItem>
                     <SelectItem value="high_end">High End — quality-focused</SelectItem>
                     <SelectItem value="standard">Standard — balanced quality & efficiency</SelectItem>
                     <SelectItem value="production">Production — speed & availability priority</SelectItem>

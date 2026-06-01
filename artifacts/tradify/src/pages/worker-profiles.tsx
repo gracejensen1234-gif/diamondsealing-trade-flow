@@ -65,19 +65,19 @@ export default function WorkerProfiles() {
           active: true,
         }),
       }).then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? "Could not add worker");
+        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? "Could not add employee/subcontractor");
         return r.json();
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subcontractors"] });
       setNewWorker({ name: "", email: "", phone: "", abn: "" });
       setShowNewWorker(false);
-      toast({ title: "Worker added" });
+      toast({ title: "Employee/subcontractor added" });
     },
     onError: (error) => {
       toast({
-        title: "Could not add worker",
-        description: error instanceof Error ? error.message : "Check the worker details and try again.",
+        title: "Could not add employee/subcontractor",
+        description: error instanceof Error ? error.message : "Check the employee/subcontractor details and try again.",
         variant: "destructive",
       });
     },
@@ -98,7 +98,7 @@ export default function WorkerProfiles() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Worker Profiles</h1>
+            <h1 className="text-2xl font-bold">Employee/Subcontractor Profiles</h1>
             <p className="text-muted-foreground mt-1">Skill sets, competencies, experience and performance scores</p>
             {user?.companySlug ? (
               <p className="mt-2 text-sm font-medium text-muted-foreground">
@@ -108,7 +108,7 @@ export default function WorkerProfiles() {
           </div>
           <Button onClick={() => setShowNewWorker((value) => !value)}>
             <UserPlus className="mr-2 h-4 w-4" />
-            Add Worker
+            Add Employee/Subcontractor
           </Button>
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function WorkerProfiles() {
                 onClick={() => createWorkerMutation.mutate(newWorker)}
                 disabled={!newWorker.name || !newWorker.email || createWorkerMutation.isPending}
               >
-                {createWorkerMutation.isPending ? "Adding..." : "Add worker"}
+                {createWorkerMutation.isPending ? "Adding..." : "Add employee/subcontractor"}
               </Button>
               <Button variant="outline" onClick={() => setShowNewWorker(false)}>Cancel</Button>
             </div>

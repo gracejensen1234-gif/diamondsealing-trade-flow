@@ -117,7 +117,7 @@ router.post("/job-reports", async (req, res) => {
       .where(and(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
     if (!assignment) return res.status(404).json({ error: "Job assignment not found" });
     if (assignment.subcontractorId !== parsed.data.subcontractorId) {
-      return res.status(403).json({ error: "This report must match the assigned worker" });
+      return res.status(403).json({ error: "This report must match the assigned employee/subcontractor" });
     }
   }
 

@@ -229,7 +229,7 @@ export default function AdminLive() {
                   </div>
                 </div>
 
-                {/* Today's location verification summary for this worker */}
+                {/* Today's location verification summary for this employee/subcontractor */}
                 {(() => {
                   const workerFlags = (locationFlags as any[]).filter(
                     (f) => f.subcontractorId === sub.subcontractorId

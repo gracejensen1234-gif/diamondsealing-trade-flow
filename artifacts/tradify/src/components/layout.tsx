@@ -21,6 +21,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { user, logout } = useAuth();
+  const roleLabel = user?.role === "worker" ? "employee/subcontractor" : user?.role ?? "user";
 
   const subId = (() => {
     if (user?.role === "worker") return user.subcontractorId ?? undefined;
@@ -71,7 +72,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { name: "Smart Allocation", href: "/allocation", icon: Brain },
         { name: "Weekly Planner", href: "/weekly-planner", icon: CalendarRange },
-        { name: "Worker Profiles", href: "/worker-profiles", icon: HardHat },
+        { name: "Employee/Subcontractor Profiles", href: "/worker-profiles", icon: HardHat },
         { name: "Builder Profiles", href: "/builder-profiles", icon: Building2 },
       ],
     },
@@ -176,7 +177,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="border-t border-sidebar-border p-3">
         <div className="mb-2 min-w-0">
           <p className="truncate text-sm font-medium">{user?.name ?? "Signed in"}</p>
-          <p className="truncate text-xs capitalize text-sidebar-foreground/55">{user?.role ?? "user"}</p>
+          <p className="truncate text-xs capitalize text-sidebar-foreground/55">{roleLabel}</p>
         </div>
         <Button
           variant="ghost"

@@ -61,7 +61,7 @@ export default function Dockets() {
                 <div className="col-span-2">
                   <Label>Subcontractor</Label>
                   <Select value={form.subcontractorId} onValueChange={(v) => setForm((p) => ({ ...p, subcontractorId: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select worker…" /></SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee/subcontractor..." /></SelectTrigger>
                     <SelectContent>{(subs as any[]).filter((s: any) => s.active).map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>

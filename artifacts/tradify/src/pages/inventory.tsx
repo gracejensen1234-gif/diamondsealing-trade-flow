@@ -50,9 +50,9 @@ export default function Inventory() {
             <DialogHeader><DialogTitle>Inventory Transaction</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
               <div>
-                <Label>Worker</Label>
+                <Label>Employee/Subcontractor</Label>
                 <Select value={txForm.subcontractorId} onValueChange={(v) => setTxForm((p) => ({ ...p, subcontractorId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select worker…" /></SelectTrigger>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee/subcontractor..." /></SelectTrigger>
                   <SelectContent>{activeSubs.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -71,7 +71,7 @@ export default function Inventory() {
                 <Select value={txForm.transactionType} onValueChange={(v) => setTxForm((p) => ({ ...p, transactionType: v }))}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="issued">Issued (out to worker)</SelectItem>
+                    <SelectItem value="issued">Issued (out to employee/subcontractor)</SelectItem>
                     <SelectItem value="returned">Returned (back to depot)</SelectItem>
                     <SelectItem value="used">Used on job</SelectItem>
                     <SelectItem value="adjustment">Adjustment</SelectItem>
@@ -115,7 +115,7 @@ export default function Inventory() {
             <Select value={filterSub} onValueChange={setFilterSub}>
               <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Workers</SelectItem>
+                <SelectItem value="all">All Employees/Subcontractors</SelectItem>
                 {activeSubs.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>

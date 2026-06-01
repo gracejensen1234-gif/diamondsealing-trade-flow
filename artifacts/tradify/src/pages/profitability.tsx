@@ -107,7 +107,7 @@ export default function Profitability() {
         </Card>
       </div>
 
-      {/* Per-worker profitability */}
+      {/* Per-employee/subcontractor profitability */}
       <div className="space-y-4">
         {(scores as any[]).map((s: any) => {
           const margin = Number(s.profitMargin ?? 0);

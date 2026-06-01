@@ -68,7 +68,7 @@ export default function Login() {
               ) : (
                 <HardHat className="h-5 w-5 text-primary" />
               )}
-              {mode === "login" ? "Sign in" : "Create worker account"}
+              {mode === "login" ? "Sign in" : "Create employee/subcontractor account"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -162,7 +162,7 @@ export default function Login() {
                 {mode === "login" ? <LogIn className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
                 {submitting
                   ? mode === "login" ? "Signing in..." : "Creating account..."
-                  : mode === "login" ? "Sign in" : "Create worker account"}
+                  : mode === "login" ? "Sign in" : "Create employee/subcontractor account"}
               </Button>
             </form>
           </CardContent>

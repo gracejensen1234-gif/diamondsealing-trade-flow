@@ -133,7 +133,7 @@ router.patch("/dispatch/:id", async (req, res) => {
     }
 
     if (changedKeys.length !== 1 || body.data.status !== "in_progress") {
-      return res.status(403).json({ error: "Workers can only start their assigned job from the field view" });
+      return res.status(403).json({ error: "Employees/subcontractors can only start their assigned job from the field view" });
     }
   }
 

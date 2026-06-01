@@ -107,7 +107,7 @@ router.post("/supplier-orders", async (req, res) => {
     .select()
     .from(subcontractorsTable)
     .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
-  if (!supplier || !sub) return res.status(400).json({ error: "Supplier or worker not found for this company" });
+  if (!supplier || !sub) return res.status(400).json({ error: "Supplier or employee/subcontractor not found for this company" });
 
   for (const item of items) {
     if (!item.stockItemId) continue;
@@ -235,7 +235,7 @@ router.post("/supplier-orders/check-and-create", async (req, res) => {
     .select()
     .from(subcontractorsTable)
     .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
-  if (!sub) return res.status(400).json({ error: "Worker not found for this company" });
+  if (!sub) return res.status(400).json({ error: "Employee/subcontractor not found for this company" });
 
   const inventory = await db
     .select()

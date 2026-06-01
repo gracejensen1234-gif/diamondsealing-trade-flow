@@ -110,7 +110,7 @@ router.post("/auth/register", async (req, res) => {
 
     if (!subcontractor) {
       return res.status(403).json({
-        error: "Ask an admin to add your worker profile with this email before creating a worker account",
+        error: "Ask an admin to add your employee/subcontractor profile with this email before creating an employee/subcontractor account",
       });
     }
 

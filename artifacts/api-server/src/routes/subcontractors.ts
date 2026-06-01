@@ -50,7 +50,7 @@ router.get("/subcontractors/:id", async (req, res) => {
   const parsed = GetSubcontractorParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
   if (!canAccessSubcontractor(req, parsed.data.id)) {
-    return res.status(403).json({ error: "You can only view your own worker profile" });
+    return res.status(403).json({ error: "You can only view your own employee/subcontractor profile" });
   }
   const [sub] = await db
     .select()
