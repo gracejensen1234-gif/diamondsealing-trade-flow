@@ -37,8 +37,18 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function fetchSetupStatus() {
-  const response = await fetch("/api/auth/setup-status", { credentials: "include" });
+  const response = await fetchWithTimeout("/api/auth/setup-status", { credentials: "include" });
   if (!response.ok) return null;
   return (await response.json()) as SetupStatus;
 }
@@ -51,17 +61,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [meResponse, setup] = await Promise.all([
-        fetch("/api/auth/me", { credentials: "include" }),
+      const [meResult, setupResult] = await Promise.allSettled([
+        fetchWithTimeout("/api/auth/me", { credentials: "include" }),
         fetchSetupStatus(),
       ]);
+      const setup = setupResult.status === "fulfilled" ? setupResult.value : null;
       setSetupStatus(setup);
-      if (meResponse.ok) {
+      if (meResult.status === "fulfilled" && meResult.value.ok) {
+        const meResponse = meResult.value;
         const data = (await meResponse.json()) as { user: AuthUser };
         setUser(data.user);
       } else {
         setUser(null);
       }
+    } catch {
+      setUser(null);
     } finally {
       setLoading(false);
     }

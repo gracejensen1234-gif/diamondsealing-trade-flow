@@ -127,11 +127,14 @@ function AuthenticatedRoutes() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-sidebar text-sidebar-foreground">
-        <div className="flex items-center gap-3 text-sm text-white/70">
+        <div className="mx-4 flex max-w-sm flex-col items-center gap-3 text-center text-sm text-white/70">
           <div className="h-10 w-10 overflow-hidden rounded-md border border-white/15 bg-black">
             <img src="/diamond-sealing-logo.jpeg" alt="Company logo" className="h-full w-full object-cover" />
           </div>
-          Loading SealFlow...
+          <div>
+            <p className="font-medium text-white">Starting SealFlow...</p>
+            <p className="mt-1 text-xs text-white/55">If this is the first open in a while, it can take a moment to wake up.</p>
+          </div>
         </div>
       </main>
     );
