@@ -3,12 +3,13 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronUp, HardHat, Star } from "lucide-react";
+import { ChevronDown, ChevronUp, HardHat, Star, UserPlus } from "lucide-react";
 
 const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
   { key: "canSilicone", label: "Silicone", group: "Products" },
@@ -30,6 +31,8 @@ export default function WorkerProfiles() {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
+  const [showNewWorker, setShowNewWorker] = useState(false);
+  const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "" });
 
   const { data: subs = [] } = useQuery({
     queryKey: ["subcontractors"],
@@ -47,6 +50,37 @@ export default function WorkerProfiles() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["worker-skills"] }); toast({ title: "Saved" }); },
   });
 
+  const createWorkerMutation = useMutation({
+    mutationFn: (data: typeof newWorker) =>
+      fetch("/api/subcontractors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          phone: data.phone || undefined,
+          abn: data.abn || undefined,
+          active: true,
+        }),
+      }).then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? "Could not add worker");
+        return r.json();
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subcontractors"] });
+      setNewWorker({ name: "", email: "", phone: "", abn: "" });
+      setShowNewWorker(false);
+      toast({ title: "Worker added" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not add worker",
+        description: error instanceof Error ? error.message : "Check the worker details and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const skillMap = new Map((skills as any[]).map((s: any) => [s.subcontractorId, s]));
 
   function getEdit(subId: number, skillData: any) {
@@ -60,9 +94,69 @@ export default function WorkerProfiles() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Worker Profiles</h1>
-        <p className="text-muted-foreground mt-1">Skill sets, competencies, experience and performance scores</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Worker Profiles</h1>
+            <p className="text-muted-foreground mt-1">Skill sets, competencies, experience and performance scores</p>
+          </div>
+          <Button onClick={() => setShowNewWorker((value) => !value)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Worker
+          </Button>
+        </div>
       </div>
+
+      {showNewWorker ? (
+        <Card>
+          <CardContent className="grid gap-4 pt-6 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerName">Name</Label>
+              <Input
+                id="newWorkerName"
+                value={newWorker.name}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, name: event.target.value }))}
+                autoComplete="name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerEmail">Email</Label>
+              <Input
+                id="newWorkerEmail"
+                type="email"
+                value={newWorker.email}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, email: event.target.value }))}
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerPhone">Phone</Label>
+              <Input
+                id="newWorkerPhone"
+                value={newWorker.phone}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, phone: event.target.value }))}
+                autoComplete="tel"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerAbn">ABN</Label>
+              <Input
+                id="newWorkerAbn"
+                value={newWorker.abn}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, abn: event.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 md:col-span-4">
+              <Button
+                onClick={() => createWorkerMutation.mutate(newWorker)}
+                disabled={!newWorker.name || !newWorker.email || createWorkerMutation.isPending}
+              >
+                {createWorkerMutation.isPending ? "Adding..." : "Add worker"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowNewWorker(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="space-y-3">
         {(subs as any[]).filter((s: any) => s.active).map((sub: any) => {
