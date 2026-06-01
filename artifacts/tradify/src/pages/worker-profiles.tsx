@@ -9,8 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronUp, HardHat, Star, UserPlus } from "lucide-react";
+import { ChevronDown, ChevronUp, FileCheck2, HardHat, ImageIcon, Star, Trash2, Upload, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import {
+  CREDENTIAL_TYPES,
+  type CredentialDraft,
+  type WorkerCredential,
+  compressCredentialImage,
+  credentialLabel,
+  emptyCredentialDraft,
+} from "@/lib/worker-credentials";
 
 const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
   { key: "canSilicone", label: "Silicone", group: "Products" },
@@ -33,6 +41,7 @@ export default function WorkerProfiles() {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
+  const [credentialDrafts, setCredentialDrafts] = useState<Record<number, CredentialDraft>>({});
   const [showNewWorker, setShowNewWorker] = useState(false);
   const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "" });
 
@@ -44,6 +53,11 @@ export default function WorkerProfiles() {
   const { data: skills = [] } = useQuery({
     queryKey: ["worker-skills"],
     queryFn: () => fetch("/api/worker-skills").then((r) => r.json()),
+  });
+
+  const { data: credentials = [] } = useQuery({
+    queryKey: ["worker-credentials"],
+    queryFn: () => fetch("/api/worker-credentials").then((r) => r.json()),
   });
 
   const saveMutation = useMutation({
@@ -83,14 +97,90 @@ export default function WorkerProfiles() {
     },
   });
 
+  const uploadCredentialMutation = useMutation({
+    mutationFn: async ({ subId, file, draft }: { subId: number; file: File; draft: CredentialDraft }) => {
+      const imageData = await compressCredentialImage(file);
+      const label = credentialLabel(draft.documentType);
+      const response = await fetch("/api/worker-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subcontractorId: subId,
+          documentType: draft.documentType,
+          label,
+          imageData,
+          fileName: file.name,
+          expiryDate: draft.expiryDate || undefined,
+          notes: draft.notes || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not upload credential");
+      return response.json();
+    },
+    onSuccess: (_credential, variables) => {
+      qc.invalidateQueries({ queryKey: ["worker-credentials"] });
+      setCredentialDrafts((prev) => ({
+        ...prev,
+        [variables.subId]: { documentType: variables.draft.documentType, expiryDate: "", notes: "" },
+      }));
+      toast({ title: "Credential uploaded" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not upload credential",
+        description: error instanceof Error ? error.message : "Choose a clear image and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCredentialMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/worker-credentials/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not delete credential");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["worker-credentials"] });
+      toast({ title: "Credential deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete credential",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const skillMap = new Map((skills as any[]).map((s: any) => [s.subcontractorId, s]));
+  const credentialsBySub = new Map<number, any[]>();
+  for (const credential of credentials as any[]) {
+    const list = credentialsBySub.get(credential.subcontractorId) ?? [];
+    list.push(credential);
+    credentialsBySub.set(credential.subcontractorId, list);
+  }
 
   function getEdit(subId: number, skillData: any) {
     return edits[subId] ?? skillData ?? {};
   }
 
+  function getCredentialDraft(subId: number) {
+    return credentialDrafts[subId] ?? emptyCredentialDraft();
+  }
+
   function updateEdit(subId: number, key: string, value: any) {
     setEdits((prev) => ({ ...prev, [subId]: { ...getEdit(subId, skillMap.get(subId)), [key]: value } }));
+  }
+
+  function updateCredentialDraft(subId: number, key: keyof CredentialDraft, value: string) {
+    setCredentialDrafts((prev) => ({ ...prev, [subId]: { ...getCredentialDraft(subId), [key]: value } }));
+  }
+
+  function handleCredentialUpload(subId: number, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    uploadCredentialMutation.mutate({ subId, file, draft: getCredentialDraft(subId) });
   }
 
   return (
@@ -169,6 +259,8 @@ export default function WorkerProfiles() {
         {(subs as any[]).filter((s: any) => s.active).map((sub: any) => {
           const sk = skillMap.get(sub.id);
           const edit = getEdit(sub.id, sk);
+          const subCredentials = credentialsBySub.get(sub.id) ?? [];
+          const credentialDraft = getCredentialDraft(sub.id);
           const isOpen = expanded === sub.id;
 
           return (
@@ -247,6 +339,98 @@ export default function WorkerProfiles() {
                       </div>
                     </div>
                   ))}
+
+                  {/* Credentials */}
+                  <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Licences & Documents</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Upload white cards, scissor lift licences, EWP tickets and other site credentials.
+                      </p>
+                    </div>
+                    {subCredentials.length > 0 ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {subCredentials.map((credential: WorkerCredential) => (
+                          <div key={credential.id} className="overflow-hidden rounded-md border bg-background">
+                            <div className="aspect-[4/3] bg-muted">
+                              <img src={credential.imageData} alt={credential.label} className="h-full w-full object-cover" />
+                            </div>
+                            <div className="space-y-2 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold">{credential.label}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {credential.expiryDate ? `Expires ${new Date(credential.expiryDate).toLocaleDateString("en-AU")}` : "No expiry date"}
+                                  </p>
+                                  {credential.notes ? <p className="mt-1 text-xs text-muted-foreground">{credential.notes}</p> : null}
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteCredentialMutation.mutate(credential.id)}
+                                  disabled={deleteCredentialMutation.isPending}
+                                  title="Delete credential"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-md border border-dashed bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                        <FileCheck2 className="h-4 w-4" />
+                        No credentials uploaded yet.
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Document type</Label>
+                        <Select
+                          value={credentialDraft.documentType}
+                          onValueChange={(value) => updateCredentialDraft(sub.id, "documentType", value)}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {CREDENTIAL_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Expiry date</Label>
+                        <Input
+                          type="date"
+                          value={credentialDraft.expiryDate}
+                          onChange={(event) => updateCredentialDraft(sub.id, "expiryDate", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label className="text-xs">Notes</Label>
+                        <Input
+                          value={credentialDraft.notes}
+                          onChange={(event) => updateCredentialDraft(sub.id, "notes", event.target.value)}
+                          placeholder="Card number, licence class, restrictions..."
+                        />
+                      </div>
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted sm:col-span-2">
+                        {uploadCredentialMutation.isPending ? <ImageIcon className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
+                        {uploadCredentialMutation.isPending ? "Uploading..." : `Upload ${credentialLabel(credentialDraft.documentType)}`}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(event) => handleCredentialUpload(sub.id, event)}
+                          disabled={uploadCredentialMutation.isPending}
+                        />
+                      </label>
+                    </div>
+                  </div>
 
                   {/* Notes */}
                   <div>

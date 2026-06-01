@@ -442,8 +442,6 @@ export interface Subcontractor {
   /** @nullable */
   phone?: string | null;
   /** @nullable */
-  vehiclePlate?: string | null;
-  /** @nullable */
   abn?: string | null;
   /** @nullable */
   ratePerMetre?: number | null;
@@ -456,7 +454,6 @@ export interface SubcontractorInput {
   name: string;
   email?: string;
   phone?: string;
-  vehiclePlate?: string;
   abn?: string;
   ratePerMetre?: number;
   active?: boolean;
@@ -466,7 +463,6 @@ export interface SubcontractorUpdate {
   name?: string;
   email?: string;
   phone?: string;
-  vehiclePlate?: string;
   abn?: string;
   ratePerMetre?: number;
   active?: boolean;

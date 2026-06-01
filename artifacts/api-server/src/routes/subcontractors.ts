@@ -19,7 +19,6 @@ function serializeSubcontractor(sub: typeof subcontractorsTable.$inferSelect, in
     name: sub.name,
     email: sub.email,
     phone: sub.phone,
-    vehiclePlate: sub.vehiclePlate,
     abn: sub.abn,
     active: sub.active,
     createdAt: sub.createdAt,
@@ -57,7 +56,6 @@ router.post("/subcontractors", requireAdmin, async (req, res) => {
     name: parsed.data.name,
     email: parsed.data.email ?? null,
     phone: parsed.data.phone ?? null,
-    vehiclePlate: parsed.data.vehiclePlate ?? null,
     abn: parsed.data.abn ?? null,
     ratePerMetre: parsed.data.ratePerMetre != null ? String(parsed.data.ratePerMetre) : null,
     active: parsed.data.active ?? true,
@@ -87,7 +85,6 @@ router.patch("/subcontractors/:id", requireAdmin, async (req, res) => {
   if (body.data.name !== undefined) updates.name = body.data.name;
   if (body.data.email !== undefined) updates.email = body.data.email;
   if (body.data.phone !== undefined) updates.phone = body.data.phone;
-  if (body.data.vehiclePlate !== undefined) updates.vehiclePlate = body.data.vehiclePlate;
   if (body.data.abn !== undefined) updates.abn = body.data.abn;
   if (body.data.ratePerMetre !== undefined) updates.ratePerMetre = String(body.data.ratePerMetre);
   if (body.data.active !== undefined) updates.active = body.data.active;

@@ -2880,8 +2880,6 @@ components:
           type: ["string", "null"]
         phone:
           type: ["string", "null"]
-        vehiclePlate:
-          type: ["string", "null"]
         abn:
           type: ["string", "null"]
         ratePerMetre:
@@ -2903,8 +2901,6 @@ components:
           type: string
         phone:
           type: string
-        vehiclePlate:
-          type: string
         abn:
           type: string
         ratePerMetre:
@@ -2920,8 +2916,6 @@ components:
         email:
           type: string
         phone:
-          type: string
-        vehiclePlate:
           type: string
         abn:
           type: string

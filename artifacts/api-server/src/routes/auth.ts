@@ -84,7 +84,6 @@ router.post("/auth/register", async (req, res) => {
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
   const abn = typeof req.body?.abn === "string" ? req.body.abn.trim() : "";
-  const vehiclePlate = typeof req.body?.vehiclePlate === "string" ? req.body.vehiclePlate.trim() : "";
 
   if (accountType === "admin" && (!adminSignupsEnabled() || submittedAdminSignupCode !== adminSignupCode())) {
     return res.status(403).json({ error: "Admin account creation is invite-only" });
@@ -101,7 +100,6 @@ router.post("/auth/register", async (req, res) => {
   if (password.length < 6 || password.length > 128) return res.status(400).json({ error: "Password must be at least 6 characters" });
   if (phone.length > 60) return res.status(400).json({ error: "Phone number is too long" });
   if (abn.length > 40) return res.status(400).json({ error: "ABN is too long" });
-  if (vehiclePlate.length > 30) return res.status(400).json({ error: "Vehicle registration is too long" });
   const [existingUser] = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(eq(appUsersTable.email, email));
   if (existingUser) {
     return res.status(409).json({ error: "An account already exists for this email" });
@@ -126,7 +124,6 @@ router.post("/auth/register", async (req, res) => {
         const updates: Record<string, unknown> = { name, active: true };
         if (phone) updates.phone = phone;
         if (abn) updates.abn = abn;
-        if (vehiclePlate) updates.vehiclePlate = vehiclePlate;
         [subcontractor] = await tx
           .update(subcontractorsTable)
           .set(updates)
@@ -142,7 +139,6 @@ router.post("/auth/register", async (req, res) => {
           email,
           phone: phone || null,
           abn: abn || null,
-          vehiclePlate: vehiclePlate || null,
           active: true,
         }).returning();
       }

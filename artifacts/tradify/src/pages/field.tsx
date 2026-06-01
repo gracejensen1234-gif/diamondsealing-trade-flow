@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ChangeEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListSubcontractors,
@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -26,8 +27,16 @@ import { useAuth } from "@/lib/auth";
 import { PhoneSetupCard } from "@/components/phone-setup-card";
 import { currentPushPermission, type PushPermissionState } from "@/lib/push-notifications";
 import {
+  CREDENTIAL_TYPES,
+  type WorkerCredential,
+  compressCredentialImage,
+  credentialLabel,
+  emptyCredentialDraft,
+} from "@/lib/worker-credentials";
+import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
+  FileCheck2, ImageIcon, Trash2, Upload,
 } from "lucide-react";
 
 // ─── Location verification ────────────────────────────────────────────────────
@@ -82,6 +91,7 @@ export default function FieldView() {
 
   // Push notification state
   const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
+  const [credentialDraft, setCredentialDraft] = useState(emptyCredentialDraft);
 
   useEffect(() => {
     if (isWorker) {
@@ -200,6 +210,69 @@ export default function FieldView() {
     },
     enabled: !!subId,
     refetchInterval: 60000,
+  });
+
+  const { data: credentials = [] } = useQuery<WorkerCredential[]>({
+    queryKey: ["worker-credentials", subId],
+    queryFn: async () => {
+      if (!subId) return [];
+      const response = await fetch(`/api/worker-credentials?subcontractorId=${subId}`);
+      if (!response.ok) throw new Error("Could not load licence documents");
+      return response.json();
+    },
+    enabled: Boolean(subId && isWorker),
+  });
+
+  const uploadCredentialMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!subId) throw new Error("Employee/subcontractor profile is not linked");
+      const imageData = await compressCredentialImage(file);
+      const response = await fetch("/api/worker-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subcontractorId: subId,
+          documentType: credentialDraft.documentType,
+          label: credentialLabel(credentialDraft.documentType),
+          imageData,
+          fileName: file.name,
+          expiryDate: credentialDraft.expiryDate || undefined,
+          notes: credentialDraft.notes || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not upload licence document");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["worker-credentials", subId] });
+      setCredentialDraft((draft) => ({ ...draft, expiryDate: "", notes: "" }));
+      toast({ title: "Licence document uploaded" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not upload licence document",
+        description: error instanceof Error ? error.message : "Choose a clear image and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCredentialMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/worker-credentials/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not delete licence document");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["worker-credentials", subId] });
+      toast({ title: "Licence document deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete licence document",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: urgentNotifications } = useQuery<any[]>({
@@ -322,6 +395,13 @@ export default function FieldView() {
   const isOnBreak = session?.status === "on_break";
   const unreadCount = unreadData?.count ?? 0;
   const pushEnabled = Boolean(pushServerStatus?.enabled);
+
+  function handleCredentialUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    uploadCredentialMutation.mutate(file);
+  }
 
   return (
     <div className="max-w-md mx-auto space-y-4 pb-20">
@@ -549,6 +629,98 @@ export default function FieldView() {
           )}
         </CardContent>
       </Card>
+
+      {isWorker && subId ? (
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileCheck2 className="h-4 w-4 text-primary" />
+              My Licences & Documents
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-2">
+            {credentials.length > 0 ? (
+              <div className="grid gap-2">
+                {credentials.map((credential) => (
+                  <div key={credential.id} className="flex gap-3 rounded-md border bg-background p-2">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                      <img src={credential.imageData} alt={credential.label} className="h-full w-full object-cover" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{credential.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {credential.expiryDate ? `Expires ${new Date(credential.expiryDate).toLocaleDateString("en-AU")}` : "No expiry date"}
+                      </p>
+                      {credential.notes ? <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{credential.notes}</p> : null}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteCredentialMutation.mutate(credential.id)}
+                      disabled={deleteCredentialMutation.isPending}
+                      title="Delete document"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                Upload your White Card, scissor lift licence, EWP ticket or other site documents.
+              </div>
+            )}
+
+            <div className="grid gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem]">
+                <div className="space-y-1">
+                  <Label className="text-xs">Document type</Label>
+                  <Select
+                    value={credentialDraft.documentType}
+                    onValueChange={(value) => setCredentialDraft((draft) => ({ ...draft, documentType: value }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CREDENTIAL_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Expiry date</Label>
+                  <Input
+                    type="date"
+                    value={credentialDraft.expiryDate}
+                    onChange={(event) => setCredentialDraft((draft) => ({ ...draft, expiryDate: event.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Notes</Label>
+                <Input
+                  value={credentialDraft.notes}
+                  onChange={(event) => setCredentialDraft((draft) => ({ ...draft, notes: event.target.value }))}
+                  placeholder="Card number, licence class, restrictions..."
+                />
+              </div>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted">
+                {uploadCredentialMutation.isPending ? <ImageIcon className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
+                {uploadCredentialMutation.isPending ? "Uploading..." : `Upload ${credentialLabel(credentialDraft.documentType)}`}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleCredentialUpload}
+                  disabled={uploadCredentialMutation.isPending}
+                />
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Today's jobs */}
       {subId && (

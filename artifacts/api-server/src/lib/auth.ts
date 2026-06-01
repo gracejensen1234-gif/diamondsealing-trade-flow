@@ -40,6 +40,7 @@ import {
   supplierOrdersTable,
   supplierProfilesTable,
   weeklyInvoicesTable,
+  workerCredentialsTable,
   weeklyPlannerProposalsTable,
   workerSkillsTable,
   workSessionsTable,
@@ -262,6 +263,7 @@ async function backfillLegacyCompanyRows(companyId: number) {
     db.update(supplierOrdersTable).set({ companyId }).where(isNull(supplierOrdersTable.companyId)),
     db.update(supplierProfilesTable).set({ companyId }).where(isNull(supplierProfilesTable.companyId)),
     db.update(weeklyInvoicesTable).set({ companyId }).where(isNull(weeklyInvoicesTable.companyId)),
+    db.update(workerCredentialsTable).set({ companyId }).where(isNull(workerCredentialsTable.companyId)),
     db.update(weeklyPlannerProposalsTable).set({ companyId }).where(isNull(weeklyPlannerProposalsTable.companyId)),
     db.update(workerSkillsTable).set({ companyId }).where(isNull(workerSkillsTable.companyId)),
     db.update(workSessionsTable).set({ companyId }).where(isNull(workSessionsTable.companyId)),
@@ -450,6 +452,7 @@ export function workerApiScope(req: Request, res: Response, next: NextFunction) 
     (method === "GET" && path === "/stock-items") ||
     path.startsWith("/notifications") ||
     path.startsWith("/push-subscriptions") ||
+    (path.startsWith("/worker-credentials") && ["GET", "POST", "DELETE"].includes(method)) ||
     (path.startsWith("/location-verifications") && method !== "PATCH");
 
   if (!allowed) {
