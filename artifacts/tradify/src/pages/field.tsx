@@ -427,9 +427,15 @@ export default function FieldView() {
   // ─── Action handlers with location verification ───────────────────────────
   const handleClockOn = useCallback(async () => {
     if (!subId) return;
-    await requestLocationVerification("clock_on", "clock-on", {});
+    const locationJob = dispatchList?.find(
+      (assignment) => assignment.status !== "completed" && Boolean(assignment.jobAddress),
+    );
+    await requestLocationVerification("clock_on", "clock-on", {
+      jobAssignmentId: locationJob?.id,
+      jobAddress: locationJob?.jobAddress ?? undefined,
+    });
     clockOn.mutate({ data: { subcontractorId: subId } });
-  }, [subId, requestLocationVerification, clockOn]);
+  }, [subId, dispatchList, requestLocationVerification, clockOn]);
 
   const handleClockOff = useCallback(async () => {
     if (!subId) return;
