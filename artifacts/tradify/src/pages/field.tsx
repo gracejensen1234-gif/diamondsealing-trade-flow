@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -446,6 +447,33 @@ export default function FieldView() {
       {!pushEnabled && (
         <PhoneSetupCard compact />
       )}
+
+      <Dialog
+        open={showPushPrompt && !!subId && !pushEnabled && pushStatus !== "granted" && pushStatus !== "unsupported"}
+        onOpenChange={(open) => {
+          if (!open) setShowPushPrompt(false);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-md bg-orange-500 text-white">
+              <Bell className="h-5 w-5" />
+            </div>
+            <DialogTitle>Turn on job notifications?</DialogTitle>
+            <DialogDescription>
+              SealFlow can alert you about new jobs, job changes, missing photos, stock pickups and urgent admin messages.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowPushPrompt(false)}>
+              Not now
+            </Button>
+            <Button onClick={handleEnablePush}>
+              Allow notifications
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Location consent prompt */}
       {locationPrompt && (
