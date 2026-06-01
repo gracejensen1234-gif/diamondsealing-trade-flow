@@ -22,6 +22,7 @@ export * from "./awards";
 export * from "./analytics";
 export * from "./worker-profiles";
 export * from "./worker-credentials";
+export * from "./leave-requests";
 export * from "./builder-profiles";
 export * from "./smart-allocation";
 export * from "./suppliers";

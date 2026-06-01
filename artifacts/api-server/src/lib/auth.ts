@@ -22,6 +22,7 @@ import {
   jobAssignmentsTable,
   jobReportsTable,
   jobsTable,
+  leaveRequestsTable,
   locationVerificationsTable,
   monthlyAwardsTable,
   monthlyRankingsTable,
@@ -245,6 +246,7 @@ async function backfillLegacyCompanyRows(companyId: number) {
     db.update(jobAssignmentsTable).set({ companyId }).where(isNull(jobAssignmentsTable.companyId)),
     db.update(jobReportsTable).set({ companyId }).where(isNull(jobReportsTable.companyId)),
     db.update(jobsTable).set({ companyId }).where(isNull(jobsTable.companyId)),
+    db.update(leaveRequestsTable).set({ companyId }).where(isNull(leaveRequestsTable.companyId)),
     db.update(locationVerificationsTable).set({ companyId }).where(isNull(locationVerificationsTable.companyId)),
     db.update(monthlyAwardsTable).set({ companyId }).where(isNull(monthlyAwardsTable.companyId)),
     db.update(monthlyRankingsTable).set({ companyId }).where(isNull(monthlyRankingsTable.companyId)),
@@ -453,6 +455,7 @@ export function workerApiScope(req: Request, res: Response, next: NextFunction) 
     path.startsWith("/notifications") ||
     path.startsWith("/push-subscriptions") ||
     (path.startsWith("/worker-credentials") && ["GET", "POST", "DELETE"].includes(method)) ||
+    (path.startsWith("/leave-requests") && ["GET", "POST", "DELETE"].includes(method)) ||
     (path.startsWith("/location-verifications") && method !== "PATCH");
 
   if (!allowed) {

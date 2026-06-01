@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -34,9 +35,16 @@ import {
   emptyCredentialDraft,
 } from "@/lib/worker-credentials";
 import {
+  type LeaveRequest,
+  formatDayOffDate,
+  leaveStatusBadgeVariant,
+  leaveStatusLabel,
+  todayDateInputValue,
+} from "@/lib/leave-requests";
+import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
-  FileCheck2, ImageIcon, Trash2, Upload,
+  CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload,
 } from "lucide-react";
 
 // ─── Location verification ────────────────────────────────────────────────────
@@ -92,6 +100,7 @@ export default function FieldView() {
   // Push notification state
   const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
   const [credentialDraft, setCredentialDraft] = useState(emptyCredentialDraft);
+  const [leaveForm, setLeaveForm] = useState({ dayOffDate: todayDateInputValue(), reason: "" });
 
   useEffect(() => {
     if (isWorker) {
@@ -223,6 +232,17 @@ export default function FieldView() {
     enabled: Boolean(subId && isWorker),
   });
 
+  const { data: leaveRequests = [] } = useQuery<LeaveRequest[]>({
+    queryKey: ["leave-requests", subId],
+    queryFn: async () => {
+      if (!subId) return [];
+      const response = await fetch(`/api/leave-requests?subcontractorId=${subId}`);
+      if (!response.ok) throw new Error("Could not load day off requests");
+      return response.json();
+    },
+    enabled: Boolean(subId && isWorker),
+  });
+
   const uploadCredentialMutation = useMutation({
     mutationFn: async (file: File) => {
       if (!subId) throw new Error("Employee/subcontractor profile is not linked");
@@ -269,6 +289,53 @@ export default function FieldView() {
     onError: (error) => {
       toast({
         title: "Could not delete licence document",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const requestLeaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!subId) throw new Error("Employee/subcontractor profile is not linked");
+      const response = await fetch("/api/leave-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subcontractorId: subId,
+          dayOffDate: leaveForm.dayOffDate,
+          reason: leaveForm.reason || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not send day off request");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests", subId] });
+      setLeaveForm({ dayOffDate: todayDateInputValue(), reason: "" });
+      toast({ title: "Day off request sent" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not send day off request",
+        description: error instanceof Error ? error.message : "Check the date and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const cancelLeaveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/leave-requests/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not cancel day off request");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests", subId] });
+      toast({ title: "Day off request cancelled" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not cancel request",
         description: error instanceof Error ? error.message : "Try again.",
         variant: "destructive",
       });
@@ -629,6 +696,82 @@ export default function FieldView() {
           )}
         </CardContent>
       </Card>
+
+      {isWorker && subId ? (
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              Day Off Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-2">
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Day off date</Label>
+                <Input
+                  type="date"
+                  value={leaveForm.dayOffDate}
+                  min={todayDateInputValue()}
+                  onChange={(event) => setLeaveForm((form) => ({ ...form, dayOffDate: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reason</Label>
+                <Textarea
+                  rows={2}
+                  value={leaveForm.reason}
+                  onChange={(event) => setLeaveForm((form) => ({ ...form, reason: event.target.value }))}
+                  placeholder="Optional note for admin..."
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => requestLeaveMutation.mutate()}
+                disabled={!leaveForm.dayOffDate || requestLeaveMutation.isPending}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                {requestLeaveMutation.isPending ? "Sending..." : "Request day off"}
+              </Button>
+            </div>
+
+            {leaveRequests.length > 0 ? (
+              <div className="space-y-2 border-t pt-3">
+                {leaveRequests.slice(0, 5).map((request) => (
+                  <div key={request.id} className="rounded-md border bg-background px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{formatDayOffDate(request.dayOffDate)}</p>
+                        {request.reason ? <p className="mt-0.5 text-xs text-muted-foreground">{request.reason}</p> : null}
+                        {request.adminNote ? <p className="mt-0.5 text-xs text-muted-foreground">Admin: {request.adminNote}</p> : null}
+                      </div>
+                      <Badge variant={leaveStatusBadgeVariant(request.status)}>
+                        {leaveStatusLabel(request.status)}
+                      </Badge>
+                    </div>
+                    {request.status === "pending" ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-7 px-2 text-xs text-muted-foreground"
+                        onClick={() => cancelLeaveMutation.mutate(request.id)}
+                        disabled={cancelLeaveMutation.isPending}
+                      >
+                        Cancel request
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                No day off requests yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {isWorker && subId ? (
         <Card>
