@@ -22,6 +22,7 @@ type AuthContextValue = {
   setupStatus: SetupStatus | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (input: { companyName: string; name: string; email: string; password: string }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -81,14 +82,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true };
   }, []);
 
+  const register = useCallback(async (input: { companyName: string; name: string; email: string; password: string }) => {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      return { ok: false, error: data?.error ?? "Could not create account" };
+    }
+
+    const data = (await response.json()) as { user: AuthUser };
+    setUser(data.user);
+    return { ok: true };
+  }, []);
+
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, setupStatus, loading, login, logout, refresh }),
-    [user, setupStatus, loading, login, logout, refresh],
+    () => ({ user, setupStatus, loading, login, register, logout, refresh }),
+    [user, setupStatus, loading, login, register, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

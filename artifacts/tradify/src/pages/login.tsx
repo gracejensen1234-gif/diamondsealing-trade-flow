@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Lock, LogIn, ShieldCheck } from "lucide-react";
+import { Building2, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,19 +7,43 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 
 export default function Login() {
-  const { login, setupStatus } = useAuth();
+  const { login, register, setupStatus } = useAuth();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [name, setName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (event: FormEvent) => {
+  const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
     const result = await login(email, password);
     setSubmitting(false);
     if (!result.ok) setError(result.error ?? "Could not sign in");
+  };
+
+  const handleRegister = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    const result = await register({
+      companyName,
+      name,
+      email: registerEmail,
+      password: registerPassword,
+    });
+    setSubmitting(false);
+    if (!result.ok) setError(result.error ?? "Could not create account");
+  };
+
+  const switchMode = (nextMode: "login" | "register") => {
+    setMode(nextMode);
+    setError("");
   };
 
   return (
@@ -38,38 +62,91 @@ export default function Login() {
         <Card className="border-white/10 bg-background/95 shadow-2xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              Sign in
+              {mode === "login" ? (
+                <ShieldCheck className="h-5 w-5 text-primary" />
+              ) : (
+                <Building2 className="h-5 w-5 text-primary" />
+              )}
+              {mode === "login" ? "Sign in" : "Create account"}
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-1">
+              <Button
+                type="button"
+                variant={mode === "login" ? "default" : "ghost"}
+                className="h-9"
+                onClick={() => switchMode("login")}
+              >
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign in
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "register" ? "default" : "ghost"}
+                className="h-9"
+                onClick={() => switchMode("register")}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Create
+              </Button>
+            </div>
+
             {setupStatus && !setupStatus.configured ? (
               <div className="mb-4 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-950">
                 Login needs admin environment variables on Render before the app can be used live.
               </div>
             ) : null}
 
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4" onSubmit={mode === "login" ? handleLogin : handleRegister}>
+              {mode === "register" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company name</Label>
+                    <Input
+                      id="companyName"
+                      type="text"
+                      autoComplete="organization"
+                      value={companyName}
+                      onChange={(event) => setCompanyName(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Your name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      autoComplete="name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      required
+                    />
+                  </div>
+                </>
+              ) : null}
+
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor={mode === "login" ? "email" : "registerEmail"}>Email</Label>
                 <Input
-                  id="email"
+                  id={mode === "login" ? "email" : "registerEmail"}
                   type="email"
                   autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  value={mode === "login" ? email : registerEmail}
+                  onChange={(event) => (mode === "login" ? setEmail(event.target.value) : setRegisterEmail(event.target.value))}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor={mode === "login" ? "password" : "registerPassword"}>Password</Label>
                 <Input
-                  id="password"
+                  id={mode === "login" ? "password" : "registerPassword"}
                   type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  value={mode === "login" ? password : registerPassword}
+                  onChange={(event) => (mode === "login" ? setPassword(event.target.value) : setRegisterPassword(event.target.value))}
                   required
+                  minLength={mode === "register" ? 6 : undefined}
                 />
               </div>
 
@@ -81,8 +158,10 @@ export default function Login() {
               ) : null}
 
               <Button type="submit" className="h-11 w-full" disabled={submitting}>
-                <LogIn className="mr-2 h-4 w-4" />
-                {submitting ? "Signing in..." : "Sign in"}
+                {mode === "login" ? <LogIn className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                {submitting
+                  ? mode === "login" ? "Signing in..." : "Creating account..."
+                  : mode === "login" ? "Sign in" : "Create account"}
               </Button>
             </form>
           </CardContent>
