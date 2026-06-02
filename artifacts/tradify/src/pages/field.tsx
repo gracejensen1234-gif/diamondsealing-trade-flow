@@ -13,6 +13,7 @@ import {
   useUpdateJobAssignment,
   getGetTodaySessionQueryKey,
   getListDispatchQueryKey,
+  type WorkSession,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -638,9 +639,16 @@ export default function FieldView() {
 
   const clockOn = useClockOn({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (newSession) => {
         toast({ title: "Clocked on — have a great day!" });
-        if (subId) queryClient.invalidateQueries({ queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }) });
+        if (subId) {
+          queryClient.setQueryData<WorkSession>(
+            getGetTodaySessionQueryKey({ subcontractorId: subId }),
+            newSession,
+          );
+          queryClient.invalidateQueries({ queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }) });
+          queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey(todayDispatchParams) });
+        }
       },
       onError: (error) => {
         toast({
