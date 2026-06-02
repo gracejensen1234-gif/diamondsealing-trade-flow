@@ -3134,6 +3134,10 @@ components:
         departedAt:
           type: ["string", "null"]
           format: date-time
+        hasJobReport:
+          type: boolean
+        jobReportPhotoCount:
+          type: integer
         createdAt:
           type: string
           format: date-time

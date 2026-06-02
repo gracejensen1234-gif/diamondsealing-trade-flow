@@ -30,6 +30,12 @@ type ReportInventoryItem = {
   currentQuantity: number;
 };
 
+type LocationVerificationResult = {
+  id?: number;
+  status: string;
+  distanceMetres?: number | null;
+};
+
 function formatQty(quantity: number, unit?: string | null) {
   return `${Number(quantity).toLocaleString("en-AU", { maximumFractionDigits: 2 })} ${unit ?? "unit"}`;
 }
@@ -79,6 +85,30 @@ function compressPhoto(file: File) {
   });
 }
 
+function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position.coords),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  });
+}
+
+async function postLocationVerification(payload: Record<string, unknown>): Promise<LocationVerificationResult> {
+  const response = await fetch("/api/location-verifications", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error ?? "Could not verify job departure location");
+  }
+  return data;
+}
+
 export default function FieldJobDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -103,6 +133,7 @@ export default function FieldJobDetail() {
   const [hoursWorked, setHoursWorked] = useState("");
   const [workDescription, setWorkDescription] = useState("");
   const [notes, setNotes] = useState("");
+  const [verifyingLocation, setVerifyingLocation] = useState(false);
   const initializedAssignmentRef = useRef<number | null>(null);
 
   const checkedJobHours = useMemo(() => {
@@ -192,8 +223,65 @@ export default function FieldJobDetail() {
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!assignment) return;
+    if (photos.length === 0) {
+      toast({
+        title: "Completion photo required",
+        description: "Upload at least one photo before leaving this job.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (user?.role === "worker") {
+      setVerifyingLocation(true);
+      try {
+        const coords = await getBrowserLocation();
+        if (!coords) {
+          await postLocationVerification({
+            subcontractorId: assignment.subcontractorId,
+            eventType: "job_departed",
+            jobAssignmentId: assignment.id,
+            status: "location_error",
+            workerConsented: false,
+          }).catch(() => undefined);
+          toast({
+            title: "Location required",
+            description: "Allow location access before submitting the report and leaving this job.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const verification = await postLocationVerification({
+          subcontractorId: assignment.subcontractorId,
+          eventType: "job_departed",
+          jobAssignmentId: assignment.id,
+          reportedLat: coords.latitude,
+          reportedLng: coords.longitude,
+          reportedAccuracyMetres: coords.accuracy,
+          workerConsented: true,
+        });
+
+        if (verification.status === "outside_range") {
+          toast({
+            title: "Location check recorded",
+            description: `You appear to be ${verification.distanceMetres ?? "?"}m from the job address. Admin will be able to review it.`,
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Location check failed",
+          description: error instanceof Error ? error.message : "Try again before leaving this job.",
+          variant: "destructive",
+        });
+        return;
+      } finally {
+        setVerifyingLocation(false);
+      }
+    }
     
     const stockPayload = Object.entries(stockUsed)
       .filter(([_, qty]) => qty > 0)
@@ -302,7 +390,7 @@ export default function FieldJobDetail() {
           <div className="space-y-3">
             <div>
               <Label className="text-base">Completion Photos <span className="text-destructive">*</span></Label>
-              <p className="text-xs text-muted-foreground mt-0.5">Take photos of the completed work for quality audit and job evidence.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Upload at least one completion photo before leaving this job.</p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {photos.map((src, i) => (
@@ -462,9 +550,9 @@ export default function FieldJobDetail() {
           <Button 
             className="w-full h-12 text-lg" 
             onClick={handleSubmit}
-            disabled={!isValid || createReport.isPending}
+            disabled={!isValid || createReport.isPending || verifyingLocation}
           >
-            Submit Report
+            {verifyingLocation ? "Checking Location..." : createReport.isPending ? "Submitting..." : "Submit Report & Leave Job"}
           </Button>
 
         </CardContent>

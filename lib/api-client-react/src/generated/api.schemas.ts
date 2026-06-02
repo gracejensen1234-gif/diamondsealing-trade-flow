@@ -597,6 +597,8 @@ export interface JobAssignment {
   arrivedAt?: string | null;
   /** @nullable */
   departedAt?: string | null;
+  hasJobReport?: boolean;
+  jobReportPhotoCount?: number;
   createdAt: string;
 }
 

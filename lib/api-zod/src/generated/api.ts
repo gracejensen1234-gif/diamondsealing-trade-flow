@@ -1211,6 +1211,8 @@ export const ListDispatchResponseItem = zod.object({
   "status": zod.enum(['pending', 'arrived', 'in_progress', 'completed']),
   "arrivedAt": zod.coerce.date().nullish(),
   "departedAt": zod.coerce.date().nullish(),
+  "hasJobReport": zod.boolean().optional(),
+  "jobReportPhotoCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListDispatchResponse = zod.array(ListDispatchResponseItem)
@@ -1282,6 +1284,8 @@ export const UpdateJobAssignmentResponse = zod.object({
   "status": zod.enum(['pending', 'arrived', 'in_progress', 'completed']),
   "arrivedAt": zod.coerce.date().nullish(),
   "departedAt": zod.coerce.date().nullish(),
+  "hasJobReport": zod.boolean().optional(),
+  "jobReportPhotoCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1315,6 +1319,8 @@ export const MarkArrivedResponse = zod.object({
   "status": zod.enum(['pending', 'arrived', 'in_progress', 'completed']),
   "arrivedAt": zod.coerce.date().nullish(),
   "departedAt": zod.coerce.date().nullish(),
+  "hasJobReport": zod.boolean().optional(),
+  "jobReportPhotoCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1343,6 +1349,8 @@ export const MarkDepartedResponse = zod.object({
   "status": zod.enum(['pending', 'arrived', 'in_progress', 'completed']),
   "arrivedAt": zod.coerce.date().nullish(),
   "departedAt": zod.coerce.date().nullish(),
+  "hasJobReport": zod.boolean().optional(),
+  "jobReportPhotoCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 

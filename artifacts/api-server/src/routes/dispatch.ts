@@ -66,6 +66,12 @@ async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
       .where(and(eq(subcontractorsTable.id, a.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
     subcontractorName = s?.name ?? null;
   }
+  const [report] = await db
+    .select({ id: jobReportsTable.id, photos: jobReportsTable.photos })
+    .from(jobReportsTable)
+    .where(and(eq(jobReportsTable.jobAssignmentId, a.id), eq(jobReportsTable.companyId, tenantId)))
+    .limit(1);
+  const reportPhotos = Array.isArray(report?.photos) ? report.photos : [];
 
   return {
     ...a,
@@ -79,6 +85,8 @@ async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
     plannedEndTime: a.plannedEndTime,
     estimatedMetres: a.estimatedMetres ? Number(a.estimatedMetres) : null,
     requiredColours: Array.isArray(a.requiredColours) ? a.requiredColours : [],
+    hasJobReport: Boolean(report),
+    jobReportPhotoCount: reportPhotos.length,
   };
 }
 
@@ -307,6 +315,19 @@ router.post("/dispatch/:id/depart", async (req, res) => {
   if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
   if (!isAdmin(req) && existing.status !== "arrived" && existing.status !== "in_progress") {
     return res.status(400).json({ error: "Check in to this job before checking out" });
+  }
+  if (!isAdmin(req)) {
+    const [report] = await db
+      .select({ id: jobReportsTable.id, photos: jobReportsTable.photos })
+      .from(jobReportsTable)
+      .where(and(eq(jobReportsTable.jobAssignmentId, existing.id), eq(jobReportsTable.companyId, companyId(req))))
+      .limit(1);
+    const photos = Array.isArray(report?.photos) ? report.photos : [];
+    if (!report || photos.length === 0) {
+      return res.status(400).json({
+        error: "Submit the job report with at least one completion photo before checking out of this job",
+      });
+    }
   }
 
   const [a] = await db.update(jobAssignmentsTable).set({

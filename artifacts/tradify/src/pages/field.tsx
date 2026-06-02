@@ -1539,19 +1539,32 @@ export default function FieldView() {
                                 Start Work
                               </Button>
                             )}
-                            <Button
-                              className="flex-1"
-                              onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
-                              disabled={markDeparted.isPending || !!locationPrompt}
-                            >
-                              Check Out of Job
-                            </Button>
+                            {isWorker ? (
+                              <Button asChild className="flex-1">
+                                <Link href={`/field/jobs/${assignment.id}`}>Submit Report & Leave Job</Link>
+                              </Button>
+                            ) : (
+                              <Button
+                                className="flex-1"
+                                onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
+                                disabled={markDeparted.isPending || !!locationPrompt}
+                              >
+                                Check Out of Job
+                              </Button>
+                            )}
                           </div>
                         )}
                         {assignment.status === "completed" && (
-                          <Button asChild variant="outline" className="w-full">
-                            <Link href={`/field/jobs/${assignment.id}`}>Submit Job Report</Link>
-                          </Button>
+                          assignment.hasJobReport ? (
+                            <div className="flex w-full items-center justify-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                              <span>Report submitted · {assignment.jobReportPhotoCount ?? 0} photo{assignment.jobReportPhotoCount === 1 ? "" : "s"}</span>
+                            </div>
+                          ) : (
+                            <Button asChild variant="outline" className="w-full">
+                              <Link href={`/field/jobs/${assignment.id}`}>Submit Job Report</Link>
+                            </Button>
+                          )
                         )}
                       </>
                     ) : (
