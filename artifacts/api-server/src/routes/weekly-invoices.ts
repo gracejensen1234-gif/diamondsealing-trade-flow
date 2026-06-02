@@ -5,6 +5,7 @@ import {
   jobReportsTable,
   subcontractorsTable,
   jobsTable,
+  workSessionsTable,
   xeroSettingsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -17,7 +18,7 @@ import {
   SubmitWeeklyInvoiceParams,
 } from "@workspace/api-zod";
 import { dateOnlyOrToday } from "../lib/date-utils.js";
-import { companyId } from "../lib/auth.js";
+import { companyId, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
 const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
@@ -48,6 +49,14 @@ type XeroInvoiceResponse = {
   }>;
 };
 
+type WeeklyInvoiceBuild = {
+  lineItems: Array<WeeklyInvoiceLineItem & { stockCost?: number }>;
+  totalMetres: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+};
+
 function serializeInvoice(inv: typeof weeklyInvoicesTable.$inferSelect, subName: string | null = null) {
   return {
     ...inv,
@@ -70,6 +79,29 @@ function addDays(date: string, days: number) {
   return result.toISOString().split("T")[0];
 }
 
+function mondayForDate(value?: string) {
+  const date = new Date(`${dateOnlyOrToday(value)}T00:00:00`);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date.toISOString().split("T")[0];
+}
+
+function workSessionMinutes(session: typeof workSessionsTable.$inferSelect) {
+  if (!session.clockedOnAt) return 0;
+  const end = session.clockedOffAt ?? new Date();
+  let breakMinutes = session.totalBreakMinutes ?? 0;
+  if (session.status === "on_break" && session.breakStartAt) {
+    breakMinutes += Math.max(0, Math.round((Date.now() - new Date(session.breakStartAt).getTime()) / 60000));
+  }
+  const minutes = Math.round((new Date(end).getTime() - new Date(session.clockedOnAt).getTime()) / 60000) - breakMinutes;
+  return Math.max(0, minutes);
+}
+
+function money(value: number) {
+  return Number(value.toFixed(2));
+}
+
 function formatXeroCsvDate(date: string) {
   const parsed = new Date(`${date}T00:00:00`);
   return parsed.toLocaleDateString("en-AU", {
@@ -86,6 +118,177 @@ function csvEscape(value: unknown) {
 
 function lineItems(inv: typeof weeklyInvoicesTable.$inferSelect) {
   return Array.isArray(inv.lineItems) ? (inv.lineItems as WeeklyInvoiceLineItem[]) : [];
+}
+
+function submittedReportIds(invoices: Array<typeof weeklyInvoicesTable.$inferSelect>) {
+  const reportIds = new Set<number>();
+  for (const invoice of invoices) {
+    if (invoice.status !== "submitted" && invoice.status !== "paid") continue;
+    for (const item of lineItems(invoice)) {
+      if (item.reportId) reportIds.add(item.reportId);
+    }
+  }
+  return reportIds;
+}
+
+async function buildWeeklyInvoiceValues(
+  tenantId: number,
+  sub: typeof subcontractorsTable.$inferSelect,
+  reports: Array<typeof jobReportsTable.$inferSelect>,
+): Promise<WeeklyInvoiceBuild> {
+  const ratePerMetre = sub.ratePerMetre ? Number(sub.ratePerMetre) : 0;
+  const items = await Promise.all(reports.map(async (r) => {
+    const [job] = r.jobId
+      ? await db.select().from(jobsTable).where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
+      : [null];
+    const metres = Number(r.metersCompleted);
+    const amount = metres * ratePerMetre;
+    return {
+      jobId: r.jobId,
+      jobTitle: job?.title ?? "Unknown Job",
+      jobAddress: job?.address ?? null,
+      dispatchDate: r.dispatchDate ?? null,
+      metersCompleted: metres,
+      ratePerMetre,
+      amount: money(amount),
+      stockCost: 0,
+      reportId: r.id,
+    };
+  }));
+  const totalMetres = items.reduce((sum, item) => sum + Number(item.metersCompleted ?? 0), 0);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+  const tax = subtotal * 0.1;
+  return {
+    lineItems: items,
+    totalMetres: money(totalMetres),
+    subtotal: money(subtotal),
+    tax: money(tax),
+    total: money(subtotal + tax),
+  };
+}
+
+async function getWeekContext(tenantId: number, subcontractorId: number, weekStartInput?: string) {
+  const weekStart = mondayForDate(weekStartInput);
+  const weekEnd = addDays(weekStart, 6);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
+  if (!sub) return null;
+
+  const [reports, sessions, invoices] = await Promise.all([
+    db
+      .select()
+      .from(jobReportsTable)
+      .where(and(
+        eq(jobReportsTable.companyId, tenantId),
+        eq(jobReportsTable.subcontractorId, subcontractorId),
+        gte(jobReportsTable.dispatchDate, weekStart),
+        lte(jobReportsTable.dispatchDate, weekEnd),
+      )),
+    db
+      .select()
+      .from(workSessionsTable)
+      .where(and(
+        eq(workSessionsTable.companyId, tenantId),
+        eq(workSessionsTable.subcontractorId, subcontractorId),
+        gte(workSessionsTable.date, weekStart),
+        lte(workSessionsTable.date, weekEnd),
+      )),
+    db
+      .select()
+      .from(weeklyInvoicesTable)
+      .where(and(
+        eq(weeklyInvoicesTable.companyId, tenantId),
+        eq(weeklyInvoicesTable.subcontractorId, subcontractorId),
+        eq(weeklyInvoicesTable.weekStartDate, weekStart),
+      )),
+  ]);
+
+  return { sub, weekStart, weekEnd, reports, sessions, invoices };
+}
+
+async function buildEarningsSummary(tenantId: number, subcontractorId: number, weekStartInput?: string) {
+  const context = await getWeekContext(tenantId, subcontractorId, weekStartInput);
+  if (!context) return null;
+  const { sub, weekStart, weekEnd, reports, sessions, invoices } = context;
+  const submittedIds = submittedReportIds(invoices);
+  const uninvoicedReports = reports.filter((report) => !submittedIds.has(report.id));
+  const earnedValues = await buildWeeklyInvoiceValues(tenantId, sub, reports);
+  const toInvoiceValues = await buildWeeklyInvoiceValues(tenantId, sub, uninvoicedReports);
+  const totalWorkMinutes = sessions.reduce((sum, session) => sum + workSessionMinutes(session), 0);
+  const draftInvoice = invoices.find((invoice) => invoice.status === "draft") ?? null;
+  const latestSubmittedInvoice =
+    [...invoices].reverse().find((invoice) => invoice.status === "submitted" || invoice.status === "paid") ?? null;
+
+  return {
+    subcontractorId,
+    subcontractorName: sub.name,
+    weekStartDate: weekStart,
+    weekEndDate: weekEnd,
+    totalWorkMinutes,
+    totalHours: Number((totalWorkMinutes / 60).toFixed(2)),
+    ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : 0,
+    completedMetres: earnedValues.totalMetres,
+    earnedSubtotal: earnedValues.subtotal,
+    earnedTax: earnedValues.tax,
+    earnedGross: earnedValues.total,
+    toInvoiceSubtotal: toInvoiceValues.subtotal,
+    toInvoiceTax: toInvoiceValues.tax,
+    toInvoiceGross: toInvoiceValues.total,
+    uninvoicedMetres: toInvoiceValues.totalMetres,
+    lineItemCount: earnedValues.lineItems.length,
+    uninvoicedLineItemCount: toInvoiceValues.lineItems.length,
+    draftInvoiceId: draftInvoice?.id ?? null,
+    submittedInvoiceId: latestSubmittedInvoice?.id ?? null,
+    xeroInvoiceId: latestSubmittedInvoice?.xeroInvoiceId ?? null,
+    submittedAt: latestSubmittedInvoice?.submittedAt ?? null,
+  };
+}
+
+async function upsertCurrentWeeklyInvoice(tenantId: number, subcontractorId: number, weekStartInput?: string) {
+  const context = await getWeekContext(tenantId, subcontractorId, weekStartInput);
+  if (!context) return null;
+  const { sub, weekStart, weekEnd, reports, invoices } = context;
+  const submittedIds = submittedReportIds(invoices);
+  const uninvoicedReports = reports.filter((report) => !submittedIds.has(report.id));
+  const values = await buildWeeklyInvoiceValues(tenantId, sub, uninvoicedReports);
+  if (values.lineItems.length === 0) {
+    return { sub, invoice: null, values };
+  }
+
+  const draft = invoices.find((invoice) => invoice.status === "draft") ?? null;
+  if (draft) {
+    const [updated] = await db
+      .update(weeklyInvoicesTable)
+      .set({
+        lineItems: values.lineItems,
+        totalMetres: String(values.totalMetres.toFixed(2)),
+        subtotal: String(values.subtotal.toFixed(2)),
+        tax: String(values.tax.toFixed(2)),
+        total: String(values.total.toFixed(2)),
+      })
+      .where(and(eq(weeklyInvoicesTable.id, draft.id), eq(weeklyInvoicesTable.companyId, tenantId)))
+      .returning();
+    return { sub, invoice: updated, values };
+  }
+
+  const [created] = await db
+    .insert(weeklyInvoicesTable)
+    .values({
+      subcontractorId,
+      companyId: tenantId,
+      weekStartDate: weekStart,
+      weekEndDate: weekEnd,
+      status: "draft",
+      lineItems: values.lineItems,
+      totalMetres: String(values.totalMetres.toFixed(2)),
+      subtotal: String(values.subtotal.toFixed(2)),
+      tax: String(values.tax.toFixed(2)),
+      total: String(values.total.toFixed(2)),
+    })
+    .returning();
+  return { sub, invoice: created, values };
 }
 
 function getXeroClientId(settings: typeof xeroSettingsTable.$inferSelect) {
@@ -270,7 +473,12 @@ router.get("/weekly-invoices", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid query" });
 
   const conditions = [eq(weeklyInvoicesTable.companyId, companyId(req))];
-  if (parsed.data.subcontractorId) conditions.push(eq(weeklyInvoicesTable.subcontractorId, parsed.data.subcontractorId));
+  const ownSubcontractorId = workerSubcontractorId(req);
+  if (ownSubcontractorId) {
+    conditions.push(eq(weeklyInvoicesTable.subcontractorId, ownSubcontractorId));
+  } else if (parsed.data.subcontractorId) {
+    conditions.push(eq(weeklyInvoicesTable.subcontractorId, parsed.data.subcontractorId));
+  }
   if (parsed.data.status) conditions.push(eq(weeklyInvoicesTable.status, parsed.data.status));
 
   const invoices = await db.select().from(weeklyInvoicesTable)
@@ -281,6 +489,56 @@ router.get("/weekly-invoices", async (req, res) => {
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   return res.json(invoices.map((i) => serializeInvoice(i, subMap.get(i.subcontractorId) ?? null)));
+});
+
+router.get("/weekly-invoices/earnings-summary", async (req, res) => {
+  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  if (!subcontractorId) return res.status(400).json({ error: "subcontractorId required" });
+  if (!requireSubcontractorAccess(req, res, subcontractorId)) return;
+
+  const summary = await buildEarningsSummary(companyId(req), subcontractorId, req.query.weekStartDate as string | undefined);
+  if (!summary) return res.status(404).json({ error: "Employee/subcontractor not found" });
+  return res.json(summary);
+});
+
+router.post("/weekly-invoices/submit-current", async (req, res) => {
+  const subcontractorId = workerSubcontractorId(req) ?? (req.body.subcontractorId ? Number(req.body.subcontractorId) : undefined);
+  if (!subcontractorId) return res.status(400).json({ error: "subcontractorId required" });
+  if (!requireSubcontractorAccess(req, res, subcontractorId)) return;
+
+  const tenantId = companyId(req);
+  const prepared = await upsertCurrentWeeklyInvoice(tenantId, subcontractorId, req.body.weekStartDate);
+  if (!prepared) return res.status(404).json({ error: "Employee/subcontractor not found" });
+  if (!prepared.invoice) {
+    return res.status(400).json({ error: "No uninvoiced completed work for this week" });
+  }
+  if (!prepared.sub.ratePerMetre || Number(prepared.sub.ratePerMetre) <= 0) {
+    return res.status(400).json({ error: "Rate per metre must be set before sending an invoice to Xero" });
+  }
+
+  let xeroInvoiceId: string;
+  try {
+    xeroInvoiceId = await createXeroDraftBill(prepared.invoice, prepared.sub.name);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not submit invoice to Xero";
+    return res.status(400).json({
+      error: "Xero submission failed",
+      message,
+      invoice: serializeInvoice(prepared.invoice, prepared.sub.name),
+      csvDownloadUrl: `/api/weekly-invoices/${prepared.invoice.id}/xero-csv`,
+    });
+  }
+
+  const [submitted] = await db.update(weeklyInvoicesTable).set({
+    status: "submitted",
+    submittedAt: new Date(),
+    xeroInvoiceId,
+  }).where(and(eq(weeklyInvoicesTable.id, prepared.invoice.id), eq(weeklyInvoicesTable.companyId, tenantId))).returning();
+
+  return res.json({
+    invoice: serializeInvoice(submitted, prepared.sub.name),
+    summary: await buildEarningsSummary(tenantId, subcontractorId, req.body.weekStartDate),
+  });
 });
 
 router.post("/weekly-invoices/generate", async (req, res) => {
@@ -368,6 +626,7 @@ router.get("/weekly-invoices/:id", async (req, res) => {
     .from(weeklyInvoicesTable)
     .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
   if (!inv) return res.status(404).json({ error: "Not found" });
+  if (!requireSubcontractorAccess(req, res, inv.subcontractorId)) return;
 
   const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, inv.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   return res.json(serializeInvoice(inv, sub?.name ?? null));
@@ -382,6 +641,7 @@ router.get("/weekly-invoices/:id/xero-csv", async (req, res) => {
     .from(weeklyInvoicesTable)
     .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
   if (!inv) return res.status(404).json({ error: "Not found" });
+  if (!requireSubcontractorAccess(req, res, inv.subcontractorId)) return;
 
   const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, inv.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
   const csv = await buildXeroCsv(inv, sub?.name ?? null);
@@ -420,6 +680,7 @@ router.post("/weekly-invoices/:id/submit", async (req, res) => {
     .from(weeklyInvoicesTable)
     .where(and(eq(weeklyInvoicesTable.id, parsed.data.id), eq(weeklyInvoicesTable.companyId, companyId(req))));
   if (!existing) return res.status(404).json({ error: "Not found" });
+  if (!requireSubcontractorAccess(req, res, existing.subcontractorId)) return;
 
   const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, existing.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
 

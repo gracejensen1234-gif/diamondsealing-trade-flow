@@ -455,6 +455,9 @@ export function workerApiScope(req: Request, res: Response, next: NextFunction) 
     (method === "GET" && path.startsWith("/sub-inventory")) ||
     (method === "GET" && path === "/inventory-transactions") ||
     (path === "/restock-requests" && ["GET", "POST"].includes(method)) ||
+    (path === "/weekly-invoices/earnings-summary" && method === "GET") ||
+    (path === "/weekly-invoices/submit-current" && method === "POST") ||
+    (method === "GET" && /^\/weekly-invoices\/\d+\/xero-csv$/.test(path)) ||
     path.startsWith("/notifications") ||
     path.startsWith("/push-subscriptions") ||
     (path.startsWith("/worker-credentials") && ["GET", "POST", "DELETE"].includes(method)) ||

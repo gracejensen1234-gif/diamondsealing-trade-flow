@@ -47,6 +47,7 @@ import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronLeft, ChevronRight, Navigation, CheckCircle2, XCircle,
   CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload, Package, ArrowDown, ArrowUp,
+  DollarSign, Receipt,
 } from "lucide-react";
 
 const timeWindowLabels: Record<string, string> = {
@@ -111,6 +112,40 @@ type FieldRestockRequest = {
   updatedAt: string;
 };
 
+type FieldEarningsSummary = {
+  subcontractorId: number;
+  subcontractorName: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  totalWorkMinutes: number;
+  totalHours: number;
+  ratePerMetre: number;
+  completedMetres: number;
+  earnedSubtotal: number;
+  earnedTax: number;
+  earnedGross: number;
+  toInvoiceSubtotal: number;
+  toInvoiceTax: number;
+  toInvoiceGross: number;
+  uninvoicedMetres: number;
+  lineItemCount: number;
+  uninvoicedLineItemCount: number;
+  draftInvoiceId?: number | null;
+  submittedInvoiceId?: number | null;
+  xeroInvoiceId?: string | null;
+  submittedAt?: string | null;
+};
+
+type SubmitCurrentInvoiceResponse = {
+  invoice?: {
+    id: number;
+    status: string;
+    xeroInvoiceId?: string | null;
+  } | null;
+  summary?: FieldEarningsSummary | null;
+  csvDownloadUrl?: string;
+};
+
 async function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
   if (!navigator.geolocation) return null;
   return new Promise((resolve) =>
@@ -137,6 +172,13 @@ async function postLocationVerification(payload: Record<string, unknown>) {
 function formatQty(quantity: number, unit?: string | null) {
   const display = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(1);
   return `${display} ${unit ?? "units"}`;
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+  }).format(Number.isFinite(value) ? value : 0);
 }
 
 function textMatchesStock(item: FieldInventoryItem, requirement: string) {
@@ -346,6 +388,53 @@ export default function FieldView() {
       return response.json();
     },
     enabled: Boolean(subId),
+  });
+
+  const {
+    data: earningsSummary,
+    isLoading: loadingEarningsSummary,
+  } = useQuery<FieldEarningsSummary>({
+    queryKey: ["field-earnings-summary", subId],
+    queryFn: async () => {
+      if (!subId) throw new Error("Employee/subcontractor profile is not linked");
+      const response = await fetch(`/api/weekly-invoices/earnings-summary?subcontractorId=${subId}`);
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not load earnings");
+      return response.json();
+    },
+    enabled: Boolean(subId && isWorker),
+    refetchInterval: 30000,
+  });
+
+  const submitCurrentInvoiceMutation = useMutation<SubmitCurrentInvoiceResponse>({
+    mutationFn: async () => {
+      if (!subId) throw new Error("Employee/subcontractor profile is not linked");
+      const response = await fetch("/api/weekly-invoices/submit-current", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subcontractorId: subId }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.message ?? data?.error ?? "Could not send invoice to Xero");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["field-earnings-summary", subId] });
+      toast({
+        title: "Invoice sent to Xero",
+        description: data.invoice?.xeroInvoiceId
+          ? "A draft bill has been created in Xero."
+          : "Your weekly invoice has been submitted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not send invoice",
+        description: error instanceof Error ? error.message : "Check the Xero connection and try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -708,6 +797,15 @@ export default function FieldView() {
       .filter((request) => request.status === "pending" || request.status === "approved")
       .slice(0, 5);
   }, [restockRequests]);
+  const earningsWeekLabel = earningsSummary
+    ? `${formatDayOffDate(earningsSummary.weekStartDate)} to ${formatDayOffDate(earningsSummary.weekEndDate)}`
+    : "This week";
+  const canSubmitCurrentInvoice = Boolean(
+    earningsSummary &&
+    earningsSummary.toInvoiceGross > 0 &&
+    earningsSummary.uninvoicedLineItemCount > 0 &&
+    earningsSummary.ratePerMetre > 0,
+  );
 
   function handleCredentialUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -947,6 +1045,96 @@ export default function FieldView() {
           )}
         </CardContent>
       </Card>
+
+      {isWorker && subId ? (
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="h-4 w-4 text-primary" />
+              Hours & Earnings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 pt-2">
+            {loadingEarningsSummary ? (
+              <div className="space-y-3">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : earningsSummary ? (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{earningsWeekLabel}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight">
+                      {formatCurrency(earningsSummary.toInvoiceGross)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Gross ready to invoice</p>
+                  </div>
+                  <Badge variant={earningsSummary.toInvoiceGross > 0 ? "default" : "secondary"}>
+                    {earningsSummary.uninvoicedLineItemCount} job report{earningsSummary.uninvoicedLineItemCount === 1 ? "" : "s"}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      Hours worked
+                    </div>
+                    <p className="mt-1 text-lg font-semibold">{earningsSummary.totalHours.toFixed(2)}</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      Gross earned
+                    </div>
+                    <p className="mt-1 text-lg font-semibold">{formatCurrency(earningsSummary.earnedGross)}</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Metres this week</p>
+                    <p className="mt-1 text-lg font-semibold">{earningsSummary.completedMetres.toFixed(2)}m</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Rate per metre</p>
+                    <p className="mt-1 text-lg font-semibold">{formatCurrency(earningsSummary.ratePerMetre)}</p>
+                  </div>
+                </div>
+
+                {earningsSummary.ratePerMetre <= 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    Your rate per metre has not been set yet. Admin must set it before invoices can be sent.
+                  </div>
+                ) : null}
+
+                <Button
+                  className="w-full"
+                  onClick={() => submitCurrentInvoiceMutation.mutate()}
+                  disabled={!canSubmitCurrentInvoice || submitCurrentInvoiceMutation.isPending}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {submitCurrentInvoiceMutation.isPending ? "Sending to Xero..." : "Send current invoice to Xero"}
+                </Button>
+
+                {earningsSummary.submittedAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    Last sent {new Date(earningsSummary.submittedAt).toLocaleString("en-AU", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {earningsSummary.xeroInvoiceId ? ` - Xero ${earningsSummary.xeroInvoiceId}` : ""}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                Earnings are available once your employee/subcontractor profile is linked.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {isWorker && subId ? (
         <Card>
