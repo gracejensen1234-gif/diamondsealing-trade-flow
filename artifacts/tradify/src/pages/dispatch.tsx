@@ -16,9 +16,29 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarIcon, GripVertical, Plus, Trash2, Edit2 } from "lucide-react";
+import { CalendarIcon, GripVertical, Plus, Trash2 } from "lucide-react";
+
+const timeWindowLabels: Record<string, string> = {
+  full_day: "Full day",
+  morning: "Morning",
+  afternoon: "Afternoon",
+  custom: "Custom time",
+};
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function optionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 export default function Dispatch() {
   const { toast } = useToast();
@@ -30,6 +50,11 @@ export default function Dispatch() {
   const [selectedJob, setSelectedJob] = useState("");
   const [selectedSub, setSelectedSub] = useState("");
   const [order, setOrder] = useState("1");
+  const [workArea, setWorkArea] = useState("");
+  const [timeWindow, setTimeWindow] = useState("full_day");
+  const [plannedStartTime, setPlannedStartTime] = useState("");
+  const [plannedEndTime, setPlannedEndTime] = useState("");
+  const [estimatedMetres, setEstimatedMetres] = useState("");
   const [colours, setColours] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -62,6 +87,11 @@ export default function Dispatch() {
     setSelectedJob("");
     setSelectedSub("");
     setOrder("1");
+    setWorkArea("");
+    setTimeWindow("full_day");
+    setPlannedStartTime("");
+    setPlannedEndTime("");
+    setEstimatedMetres("");
     setColours("");
     setContactName("");
     setContactPhone("");
@@ -78,10 +108,15 @@ export default function Dispatch() {
             jobId: parseInt(selectedJob),
             subcontractorId: selectedSub ? parseInt(selectedSub) : undefined,
             scheduledOrder: parseInt(order),
+            workArea: optionalText(workArea),
+            timeWindow,
+            plannedStartTime: optionalText(plannedStartTime),
+            plannedEndTime: optionalText(plannedEndTime),
+            estimatedMetres: optionalNumber(estimatedMetres),
             requiredColours: colours ? colours.split(',').map(c => c.trim()) : [],
-            builderContactName: contactName,
-            builderContactPhone: contactPhone,
-            notes
+            builderContactName: optionalText(contactName),
+            builderContactPhone: optionalText(contactPhone),
+            notes: optionalText(notes)
           }
         ]
       }
@@ -95,7 +130,7 @@ export default function Dispatch() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dispatch</h1>
-          <p className="text-muted-foreground mt-2">Manage daily assignments for subcontractors.</p>
+          <p className="text-muted-foreground mt-2">Break larger jobs into daily work blocks for employees/subcontractors.</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -107,17 +142,17 @@ export default function Dispatch() {
           />
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" /> Assign Job</Button>
+              <Button><Plus className="h-4 w-4 mr-2" /> Assign Work Block</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Assign Job to Schedule</DialogTitle>
+                <DialogTitle>Assign Work Block</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Job</Label>
+                  <Label>Job / project</Label>
                   <Select value={selectedJob} onValueChange={setSelectedJob}>
-                    <SelectTrigger><SelectValue placeholder="Select a job" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select a job or project" /></SelectTrigger>
                     <SelectContent>
                       {pendingJobs.map(j => (
                         <SelectItem key={j.id} value={j.id.toString()}>{j.title}</SelectItem>
@@ -125,11 +160,20 @@ export default function Dispatch() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Work block / units</Label>
+                  <Input
+                    value={workArea}
+                    onChange={(e) => setWorkArea(e.target.value)}
+                    placeholder="e.g. Units 1-4 bathrooms, Level 2 balconies, Block B"
+                  />
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Subcontractor</Label>
-                    <Select value={selectedSub} onValueChange={setSelectedSub}>
+                    <Label>Employee/Subcontractor</Label>
+                    <Select value={selectedSub || "none"} onValueChange={(value) => setSelectedSub(value === "none" ? "" : value)}>
                       <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Unassigned</SelectItem>
@@ -143,6 +187,41 @@ export default function Dispatch() {
                     <Label>Order / Stop #</Label>
                     <Input type="number" value={order} onChange={(e) => setOrder(e.target.value)} min="1" />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Day part</Label>
+                    <Select value={timeWindow} onValueChange={setTimeWindow}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full_day">Full day</SelectItem>
+                        <SelectItem value="morning">Morning</SelectItem>
+                        <SelectItem value="afternoon">Afternoon</SelectItem>
+                        <SelectItem value="custom">Custom time</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Start</Label>
+                    <Input type="time" value={plannedStartTime} onChange={(e) => setPlannedStartTime(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Finish</Label>
+                    <Input type="time" value={plannedEndTime} onChange={(e) => setPlannedEndTime(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Estimated metres for this block</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={estimatedMetres}
+                    onChange={(e) => setEstimatedMetres(e.target.value)}
+                    placeholder="e.g. 80"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -162,12 +241,17 @@ export default function Dispatch() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Notes for Subby</Label>
-                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  <Label>Instructions for this block</Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g. Complete wet area internals first, leave balconies for afternoon crew."
+                    rows={3}
+                  />
                 </div>
 
                 <Button className="w-full mt-4" onClick={handleCreate} disabled={!selectedJob || createDispatch.isPending}>
-                  Add to Schedule
+                  Add Work Block
                 </Button>
               </div>
             </DialogContent>
@@ -179,8 +263,8 @@ export default function Dispatch() {
         {/* Left Column: Available Jobs */}
         <Card className="col-span-1 border-dashed">
           <CardHeader className="bg-muted/30">
-            <CardTitle className="text-lg">Pending Jobs</CardTitle>
-            <CardDescription>Available to schedule</CardDescription>
+            <CardTitle className="text-lg">Pending Jobs / Projects</CardTitle>
+            <CardDescription>Select one, then schedule one block at a time</CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-3">
             {loadingJobs ? (
@@ -208,8 +292,8 @@ export default function Dispatch() {
         {/* Right Column: Scheduled */}
         <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg">Schedule for {format(new Date(date), 'MMM do, yyyy')}</CardTitle>
-            <CardDescription>Use stop numbers when assigning jobs to set the daily order.</CardDescription>
+            <CardTitle className="text-lg">Work Blocks for {format(new Date(date), 'MMM do, yyyy')}</CardTitle>
+            <CardDescription>Use stop numbers and day parts to split larger unit or apartment jobs.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
@@ -219,7 +303,7 @@ export default function Dispatch() {
                 </div>
               ) : dispatchList?.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
-                  No jobs scheduled for this date.
+                  No work blocks scheduled for this date.
                 </div>
               ) : (
                 dispatchList?.sort((a, b) => a.scheduledOrder - b.scheduledOrder).map(assignment => (
@@ -233,6 +317,7 @@ export default function Dispatch() {
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-semibold">{assignment.jobTitle}</h4>
+                          {assignment.workArea && <p className="text-sm font-medium text-foreground">{assignment.workArea}</p>}
                           <p className="text-sm text-muted-foreground">{assignment.jobAddress}</p>
                         </div>
                         <Badge variant={
@@ -249,6 +334,27 @@ export default function Dispatch() {
                           <span className="text-muted-foreground">Sub:</span>
                           <span className="font-medium">{assignment.subcontractorName || 'Unassigned'}</span>
                         </div>
+
+                        <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-0.5 rounded-md">
+                          <span className="text-muted-foreground">Block:</span>
+                          <span className="font-medium">{timeWindowLabels[assignment.timeWindow ?? "full_day"] ?? assignment.timeWindow}</span>
+                        </div>
+
+                        {(assignment.plannedStartTime || assignment.plannedEndTime) && (
+                          <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-0.5 rounded-md">
+                            <span className="text-muted-foreground">Time:</span>
+                            <span className="font-medium">
+                              {assignment.plannedStartTime || "Start"} - {assignment.plannedEndTime || "Finish"}
+                            </span>
+                          </div>
+                        )}
+
+                        {assignment.estimatedMetres != null && (
+                          <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-0.5 rounded-md">
+                            <span className="text-muted-foreground">Target:</span>
+                            <span className="font-medium">{assignment.estimatedMetres}m</span>
+                          </div>
+                        )}
                         
                         {assignment.requiredColours && assignment.requiredColours.length > 0 && (
                           <div className="flex items-center gap-1.5">
@@ -261,6 +367,12 @@ export default function Dispatch() {
                           </div>
                         )}
                       </div>
+
+                      {assignment.notes && (
+                        <p className="mt-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm text-muted-foreground">
+                          {assignment.notes}
+                        </p>
+                      )}
                       
                       {(assignment.arrivedAt || assignment.departedAt) && (
                         <div className="flex gap-4 text-xs text-muted-foreground mt-2 border-t pt-2">

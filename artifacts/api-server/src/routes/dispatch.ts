@@ -73,6 +73,11 @@ async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
     jobAddress,
     jobDescription,
     subcontractorName,
+    workArea: a.workArea,
+    timeWindow: a.timeWindow ?? "full_day",
+    plannedStartTime: a.plannedStartTime,
+    plannedEndTime: a.plannedEndTime,
+    estimatedMetres: a.estimatedMetres ? Number(a.estimatedMetres) : null,
     requiredColours: Array.isArray(a.requiredColours) ? a.requiredColours : [],
   };
 }
@@ -106,6 +111,11 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
       scheduledOrder: a.scheduledOrder,
       jobId: a.jobId,
       subcontractorId: a.subcontractorId ?? null,
+      workArea: a.workArea ?? null,
+      timeWindow: a.timeWindow ?? "full_day",
+      plannedStartTime: a.plannedStartTime ?? null,
+      plannedEndTime: a.plannedEndTime ?? null,
+      estimatedMetres: a.estimatedMetres != null ? String(a.estimatedMetres) : null,
       builderContactName: a.builderContactName ?? null,
       builderContactPhone: a.builderContactPhone ?? null,
       requiredColours: a.requiredColours ?? [],
@@ -124,7 +134,7 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
           subcontractorId: assignment.subcontractorId,
           type: "new_job",
           title: "New job assigned",
-          body: `${assignment.jobTitle ?? "Job"}${assignment.jobAddress ? ` at ${assignment.jobAddress}` : ""}`,
+          body: `${assignment.jobTitle ?? "Job"}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${assignment.jobAddress ? ` at ${assignment.jobAddress}` : ""}`,
           priority: "high",
           actionUrl: "/field",
           linkedEntityType: "job_assignment",
@@ -171,6 +181,13 @@ router.patch("/dispatch/:id", async (req, res) => {
   const updates: Record<string, unknown> = {};
   if (body.data.scheduledOrder !== undefined) updates.scheduledOrder = body.data.scheduledOrder;
   if (body.data.subcontractorId !== undefined) updates.subcontractorId = body.data.subcontractorId;
+  if (body.data.workArea !== undefined) updates.workArea = body.data.workArea || null;
+  if (body.data.timeWindow !== undefined) updates.timeWindow = body.data.timeWindow || "full_day";
+  if (body.data.plannedStartTime !== undefined) updates.plannedStartTime = body.data.plannedStartTime || null;
+  if (body.data.plannedEndTime !== undefined) updates.plannedEndTime = body.data.plannedEndTime || null;
+  if (body.data.estimatedMetres !== undefined) {
+    updates.estimatedMetres = body.data.estimatedMetres != null ? String(body.data.estimatedMetres) : null;
+  }
   if (body.data.requiredColours !== undefined) updates.requiredColours = body.data.requiredColours;
   if (body.data.builderContactName !== undefined) updates.builderContactName = body.data.builderContactName;
   if (body.data.builderContactPhone !== undefined) updates.builderContactPhone = body.data.builderContactPhone;
@@ -186,7 +203,20 @@ router.patch("/dispatch/:id", async (req, res) => {
 
   const enriched = await enrichAssignment(a);
 
-  if (enriched.subcontractorId && (body.data.subcontractorId !== undefined || body.data.scheduledOrder !== undefined || body.data.notes !== undefined || body.data.requiredColours !== undefined)) {
+  if (
+    enriched.subcontractorId &&
+    (
+      body.data.subcontractorId !== undefined ||
+      body.data.scheduledOrder !== undefined ||
+      body.data.workArea !== undefined ||
+      body.data.timeWindow !== undefined ||
+      body.data.plannedStartTime !== undefined ||
+      body.data.plannedEndTime !== undefined ||
+      body.data.estimatedMetres !== undefined ||
+      body.data.notes !== undefined ||
+      body.data.requiredColours !== undefined
+    )
+  ) {
     try {
       await createAndSendNotification({
         subcontractorId: enriched.subcontractorId,

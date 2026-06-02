@@ -3076,6 +3076,16 @@ components:
           type: ["integer", "null"]
         subcontractorName:
           type: ["string", "null"]
+        workArea:
+          type: ["string", "null"]
+        timeWindow:
+          type: string
+        plannedStartTime:
+          type: ["string", "null"]
+        plannedEndTime:
+          type: ["string", "null"]
+        estimatedMetres:
+          type: ["number", "null"]
         builderContactName:
           type: ["string", "null"]
         builderContactPhone:
@@ -3118,6 +3128,16 @@ components:
                 type: integer
               scheduledOrder:
                 type: integer
+              workArea:
+                type: string
+              timeWindow:
+                type: string
+              plannedStartTime:
+                type: string
+              plannedEndTime:
+                type: string
+              estimatedMetres:
+                type: number
               requiredColours:
                 type: array
                 items:
@@ -3136,6 +3156,16 @@ components:
           type: integer
         subcontractorId:
           type: integer
+        workArea:
+          type: string
+        timeWindow:
+          type: string
+        plannedStartTime:
+          type: string
+        plannedEndTime:
+          type: string
+        estimatedMetres:
+          type: ["number", "null"]
         requiredColours:
           type: array
           items:

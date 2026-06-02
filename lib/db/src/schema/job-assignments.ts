@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, jsonb, timestamp, numeric } from "drizzle-orm/pg-core";
 import { companyAccountsTable } from "./company-accounts";
 import { jobsTable } from "./jobs";
 import { subcontractorsTable } from "./subcontractors";
@@ -10,6 +10,11 @@ export const jobAssignmentsTable = pgTable("job_assignments", {
   scheduledOrder: integer("scheduled_order").notNull().default(1),
   jobId: integer("job_id").references(() => jobsTable.id),
   subcontractorId: integer("subcontractor_id").references(() => subcontractorsTable.id),
+  workArea: text("work_area"),
+  timeWindow: text("time_window").notNull().default("full_day"),
+  plannedStartTime: text("planned_start_time"),
+  plannedEndTime: text("planned_end_time"),
+  estimatedMetres: numeric("estimated_metres", { precision: 10, scale: 2 }),
   builderContactName: text("builder_contact_name"),
   builderContactPhone: text("builder_contact_phone"),
   requiredColours: jsonb("required_colours").notNull().default([]),

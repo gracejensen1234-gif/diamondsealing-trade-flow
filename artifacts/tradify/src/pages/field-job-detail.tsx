@@ -14,6 +14,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Upload, X, MapPin } from "lucide-react";
 
+const timeWindowLabels: Record<string, string> = {
+  full_day: "Full day",
+  morning: "Morning",
+  afternoon: "Afternoon",
+  custom: "Custom time",
+};
+
 function compressPhoto(file: File) {
   return new Promise<string>((resolve, reject) => {
     const image = new Image();
@@ -146,6 +153,9 @@ export default function FieldJobDetail() {
       <Card>
         <CardHeader className="p-4 pb-2 bg-muted/50">
           <CardTitle className="text-lg">{assignment.jobTitle}</CardTitle>
+          {assignment.workArea && (
+            <p className="text-sm font-medium mt-1">{assignment.workArea}</p>
+          )}
           {assignment.jobAddress && (
             <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
               <MapPin className="h-3 w-3" /> {assignment.jobAddress}
@@ -153,6 +163,21 @@ export default function FieldJobDetail() {
           )}
         </CardHeader>
         <CardContent className="p-4 space-y-6">
+          <div className="rounded-md border bg-background px-3 py-2 text-sm">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span><strong>Block:</strong> {timeWindowLabels[assignment.timeWindow ?? "full_day"] ?? assignment.timeWindow}</span>
+              {(assignment.plannedStartTime || assignment.plannedEndTime) && (
+                <span><strong>Time:</strong> {assignment.plannedStartTime || "Start"} - {assignment.plannedEndTime || "Finish"}</span>
+              )}
+              {assignment.estimatedMetres != null && (
+                <span><strong>Target:</strong> {assignment.estimatedMetres}m</span>
+              )}
+            </div>
+            {assignment.notes && (
+              <p className="mt-2 text-muted-foreground">{assignment.notes}</p>
+            )}
+          </div>
+
           
           <div className="space-y-2">
             <Label className="text-base">Meters Completed <span className="text-destructive">*</span></Label>

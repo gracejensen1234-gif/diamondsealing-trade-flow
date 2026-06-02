@@ -572,6 +572,15 @@ export interface JobAssignment {
   /** @nullable */
   subcontractorName?: string | null;
   /** @nullable */
+  workArea?: string | null;
+  timeWindow?: string;
+  /** @nullable */
+  plannedStartTime?: string | null;
+  /** @nullable */
+  plannedEndTime?: string | null;
+  /** @nullable */
+  estimatedMetres?: number | null;
+  /** @nullable */
   builderContactName?: string | null;
   /** @nullable */
   builderContactPhone?: string | null;
@@ -590,6 +599,11 @@ export type DispatchInputAssignmentsItem = {
   jobId: number;
   subcontractorId?: number;
   scheduledOrder: number;
+  workArea?: string;
+  timeWindow?: string;
+  plannedStartTime?: string;
+  plannedEndTime?: string;
+  estimatedMetres?: number;
   requiredColours?: string[];
   builderContactName?: string;
   builderContactPhone?: string;
@@ -614,6 +628,11 @@ export const JobAssignmentUpdateStatus = {
 export interface JobAssignmentUpdate {
   scheduledOrder?: number;
   subcontractorId?: number;
+  workArea?: string;
+  timeWindow?: string;
+  plannedStartTime?: string;
+  plannedEndTime?: string;
+  estimatedMetres?: number | null;
   requiredColours?: string[];
   builderContactName?: string;
   builderContactPhone?: string;

@@ -47,6 +47,13 @@ import {
   CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload,
 } from "lucide-react";
 
+const timeWindowLabels: Record<string, string> = {
+  full_day: "Full day",
+  morning: "Morning",
+  afternoon: "Afternoon",
+  custom: "Custom time",
+};
+
 // ─── Location verification ────────────────────────────────────────────────────
 
 type LocationPrompt = {
@@ -936,6 +943,9 @@ export default function FieldView() {
                         {assignment.status.replace("_", " ")}
                       </Badge>
                     </div>
+                    {assignment.workArea && (
+                      <p className="mt-1 text-sm font-medium text-foreground">{assignment.workArea}</p>
+                    )}
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-2 text-sm">
                     {assignment.jobAddress && (
@@ -953,6 +963,21 @@ export default function FieldView() {
                         </span>
                       </div>
                     )}
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="outline" className="text-xs">
+                        {timeWindowLabels[assignment.timeWindow ?? "full_day"] ?? assignment.timeWindow}
+                      </Badge>
+                      {(assignment.plannedStartTime || assignment.plannedEndTime) && (
+                        <Badge variant="outline" className="text-xs">
+                          {assignment.plannedStartTime || "Start"} - {assignment.plannedEndTime || "Finish"}
+                        </Badge>
+                      )}
+                      {assignment.estimatedMetres != null && (
+                        <Badge variant="secondary" className="text-xs">
+                          Target: {assignment.estimatedMetres}m
+                        </Badge>
+                      )}
+                    </div>
                     {assignment.requiredColours && assignment.requiredColours.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {assignment.requiredColours.map((c) => (
@@ -961,6 +986,9 @@ export default function FieldView() {
                           </Badge>
                         ))}
                       </div>
+                    )}
+                    {assignment.notes && (
+                      <p className="rounded-md bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">{assignment.notes}</p>
                     )}
                   </CardContent>
                   <CardFooter className="p-4 pt-0 flex gap-2">
