@@ -2,7 +2,7 @@ services:
   - type: web
     name: diamond-sealing-operations
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: corepack enable && corepack prepare pnpm@10.34.1 --activate && pnpm install --no-frozen-lockfile && pnpm run build:deploy
     startCommand: pnpm run start:deploy
     healthCheckPath: /api/healthz
@@ -17,6 +17,22 @@ services:
         fromDatabase:
           name: diamond-sealing-db
           property: connectionString
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        value: info@diamondsealing.com.au
+      - key: INVITE_EMAIL_FROM
+        value: "SealFlow <info@diamondsealing.com.au>"
+      - key: INVITE_EMAIL_REPLY_TO
+        value: info@diamondsealing.com.au
+      - key: APP_BASE_URL
+        value: https://diamond-sealing-operations.onrender.com
+      - key: SMTP_PASS
+        sync: false
 
 databases:
   - name: diamond-sealing-db
