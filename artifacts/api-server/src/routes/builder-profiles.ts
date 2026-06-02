@@ -65,10 +65,18 @@ router.get("/builder-profiles/:id", async (req, res) => {
 // PATCH /builder-profiles/:id
 router.patch("/builder-profiles/:id", async (req, res) => {
   const allowed = [
-    "name","contactName","contactPhone","contactEmail","qualityTier","customTierLabel",
+    "name","customerId","contactName","contactPhone","contactEmail","qualityTier","customTierLabel",
     "preferredWorkerIds","avoidedWorkerIds","finishExpectations","documentationRequirements",
     "signOffRequired","signOffNotes","siteNotes","specialInstructions","active",
   ];
+  const tenantId = companyId(req);
+  if (req.body.customerId !== undefined && req.body.customerId !== null) {
+    const [customer] = await db
+      .select()
+      .from(customersTable)
+      .where(and(eq(customersTable.id, Number(req.body.customerId)), eq(customersTable.companyId, tenantId)));
+    if (!customer) return res.status(400).json({ error: "Client not found for this company" });
+  }
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   for (const k of allowed) {
     if (req.body[k] !== undefined) updates[k] = req.body[k];
@@ -76,7 +84,7 @@ router.patch("/builder-profiles/:id", async (req, res) => {
   const [row] = await db
     .update(builderProfilesTable)
     .set(updates)
-    .where(and(eq(builderProfilesTable.id, Number(req.params.id)), eq(builderProfilesTable.companyId, companyId(req))))
+    .where(and(eq(builderProfilesTable.id, Number(req.params.id)), eq(builderProfilesTable.companyId, tenantId)))
     .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
   return res.json(fmtProfile(row));

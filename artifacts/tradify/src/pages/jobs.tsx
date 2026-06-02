@@ -1,4 +1,4 @@
-import { getListJobsQueryKey, useCreateJob, useListCustomers, useListJobs } from "@workspace/api-client-react";
+import { getListCustomersQueryKey, getListJobsQueryKey, useCreateJob, useListCustomers, useListJobs } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,19 +16,22 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 const emptyJobForm = {
   title: "",
-  customerId: "none",
+  clientSelection: "none",
   address: "",
   scheduledDate: "",
   dueDate: "",
@@ -36,6 +39,22 @@ const emptyJobForm = {
   status: "pending",
   description: "",
   notes: "",
+};
+
+type BuilderProfileOption = {
+  id: number;
+  customerId?: number | null;
+  name: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  qualityTier: string;
+  active?: boolean;
+};
+
+type PreparedClientSelection = {
+  customerId?: number;
+  builder?: BuilderProfileOption;
 };
 
 function optionalText(value: string): string | undefined {
@@ -63,6 +82,14 @@ export default function Jobs() {
   const queryClient = useQueryClient();
   const { data: jobs, isLoading } = useListJobs();
   const { data: customers } = useListCustomers();
+  const { data: builderProfiles = [], isLoading: loadingBuilders } = useQuery<BuilderProfileOption[]>({
+    queryKey: ["builder-profiles"],
+    queryFn: async () => {
+      const response = await fetch("/api/builder-profiles");
+      if (!response.ok) throw new Error("Could not load builders");
+      return response.json();
+    },
+  });
 
   const createJob = useCreateJob({
     mutation: {
@@ -86,7 +113,46 @@ export default function Jobs() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleCreateJob = (event: FormEvent<HTMLFormElement>) => {
+  async function createClientFromBuilder(builder: BuilderProfileOption) {
+    const response = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: builder.name,
+        company: builder.name,
+        email: builder.contactEmail ?? undefined,
+        phone: builder.contactPhone ?? undefined,
+        notes: "Created from builder profile when selected in a job.",
+      }),
+    });
+    if (!response.ok) throw new Error("Could not create a client record for this builder");
+    const customer = await response.json() as { id: number };
+
+    await fetch(`/api/builder-profiles/${builder.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: customer.id }),
+    }).catch(() => null);
+
+    queryClient.invalidateQueries({ queryKey: ["builder-profiles"] });
+    queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+    return customer.id;
+  }
+
+  async function prepareClientSelection(value: string): Promise<PreparedClientSelection> {
+    if (value === "none") return {};
+    if (value.startsWith("client:")) return { customerId: Number(value.replace("client:", "")) };
+    if (!value.startsWith("builder:")) return {};
+
+    const builderId = Number(value.replace("builder:", ""));
+    const builder = builderProfiles.find((profile) => profile.id === builderId);
+    if (!builder) throw new Error("Builder profile could not be found");
+
+    const customerId = builder.customerId ?? await createClientFromBuilder(builder);
+    return { customerId, builder };
+  }
+
+  const handleCreateJob = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = form.title.trim();
     if (!title) {
@@ -98,11 +164,25 @@ export default function Jobs() {
       return;
     }
 
+    let selection: PreparedClientSelection;
+    try {
+      selection = await prepareClientSelection(form.clientSelection);
+    } catch (error) {
+      toast({
+        title: "Could not prepare client",
+        description: error instanceof Error ? error.message : "Try selecting the builder again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     createJob.mutate({
       data: {
         title,
-        customerId: form.customerId !== "none" ? Number(form.customerId) : undefined,
+        customerId: selection.customerId,
         address: optionalText(form.address),
+        builderContactName: optionalText(selection.builder?.contactName ?? ""),
+        builderContactPhone: optionalText(selection.builder?.contactPhone ?? ""),
         scheduledDate: optionalText(form.scheduledDate),
         dueDate: optionalText(form.dueDate),
         priority: form.priority as "low" | "medium" | "high",
@@ -147,17 +227,42 @@ export default function Jobs() {
                 </div>
                 <div className="space-y-2">
                   <Label>Client</Label>
-                  <Select value={form.customerId} onValueChange={(value) => updateForm("customerId", value)}>
+                  <Select value={form.clientSelection} onValueChange={(value) => updateForm("clientSelection", value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select client" />
+                      <SelectValue placeholder="Select client or builder" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No client</SelectItem>
-                      {(customers ?? []).map((customer) => (
-                        <SelectItem key={customer.id} value={String(customer.id)}>
-                          {customer.name}
+                      {(customers ?? []).length > 0 ? (
+                        <SelectGroup>
+                          <SelectLabel>Clients</SelectLabel>
+                          {(customers ?? []).map((customer) => (
+                            <SelectItem key={`client-${customer.id}`} value={`client:${customer.id}`}>
+                              {customer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ) : null}
+                      {builderProfiles.length > 0 ? (
+                        <>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel>Builders</SelectLabel>
+                            {builderProfiles
+                              .filter((builder) => builder.active !== false)
+                              .map((builder) => (
+                                <SelectItem key={`builder-${builder.id}`} value={`builder:${builder.id}`}>
+                                  Builder: {builder.name}
+                                </SelectItem>
+                              ))}
+                          </SelectGroup>
+                        </>
+                      ) : null}
+                      {loadingBuilders ? (
+                        <SelectItem value="loading-builders" disabled>
+                          Loading builders...
                         </SelectItem>
-                      ))}
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </div>
