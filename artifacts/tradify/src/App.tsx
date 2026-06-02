@@ -45,6 +45,7 @@ import WeeklyPlanner from "@/pages/weekly-planner";
 import Suppliers from "@/pages/suppliers";
 import Profitability from "@/pages/profitability";
 import NotificationCentre from "@/pages/notifications";
+import StaffInvites from "@/pages/staff-invites";
 
 const queryClient = new QueryClient();
 
@@ -74,6 +75,7 @@ function AdminRoutes() {
         <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
         <Route path="/stock" component={Stock} />
         <Route path="/settings/xero" component={XeroSettings} />
+        <Route path="/settings/staff-invites" component={StaffInvites} />
 
         {/* Analytics & Performance */}
         <Route path="/analytics" component={Analytics} />

@@ -5,7 +5,7 @@ import {
   Smartphone, ClipboardList, Radio, Clock, FileSpreadsheet, Package,
   Settings, BarChart2, Trophy, Star, ShieldCheck, Truck,
   Award, Brain, CalendarRange, TrendingUp, HardHat, Building2,
-  ScrollText, Bell, Menu, LogOut,
+  ScrollText, Bell, Menu, LogOut, UserPlus,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -111,7 +111,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     },
     {
       title: "Settings",
-      items: [{ name: "Xero Settings", href: "/settings/xero", icon: Settings }],
+      items: [
+        { name: "Staff Invites", href: "/settings/staff-invites", icon: UserPlus },
+        { name: "Xero Settings", href: "/settings/xero", icon: Settings },
+      ],
     },
   ];
 

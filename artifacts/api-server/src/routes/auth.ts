@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { appUsersTable, companyAccountsTable, subcontractorsTable } from "@workspace/db";
+import { appUsersTable, companyAccountsTable, staffInvitesTable, subcontractorsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import {
   authenticateByEmailPassword,
@@ -33,6 +33,10 @@ function slugifyCompany(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "company";
+}
+
+function normalizeInviteCode(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
 }
 
 async function nextCompanySlug(companyName: string) {
@@ -75,9 +79,16 @@ router.post("/auth/register", async (req, res) => {
     });
   }
 
-  const accountType = req.body?.accountType === "worker" ? "worker" : req.body?.accountType === "company" ? "company" : "admin";
+  const accountType = req.body?.accountType === "worker"
+    ? "worker"
+    : req.body?.accountType === "company"
+      ? "company"
+      : req.body?.accountType === "staff"
+        ? "staff"
+        : "admin";
   const companyName = typeof req.body?.companyName === "string" ? req.body.companyName.trim() : "";
   const companyCode = typeof req.body?.companyCode === "string" ? req.body.companyCode.trim() : "";
+  const staffInviteCode = typeof req.body?.staffInviteCode === "string" ? normalizeInviteCode(req.body.staffInviteCode) : "";
   const submittedAdminSignupCode = typeof req.body?.adminSignupCode === "string" ? req.body.adminSignupCode.trim() : "";
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
@@ -95,6 +106,9 @@ router.post("/auth/register", async (req, res) => {
   if (accountType === "worker" && (companyCode.length < 2 || companyCode.length > 120)) {
     return res.status(400).json({ error: "Company code is required" });
   }
+  if (accountType === "staff" && (staffInviteCode.length < 8 || staffInviteCode.length > 80)) {
+    return res.status(400).json({ error: "Staff invite code is required" });
+  }
   if (name.length < 2 || name.length > 120) return res.status(400).json({ error: "Your name is required" });
   if (!EMAIL_PATTERN.test(email)) return res.status(400).json({ error: "A valid email is required" });
   if (password.length < 6 || password.length > 128) return res.status(400).json({ error: "Password must be at least 6 characters" });
@@ -103,6 +117,67 @@ router.post("/auth/register", async (req, res) => {
   const [existingUser] = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(eq(appUsersTable.email, email));
   if (existingUser) {
     return res.status(409).json({ error: "An account already exists for this email" });
+  }
+
+  if (accountType === "staff") {
+    const [invite] = await db
+      .select()
+      .from(staffInvitesTable)
+      .where(eq(staffInvitesTable.inviteCode, staffInviteCode));
+    if (!invite) return res.status(404).json({ error: "Staff invite code not found" });
+    if (invite.status !== "pending") return res.status(400).json({ error: "This staff invite is no longer active" });
+    if (invite.expiresAt.getTime() < Date.now()) {
+      await db.update(staffInvitesTable)
+        .set({ status: "expired", updatedAt: new Date() })
+        .where(eq(staffInvitesTable.id, invite.id));
+      return res.status(400).json({ error: "This staff invite has expired" });
+    }
+    if (invite.email.toLowerCase() !== email) {
+      return res.status(400).json({ error: "Use the email address this staff invite was created for" });
+    }
+
+    const [company] = await db
+      .select()
+      .from(companyAccountsTable)
+      .where(eq(companyAccountsTable.id, invite.companyId));
+    if (!company) return res.status(404).json({ error: "Company account not found for this invite" });
+
+    const passwordHash = await hashPassword(password);
+    const result = await db.transaction(async (tx) => {
+      const [createdStaff] = await tx.insert(appUsersTable).values({
+        companyId: company.id,
+        name,
+        email,
+        role: "admin",
+        passwordHash,
+        active: true,
+      }).returning();
+
+      await tx.update(staffInvitesTable)
+        .set({
+          status: "accepted",
+          acceptedByUserId: createdStaff.id,
+          acceptedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(staffInvitesTable.id, invite.id));
+
+      return createdStaff;
+    });
+
+    const user = {
+      id: result.id,
+      companyId: company.id,
+      companyName: company.name,
+      companySlug: company.slug,
+      name: result.name,
+      email: result.email,
+      role: "admin" as const,
+      subcontractorId: null,
+    };
+
+    setSessionCookie(res, user);
+    return res.status(201).json({ user });
   }
 
   if (accountType === "worker") {

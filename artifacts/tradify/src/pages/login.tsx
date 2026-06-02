@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Building2, HardHat, Lock, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +9,12 @@ import { useAuth } from "@/lib/auth";
 
 export default function Login() {
   const { login, register, setupStatus } = useAuth();
-  const [mode, setMode] = useState<"login" | "company" | "employee">("login");
+  const [mode, setMode] = useState<"login" | "company" | "employee" | "staff">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyCode, setCompanyCode] = useState("");
+  const [staffInviteCode, setStaffInviteCode] = useState("");
   const [name, setName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
@@ -21,6 +22,15 @@ export default function Login() {
   const [registerAbn, setRegisterAbn] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get("invite");
+    if (params.get("mode") === "staff" || invite) {
+      setMode("staff");
+      if (invite) setStaffInviteCode(invite);
+    }
+  }, []);
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -36,9 +46,10 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     const result = await register({
-      accountType: mode === "company" ? "company" : "worker",
+      accountType: mode === "company" ? "company" : mode === "staff" ? "staff" : "worker",
       companyName: mode === "company" ? companyName : undefined,
       companyCode: mode === "employee" ? companyCode : undefined,
+      staffInviteCode: mode === "staff" ? staffInviteCode : undefined,
       name,
       email: registerEmail,
       password: registerPassword,
@@ -49,13 +60,17 @@ export default function Login() {
     if (!result.ok) setError(result.error ?? "Could not create account");
   };
 
-  const switchMode = (nextMode: "login" | "company" | "employee") => {
+  const switchMode = (nextMode: "login" | "company" | "employee" | "staff") => {
     setMode(nextMode);
     setError("");
   };
 
-  const isRegistering = mode === "company" || mode === "employee";
-  const registerTitle = mode === "company" ? "Create company account" : "Create employee/subcontractor account";
+  const isRegistering = mode === "company" || mode === "employee" || mode === "staff";
+  const registerTitle = mode === "company"
+    ? "Create company account"
+    : mode === "staff"
+      ? "Create staff admin account"
+      : "Create employee/subcontractor account";
   const submitText = mode === "login" ? "Sign in" : registerTitle;
 
   return (
@@ -78,6 +93,8 @@ export default function Login() {
                 <ShieldCheck className="h-5 w-5 text-primary" />
               ) : mode === "company" ? (
                 <Building2 className="h-5 w-5 text-primary" />
+              ) : mode === "staff" ? (
+                <ShieldCheck className="h-5 w-5 text-primary" />
               ) : (
                 <HardHat className="h-5 w-5 text-primary" />
               )}
@@ -85,7 +102,7 @@ export default function Login() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-5 grid grid-cols-3 gap-2 rounded-md border bg-muted/40 p-1">
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-1 sm:grid-cols-4">
               <Button
                 type="button"
                 variant={mode === "login" ? "default" : "ghost"}
@@ -112,6 +129,15 @@ export default function Login() {
               >
                 <UserPlus className="mr-2 h-4 w-4" />
                 Employee
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "staff" ? "default" : "ghost"}
+                className="h-9"
+                onClick={() => switchMode("staff")}
+              >
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Staff
               </Button>
             </div>
 
@@ -150,6 +176,22 @@ export default function Login() {
                       />
                       <p className="text-xs text-muted-foreground">
                         Your company admin can find this on the Employee/Subcontractor Profiles page.
+                      </p>
+                    </div>
+                  ) : null}
+                  {mode === "staff" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="staffInviteCode">Staff invite code</Label>
+                      <Input
+                        id="staffInviteCode"
+                        type="text"
+                        autoComplete="off"
+                        value={staffInviteCode}
+                        onChange={(event) => setStaffInviteCode(event.target.value)}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use the invite link or code created by your company admin.
                       </p>
                     </div>
                   ) : null}

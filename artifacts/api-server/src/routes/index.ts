@@ -30,6 +30,7 @@ import suppliersRouter from "./suppliers";
 import profitabilityRouter from "./profitability";
 import notificationsRouter from "./notifications";
 import locationVerificationsRouter from "./location-verifications";
+import staffInvitesRouter from "./staff-invites";
 import { requireAuth, requireCompany, workerApiScope } from "../lib/auth.js";
 
 const router: IRouter = Router();
@@ -68,5 +69,6 @@ router.use(suppliersRouter);
 router.use(profitabilityRouter);
 router.use(notificationsRouter);
 router.use(locationVerificationsRouter);
+router.use(staffInvitesRouter);
 
 export default router;

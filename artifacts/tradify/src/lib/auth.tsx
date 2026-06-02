@@ -24,9 +24,10 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   register: (input: {
-    accountType: "company" | "admin" | "worker";
+    accountType: "company" | "admin" | "worker" | "staff";
     companyName?: string;
     companyCode?: string;
+    staffInviteCode?: string;
     name: string;
     email: string;
     password: string;
@@ -107,9 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (input: {
-    accountType: "company" | "admin" | "worker";
+    accountType: "company" | "admin" | "worker" | "staff";
     companyName?: string;
     companyCode?: string;
+    staffInviteCode?: string;
     name: string;
     email: string;
     password: string;
