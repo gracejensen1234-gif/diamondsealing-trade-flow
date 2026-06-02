@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { appUsersTable, staffInvitesTable } from "@workspace/db";
 import { and, desc, eq } from "drizzle-orm";
 import { companyId, requireAdmin } from "../lib/auth.js";
+import { sendStaffInviteEmail } from "../lib/emailService.js";
 
 const router = Router();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -33,6 +34,33 @@ function serializeInvite(req: Request, invite: typeof staffInvitesTable.$inferSe
   return {
     ...invite,
     inviteUrl: invite.status === "pending" ? inviteUrl(req, invite.inviteCode) : null,
+  };
+}
+
+async function sendInviteEmailAndStore(req: Request, invite: typeof staffInvitesTable.$inferSelect) {
+  const delivery = await sendStaffInviteEmail({
+    to: invite.email,
+    staffName: invite.name,
+    companyName: req.authUser?.companyName || "Your company",
+    inviteUrl: inviteUrl(req, invite.inviteCode),
+    inviteCode: invite.inviteCode,
+    expiresAt: invite.expiresAt,
+  });
+
+  const [updated] = await db.update(staffInvitesTable)
+    .set({
+      emailStatus: delivery.status,
+      emailSentAt: delivery.status === "sent" ? new Date() : invite.emailSentAt,
+      emailMessageId: delivery.status === "sent" ? delivery.messageId : invite.emailMessageId,
+      emailError: delivery.status === "sent" ? null : delivery.error,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(staffInvitesTable.id, invite.id), eq(staffInvitesTable.companyId, companyId(req))))
+    .returning();
+
+  return {
+    invite: updated ?? invite,
+    emailDelivery: delivery,
   };
 }
 
@@ -90,7 +118,40 @@ router.post("/staff-invites", requireAdmin, async (req, res) => {
     expiresAt,
   }).returning();
 
-  return res.status(201).json(serializeInvite(req, invite));
+  const sent = await sendInviteEmailAndStore(req, invite);
+
+  return res.status(201).json({
+    ...serializeInvite(req, sent.invite),
+    emailDelivery: sent.emailDelivery,
+  });
+});
+
+router.post("/staff-invites/:id/send-email", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid invite id" });
+
+  const [invite] = await db
+    .select()
+    .from(staffInvitesTable)
+    .where(and(
+      eq(staffInvitesTable.id, id),
+      eq(staffInvitesTable.companyId, companyId(req)),
+    ));
+  if (!invite) return res.status(404).json({ error: "Invite not found" });
+  if (invite.status !== "pending") return res.status(400).json({ error: "Only pending invites can be emailed" });
+  if (invite.expiresAt.getTime() < Date.now()) {
+    const [expired] = await db.update(staffInvitesTable)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(and(eq(staffInvitesTable.id, invite.id), eq(staffInvitesTable.companyId, companyId(req))))
+      .returning();
+    return res.status(400).json({ error: "This staff invite has expired", invite: expired ? serializeInvite(req, expired) : undefined });
+  }
+
+  const sent = await sendInviteEmailAndStore(req, invite);
+  return res.json({
+    ...serializeInvite(req, sent.invite),
+    emailDelivery: sent.emailDelivery,
+  });
 });
 
 router.patch("/staff-invites/:id/revoke", requireAdmin, async (req, res) => {

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ShieldCheck, UserPlus, XCircle } from "lucide-react";
+import { Copy, Mail, Send, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 
 type StaffInvite = {
   id: number;
@@ -18,7 +18,15 @@ type StaffInvite = {
   status: "pending" | "accepted" | "revoked" | "expired";
   expiresAt: string;
   acceptedAt: string | null;
+  emailStatus: "not_configured" | "sent" | "failed";
+  emailSentAt: string | null;
+  emailError: string | null;
   createdAt: string;
+  emailDelivery?: {
+    status: "not_configured" | "sent" | "failed";
+    error?: string;
+    messageId?: string | null;
+  };
 };
 
 async function requestJson(url: string, init?: RequestInit) {
@@ -33,6 +41,25 @@ function statusBadge(status: StaffInvite["status"]) {
   if (status === "accepted") return "secondary";
   if (status === "revoked") return "outline";
   return "destructive";
+}
+
+function emailBadge(status: StaffInvite["emailStatus"]) {
+  if (status === "sent") return "secondary";
+  if (status === "failed") return "destructive";
+  return "outline";
+}
+
+function emailLabel(invite: StaffInvite) {
+  if (invite.emailStatus === "sent") return "Email sent";
+  if (invite.emailStatus === "failed") return "Email failed";
+  return "Email not configured";
+}
+
+function emailDetail(invite: StaffInvite) {
+  if (invite.emailStatus === "sent" && invite.emailSentAt) return `Sent ${formatDate(invite.emailSentAt)}`;
+  if (invite.emailStatus === "failed" && invite.emailError) return invite.emailError;
+  if (invite.emailStatus === "not_configured") return "Add RESEND_API_KEY and INVITE_EMAIL_FROM in Render to send automatically.";
+  return "";
 }
 
 function formatDate(value: string | null) {
@@ -81,10 +108,44 @@ export default function StaffInvites() {
       setName("");
       setEmail("");
       queryClient.invalidateQueries({ queryKey: ["staff-invites"] });
-      toast({ title: "Staff admin invite created" });
+      if (invite.emailDelivery?.status === "sent" || invite.emailStatus === "sent") {
+        toast({ title: "Staff invite created and emailed" });
+      } else if (invite.emailDelivery?.status === "not_configured" || invite.emailStatus === "not_configured") {
+        toast({
+          title: "Staff invite created",
+          description: "Email sending needs RESEND_API_KEY and INVITE_EMAIL_FROM in Render. Copy the link for now.",
+        });
+      } else {
+        toast({
+          title: "Staff invite created",
+          description: invite.emailDelivery?.error || invite.emailError || "Email failed. Copy the invite link or send again.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error) => toast({
       title: "Could not create invite",
+      description: error instanceof Error ? error.message : "Try again.",
+      variant: "destructive",
+    }),
+  });
+
+  const sendEmail = useMutation({
+    mutationFn: (id: number) => requestJson(`/api/staff-invites/${id}/send-email`, { method: "POST" }),
+    onSuccess: (invite: StaffInvite) => {
+      queryClient.invalidateQueries({ queryKey: ["staff-invites"] });
+      if (invite.emailDelivery?.status === "sent" || invite.emailStatus === "sent") {
+        toast({ title: "Invite email sent" });
+      } else {
+        toast({
+          title: "Invite email not sent",
+          description: invite.emailDelivery?.error || invite.emailError || "Check email settings in Render.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error) => toast({
+      title: "Could not send invite email",
       description: error instanceof Error ? error.message : "Try again.",
       variant: "destructive",
     }),
@@ -151,6 +212,11 @@ export default function StaffInvites() {
             <div>
               <p className="text-sm font-medium">{lastInvite.name || lastInvite.email}</p>
               <p className="text-xs text-muted-foreground">{lastInvite.email}</p>
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <Mail className="h-3.5 w-3.5" />
+                {emailLabel(lastInvite)}
+              </p>
+              {emailDetail(lastInvite) ? <p className="mt-1 text-xs text-muted-foreground">{emailDetail(lastInvite)}</p> : null}
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <Input readOnly value={lastInvite.inviteUrl} />
@@ -185,6 +251,7 @@ export default function StaffInvites() {
                     <p className="font-semibold">{invite.name || invite.email}</p>
                     <Badge variant={statusBadge(invite.status) as any} className="capitalize">{invite.status}</Badge>
                     <Badge variant="outline">Admin access</Badge>
+                    <Badge variant={emailBadge(invite.emailStatus) as any}>{emailLabel(invite)}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{invite.email}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -192,9 +259,14 @@ export default function StaffInvites() {
                     {invite.status === "pending" ? ` • Expires ${formatDate(invite.expiresAt)}` : ""}
                     {invite.acceptedAt ? ` • Accepted ${formatDate(invite.acceptedAt)}` : ""}
                   </p>
+                  {emailDetail(invite) ? <p className="mt-1 max-w-2xl text-xs text-muted-foreground">{emailDetail(invite)}</p> : null}
                 </div>
                 {invite.status === "pending" ? (
                   <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => sendEmail.mutate(invite.id)} disabled={sendEmail.isPending}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Email
+                    </Button>
                     {invite.inviteUrl ? (
                       <Button variant="outline" size="sm" onClick={() => copyText(invite.inviteUrl!, "Invite link")}>
                         <Copy className="mr-2 h-4 w-4" />
