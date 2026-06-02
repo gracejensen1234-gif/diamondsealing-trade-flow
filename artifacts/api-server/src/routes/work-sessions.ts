@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { workSessionsTable, subcontractorsTable, gpsTracksTable, activityTable } from "@workspace/db";
+import { workSessionsTable, subcontractorsTable, gpsTracksTable, activityTable, locationVerificationsTable } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import {
   ClockOnBody,
@@ -14,6 +14,7 @@ import {
 import {
   canAccessSubcontractor,
   companyId,
+  isAdmin,
   requireAdmin,
   requireSubcontractorAccess,
   workerSubcontractorId,
@@ -40,11 +41,12 @@ router.post("/work-sessions/clock-on", async (req, res) => {
   const parsed = ClockOnBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
   if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId)) return;
+  const currentCompanyId = companyId(req);
 
   const today = new Date().toISOString().split("T")[0];
   const existing = await db.select().from(workSessionsTable).where(
     and(
-      eq(workSessionsTable.companyId, companyId(req)),
+      eq(workSessionsTable.companyId, currentCompanyId),
       eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
       eq(workSessionsTable.date, today),
     ),
@@ -54,12 +56,48 @@ router.post("/work-sessions/clock-on", async (req, res) => {
   const [sub] = await db
     .select()
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
+    .where(and(eq(subcontractorsTable.id, parsed.data.subcontractorId), eq(subcontractorsTable.companyId, currentCompanyId)));
   if (!sub) return res.status(404).json({ error: "Subcontractor not found" });
+
+  const locationVerificationId = parsed.data.locationVerificationId ?? null;
+  if (!isAdmin(req)) {
+    if (!locationVerificationId) {
+      return res.status(400).json({ error: "Location is required before clocking on" });
+    }
+
+    const [verification] = await db
+      .select()
+      .from(locationVerificationsTable)
+      .where(
+        and(
+          eq(locationVerificationsTable.id, locationVerificationId),
+          eq(locationVerificationsTable.companyId, currentCompanyId),
+          eq(locationVerificationsTable.subcontractorId, parsed.data.subcontractorId),
+        ),
+      );
+
+    const isFresh = verification ? Date.now() - new Date(verification.createdAt).getTime() <= 15 * 60 * 1000 : false;
+    const hasCapturedLocation =
+      verification?.reportedLat != null &&
+      verification?.reportedLng != null &&
+      verification.workerConsented;
+    const validStatus = verification?.status !== "skipped" && verification?.status !== "location_error";
+
+    if (
+      !verification ||
+      verification.eventType !== "clock_on" ||
+      verification.workSessionId ||
+      !isFresh ||
+      !hasCapturedLocation ||
+      !validStatus
+    ) {
+      return res.status(400).json({ error: "A fresh location check is required before clocking on" });
+    }
+  }
 
   const [session] = await db.insert(workSessionsTable).values({
     subcontractorId: parsed.data.subcontractorId,
-    companyId: companyId(req),
+    companyId: currentCompanyId,
     date: today,
     status: "active",
     gpsEnabled: parsed.data.gpsEnabled ?? true,
@@ -67,8 +105,15 @@ router.post("/work-sessions/clock-on", async (req, res) => {
     clockedOnAt: new Date(),
   }).returning();
 
+  if (locationVerificationId) {
+    await db
+      .update(locationVerificationsTable)
+      .set({ workSessionId: session.id })
+      .where(and(eq(locationVerificationsTable.id, locationVerificationId), eq(locationVerificationsTable.companyId, currentCompanyId)));
+  }
+
   await db.insert(activityTable).values({
-    companyId: companyId(req),
+    companyId: currentCompanyId,
     type: "clocked_on",
     description: `${sub.name} clocked on`,
     entityId: session.id,

@@ -7,6 +7,7 @@ import {
   useGetTodaySession,
   useUpdateWorkSession,
   useListSubcontractors,
+  getGetTodaySessionQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,11 +34,13 @@ export default function AdminTimesheets() {
 
   const { data: subs } = useListSubcontractors();
   const manualSubcontractorId = manualSubId ? parseInt(manualSubId) : undefined;
+  const manualSessionParams = { subcontractorId: manualSubcontractorId ?? 0 };
   const { data: manualSession, isFetching: loadingManualSession } = useGetTodaySession(
-    { subcontractorId: manualSubcontractorId ?? 0 },
+    manualSessionParams,
     {
       query: {
         enabled: Boolean(manualSubcontractorId),
+        queryKey: getGetTodaySessionQueryKey(manualSessionParams),
         retry: false,
       },
     },

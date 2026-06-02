@@ -2997,6 +2997,8 @@ components:
       properties:
         subcontractorId:
           type: integer
+        locationVerificationId:
+          type: integer
         gpsEnabled:
           type: boolean
         gpsDisabledOnBreak:

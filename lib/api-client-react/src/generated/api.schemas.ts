@@ -525,6 +525,7 @@ export interface WorkSessionUpdate {
 
 export interface ClockOnInput {
   subcontractorId: number;
+  locationVerificationId?: number;
   gpsEnabled?: boolean;
   gpsDisabledOnBreak?: boolean;
 }

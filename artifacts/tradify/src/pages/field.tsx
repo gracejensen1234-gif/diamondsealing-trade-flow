@@ -59,8 +59,16 @@ const timeWindowLabels: Record<string, string> = {
 type LocationPrompt = {
   eventLabel: string;
   jobAddress?: string;
+  required?: boolean;
   onAllow: () => void;
-  onSkip: () => void;
+  onSkip?: () => void;
+};
+
+type LocationVerificationResult = {
+  id?: number;
+  status: string;
+  distanceMetres?: number | null;
+  withinBounds?: boolean | null;
 };
 
 async function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
@@ -81,7 +89,7 @@ async function postLocationVerification(payload: Record<string, unknown>) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (res.ok) return (await res.json()) as { status: string; distanceMetres?: number | null; withinBounds?: boolean | null };
+    if (res.ok) return (await res.json()) as LocationVerificationResult;
   } catch {}
   return null;
 }
@@ -134,13 +142,14 @@ export default function FieldView() {
     (
       eventType: string,
       eventLabel: string,
-      opts: { jobAssignmentId?: number; jobAddress?: string; workSessionId?: number },
+      opts: { jobAssignmentId?: number; jobAddress?: string; workSessionId?: number; required?: boolean },
     ) =>
-      new Promise<void>((resolve) => {
+      new Promise<LocationVerificationResult | null>((resolve) => {
         setLocationPrompt({
           eventLabel,
           jobAddress: opts.jobAddress,
-          onSkip: async () => {
+          required: opts.required,
+          onSkip: opts.required ? undefined : async () => {
             setLocationPrompt(null);
             await postLocationVerification({
               subcontractorId: subId,
@@ -150,7 +159,7 @@ export default function FieldView() {
               status: "skipped",
               workerConsented: false,
             });
-            resolve();
+            resolve(null);
           },
           onAllow: async () => {
             setLocationPrompt(null);
@@ -164,8 +173,14 @@ export default function FieldView() {
                 status: "location_error",
                 workerConsented: true,
               });
-              toast({ title: "Location unavailable", description: "Could not get your location. Event recorded.", variant: "destructive" });
-              resolve();
+              toast({
+                title: "Location required",
+                description: opts.required
+                  ? "Turn on location access before clocking on for the day."
+                  : "Could not get your location. Event recorded.",
+                variant: "destructive",
+              });
+              resolve(null);
               return;
             }
             const result = await postLocationVerification({
@@ -187,7 +202,14 @@ export default function FieldView() {
                 variant: "destructive",
               });
             }
-            resolve();
+            if (!result) {
+              toast({
+                title: "Location check failed",
+                description: "Try again before clocking on.",
+                variant: "destructive",
+              });
+            }
+            resolve(result);
           },
         });
       }),
@@ -374,6 +396,13 @@ export default function FieldView() {
         toast({ title: "Clocked on — have a great day!" });
         if (subId) queryClient.invalidateQueries({ queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }) });
       },
+      onError: (error) => {
+        toast({
+          title: "Could not clock on",
+          description: error instanceof Error ? error.message : "Location must be enabled before clocking on.",
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -437,11 +466,21 @@ export default function FieldView() {
     const locationJob = dispatchList?.find(
       (assignment) => assignment.status !== "completed" && Boolean(assignment.jobAddress),
     );
-    await requestLocationVerification("clock_on", "clock-on", {
+    const verification = await requestLocationVerification("clock_on", "clock-on", {
       jobAssignmentId: locationJob?.id,
       jobAddress: locationJob?.jobAddress ?? undefined,
+      required: true,
     });
-    clockOn.mutate({ data: { subcontractorId: subId } });
+    if (!verification?.id) return;
+    if (verification.status === "skipped" || verification.status === "location_error") {
+      toast({
+        title: "Location required",
+        description: "You must allow location access before clocking on.",
+        variant: "destructive",
+      });
+      return;
+    }
+    clockOn.mutate({ data: { subcontractorId: subId, locationVerificationId: verification.id } });
   }, [subId, dispatchList, requestLocationVerification, clockOn]);
 
   const handleClockOff = useCallback(async () => {
@@ -559,6 +598,9 @@ export default function FieldView() {
                     <span className="block mt-0.5 font-medium">{locationPrompt.jobAddress}</span>
                   )}
                   <span className="block mt-1 opacity-80">This is not continuous tracking.</span>
+                  {locationPrompt.required && (
+                    <span className="block mt-1 font-medium">Location is required before clocking on.</span>
+                  )}
                 </p>
                 <div className="flex gap-2 mt-3">
                   <Button
@@ -568,14 +610,16 @@ export default function FieldView() {
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" /> Allow
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs gap-1.5"
-                    onClick={locationPrompt.onSkip}
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Skip
-                  </Button>
+                  {locationPrompt.onSkip && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={locationPrompt.onSkip}
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> Skip
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

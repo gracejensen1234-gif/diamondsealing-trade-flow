@@ -876,6 +876,7 @@ export const UpdateSubcontractorResponse = zod.object({
  */
 export const ClockOnBody = zod.object({
   "subcontractorId": zod.number(),
+  "locationVerificationId": zod.number().optional(),
   "gpsEnabled": zod.boolean().optional(),
   "gpsDisabledOnBreak": zod.boolean().optional()
 })
