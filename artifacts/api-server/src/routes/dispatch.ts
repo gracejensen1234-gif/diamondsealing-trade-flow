@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { jobAssignmentsTable, jobsTable, subcontractorsTable, workSessionsTable } from "@workspace/db";
+import { jobAssignmentsTable, jobReportsTable, jobsTable, subcontractorsTable, workSessionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   CreateDispatchBody,
@@ -239,9 +239,32 @@ router.patch("/dispatch/:id", async (req, res) => {
 router.delete("/dispatch/:id", requireAdmin, async (req, res) => {
   const parsed = DeleteJobAssignmentParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) return res.status(400).json({ error: "Invalid id" });
-  await db
+
+  const tenantId = companyId(req);
+  const [existing] = await db
+    .select()
+    .from(jobAssignmentsTable)
+    .where(and(eq(jobAssignmentsTable.id, parsed.data.id), eq(jobAssignmentsTable.companyId, tenantId)));
+  if (!existing) return res.status(404).json({ error: "Assignment not found" });
+
+  const [report] = await db
+    .select({ id: jobReportsTable.id })
+    .from(jobReportsTable)
+    .where(and(eq(jobReportsTable.jobAssignmentId, existing.id), eq(jobReportsTable.companyId, tenantId)))
+    .limit(1);
+
+  if (existing.status !== "pending" || existing.arrivedAt || existing.departedAt || report) {
+    return res.status(409).json({
+      error: "This work block has already been worked. Keep it for timesheets and invoices, or create a replacement block.",
+    });
+  }
+
+  const [deleted] = await db
     .delete(jobAssignmentsTable)
-    .where(and(eq(jobAssignmentsTable.id, parsed.data.id), eq(jobAssignmentsTable.companyId, companyId(req))));
+    .where(and(eq(jobAssignmentsTable.id, existing.id), eq(jobAssignmentsTable.companyId, tenantId)))
+    .returning({ id: jobAssignmentsTable.id });
+  if (!deleted) return res.status(404).json({ error: "Assignment not found" });
+
   return res.status(204).send();
 });
 

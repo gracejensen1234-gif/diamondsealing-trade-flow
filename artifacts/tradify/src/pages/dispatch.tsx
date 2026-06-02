@@ -5,21 +5,21 @@ import {
   useListJobs, 
   useListSubcontractors,
   useCreateDispatch,
-  useUpdateJobAssignment,
+  useDeleteJobAssignment,
   getListDispatchQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarIcon, GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 const timeWindowLabels: Record<string, string> = {
   full_day: "Full day",
@@ -40,11 +40,23 @@ function optionalNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function errorMessage(error: unknown) {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object" && "error" in data) {
+      const message = (data as { error?: unknown }).error;
+      if (typeof message === "string") return message;
+    }
+  }
+  return error instanceof Error ? error.message : "Try again.";
+}
+
 export default function Dispatch() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [assignmentToRemove, setAssignmentToRemove] = useState<any | null>(null);
   
   // Create dispatch form state
   const [selectedJob, setSelectedJob] = useState("");
@@ -75,11 +87,20 @@ export default function Dispatch() {
     }
   });
 
-  const deleteAssignment = useMutation({
-    mutationFn: (id: number) => fetch(`/api/dispatch/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast({ title: "Assignment removed" });
-      queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ date }) });
+  const deleteAssignment = useDeleteJobAssignment({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Assignment removed" });
+        setAssignmentToRemove(null);
+        queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ date }) });
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not remove assignment",
+          description: errorMessage(error),
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -383,12 +404,13 @@ export default function Dispatch() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                          if (confirm('Remove assignment?')) {
-                            deleteAssignment.mutate(assignment.id);
-                          }
-                        }}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setAssignmentToRemove(assignment)}
+                        disabled={deleteAssignment.isPending}
+                        title="Remove assignment"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -400,6 +422,36 @@ export default function Dispatch() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={Boolean(assignmentToRemove)} onOpenChange={(open) => {
+        if (!open) setAssignmentToRemove(null);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove work block?</DialogTitle>
+            <DialogDescription>
+              {assignmentToRemove?.jobTitle ?? "This assignment"} will be removed from dispatch for {format(new Date(date), "MMM do, yyyy")}.
+            </DialogDescription>
+          </DialogHeader>
+          {assignmentToRemove?.workArea ? (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm font-medium">
+              {assignmentToRemove.workArea}
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setAssignmentToRemove(null)} disabled={deleteAssignment.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => assignmentToRemove && deleteAssignment.mutate({ id: assignmentToRemove.id })}
+              disabled={!assignmentToRemove || deleteAssignment.isPending}
+            >
+              {deleteAssignment.isPending ? "Removing..." : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
