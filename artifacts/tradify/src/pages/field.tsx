@@ -121,6 +121,9 @@ type FieldEarningsSummary = {
   totalWorkMinutes: number;
   totalHours: number;
   ratePerMetre: number;
+  hourlyRate: number;
+  completedInvoiceHours: number;
+  uninvoicedInvoiceHours: number;
   completedMetres: number;
   earnedSubtotal: number;
   earnedTax: number;
@@ -851,7 +854,7 @@ export default function FieldView() {
     earningsSummary &&
     earningsSummary.toInvoiceGross > 0 &&
     earningsSummary.uninvoicedLineItemCount > 0 &&
-    earningsSummary.ratePerMetre > 0,
+    (earningsSummary.ratePerMetre > 0 || earningsSummary.hourlyRate > 0),
   );
   const currentInvoiceId = earningsSummary?.draftInvoiceId ?? earningsSummary?.submittedInvoiceId ?? null;
 
@@ -1157,11 +1160,15 @@ export default function FieldView() {
                     <p className="text-xs text-muted-foreground">Rate per metre</p>
                     <p className="mt-1 text-lg font-semibold">{formatCurrency(earningsSummary.ratePerMetre)}</p>
                   </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Hourly rate</p>
+                    <p className="mt-1 text-lg font-semibold">{formatCurrency(earningsSummary.hourlyRate)}/hr</p>
+                  </div>
                 </div>
 
-                {earningsSummary.ratePerMetre <= 0 ? (
+                {earningsSummary.ratePerMetre <= 0 && earningsSummary.hourlyRate <= 0 ? (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                    Your rate per metre has not been set yet. Admin must set it before invoices can be sent.
+                    Your pay rate has not been set yet. Admin must set a metre rate or hourly rate before invoices can be sent.
                   </div>
                 ) : null}
 

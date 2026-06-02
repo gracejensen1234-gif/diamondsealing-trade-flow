@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronUp, FileCheck2, HardHat, ImageIcon, Star, Trash2, Upload, UserPlus } from "lucide-react";
+import { ChevronDown, ChevronUp, DollarSign, FileCheck2, HardHat, ImageIcon, Star, Trash2, Upload, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   CREDENTIAL_TYPES,
@@ -38,12 +38,14 @@ const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
 export default function WorkerProfiles() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
+  const [rateEdits, setRateEdits] = useState<Record<number, { hourlyRate: string; ratePerMetre: string }>>({});
   const [credentialDrafts, setCredentialDrafts] = useState<Record<number, CredentialDraft>>({});
   const [showNewWorker, setShowNewWorker] = useState(false);
-  const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "" });
+  const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "", hourlyRate: "" });
 
   const { data: subs = [] } = useQuery({
     queryKey: ["subcontractors"],
@@ -53,6 +55,7 @@ export default function WorkerProfiles() {
   const { data: skills = [] } = useQuery({
     queryKey: ["worker-skills"],
     queryFn: () => fetch("/api/worker-skills").then((r) => r.json()),
+    enabled: isAdmin,
   });
 
   const { data: credentials = [] } = useQuery({
@@ -76,6 +79,7 @@ export default function WorkerProfiles() {
           email: data.email,
           phone: data.phone || undefined,
           abn: data.abn || undefined,
+          hourlyRate: Number(data.hourlyRate) > 0 ? Number(data.hourlyRate) : undefined,
           active: true,
         }),
       }).then(async (r) => {
@@ -84,7 +88,7 @@ export default function WorkerProfiles() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subcontractors"] });
-      setNewWorker({ name: "", email: "", phone: "", abn: "" });
+      setNewWorker({ name: "", email: "", phone: "", abn: "", hourlyRate: "" });
       setShowNewWorker(false);
       toast({ title: "Employee/subcontractor added" });
     },
@@ -92,6 +96,32 @@ export default function WorkerProfiles() {
       toast({
         title: "Could not add employee/subcontractor",
         description: error instanceof Error ? error.message : "Check the employee/subcontractor details and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateRatesMutation = useMutation({
+    mutationFn: async ({ subId, rates }: { subId: number; rates: { hourlyRate: string; ratePerMetre: string } }) => {
+      const response = await fetch(`/api/subcontractors/${subId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hourlyRate: Number(rates.hourlyRate) > 0 ? Number(rates.hourlyRate) : 0,
+          ratePerMetre: Number(rates.ratePerMetre) > 0 ? Number(rates.ratePerMetre) : 0,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not save pay rates");
+      return response.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subcontractors"] });
+      toast({ title: "Pay rates saved" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not save pay rates",
+        description: error instanceof Error ? error.message : "Try again.",
         variant: "destructive",
       });
     },
@@ -168,6 +198,17 @@ export default function WorkerProfiles() {
     return credentialDrafts[subId] ?? emptyCredentialDraft();
   }
 
+  function getRateEdit(sub: any) {
+    return rateEdits[sub.id] ?? {
+      hourlyRate: sub.hourlyRate != null ? String(sub.hourlyRate) : "",
+      ratePerMetre: sub.ratePerMetre != null ? String(sub.ratePerMetre) : "",
+    };
+  }
+
+  function updateRateEdit(sub: any, key: "hourlyRate" | "ratePerMetre", value: string) {
+    setRateEdits((prev) => ({ ...prev, [sub.id]: { ...getRateEdit(sub), [key]: value } }));
+  }
+
   function updateEdit(subId: number, key: string, value: any) {
     setEdits((prev) => ({ ...prev, [subId]: { ...getEdit(subId, skillMap.get(subId)), [key]: value } }));
   }
@@ -188,24 +229,28 @@ export default function WorkerProfiles() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Employee/Subcontractor Profiles</h1>
-            <p className="text-muted-foreground mt-1">Skill sets, competencies, experience and performance scores</p>
-            {user?.companySlug ? (
+            <h1 className="text-2xl font-bold">{isAdmin ? "Employee/Subcontractor Profiles" : "My Profile"}</h1>
+            <p className="text-muted-foreground mt-1">
+              {isAdmin ? "Skill sets, competencies, experience and performance scores" : "Your contact details, pay rate and site credentials"}
+            </p>
+            {isAdmin && user?.companySlug ? (
               <p className="mt-2 text-sm font-medium text-muted-foreground">
                 Company code: <span className="text-foreground">{user.companySlug}</span>
               </p>
             ) : null}
           </div>
-          <Button onClick={() => setShowNewWorker((value) => !value)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Employee/Subcontractor
-          </Button>
+          {isAdmin ? (
+            <Button onClick={() => setShowNewWorker((value) => !value)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Employee/Subcontractor
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {showNewWorker ? (
+      {isAdmin && showNewWorker ? (
         <Card>
-          <CardContent className="grid gap-4 pt-6 md:grid-cols-4">
+          <CardContent className="grid gap-4 pt-6 md:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="newWorkerName">Name</Label>
               <Input
@@ -242,7 +287,18 @@ export default function WorkerProfiles() {
                 onChange={(event) => setNewWorker((worker) => ({ ...worker, abn: event.target.value }))}
               />
             </div>
-            <div className="flex gap-2 md:col-span-4">
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerHourlyRate">Hourly rate</Label>
+              <Input
+                id="newWorkerHourlyRate"
+                type="number"
+                min="0"
+                step="0.01"
+                value={newWorker.hourlyRate}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, hourlyRate: event.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 md:col-span-5">
               <Button
                 onClick={() => createWorkerMutation.mutate(newWorker)}
                 disabled={!newWorker.name || !newWorker.email || createWorkerMutation.isPending}
@@ -259,6 +315,7 @@ export default function WorkerProfiles() {
         {(subs as any[]).filter((s: any) => s.active).map((sub: any) => {
           const sk = skillMap.get(sub.id);
           const edit = getEdit(sub.id, sk);
+          const rates = getRateEdit(sub);
           const subCredentials = credentialsBySub.get(sub.id) ?? [];
           const credentialDraft = getCredentialDraft(sub.id);
           const isOpen = expanded === sub.id;
@@ -274,22 +331,30 @@ export default function WorkerProfiles() {
                     <div>
                       <p className="font-semibold">{sub.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-xs">{sk?.experienceLevel ?? "intermediate"}</Badge>
-                        {sk?.canSilicone && <Badge variant="secondary" className="text-xs">Silicone</Badge>}
-                        {sk?.canSikaflex && <Badge variant="secondary" className="text-xs">Sikaflex</Badge>}
-                        {sk?.canCommercial && <Badge variant="secondary" className="text-xs">Commercial</Badge>}
-                        {sk?.canPools && <Badge variant="secondary" className="text-xs">Pools</Badge>}
+                        {isAdmin ? <Badge variant="outline" className="text-xs">{sk?.experienceLevel ?? "intermediate"}</Badge> : null}
+                        {isAdmin && sk?.canSilicone && <Badge variant="secondary" className="text-xs">Silicone</Badge>}
+                        {isAdmin && sk?.canSikaflex && <Badge variant="secondary" className="text-xs">Sikaflex</Badge>}
+                        {isAdmin && sk?.canCommercial && <Badge variant="secondary" className="text-xs">Commercial</Badge>}
+                        {isAdmin && sk?.canPools && <Badge variant="secondary" className="text-xs">Pools</Badge>}
+                        {!isAdmin ? (
+                          <Badge variant="outline" className="gap-1 text-xs">
+                            <DollarSign className="h-3 w-3" />
+                            {sub.hourlyRate != null ? `$${Number(sub.hourlyRate).toFixed(2)}/hr` : "Hourly rate not set"}
+                          </Badge>
+                        ) : null}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="text-right text-sm">
-                      <div className="flex items-center gap-1 text-amber-600">
-                        <Star className="w-3.5 h-3.5" />
-                        <span className="font-semibold">{Number(sk?.qualityScore ?? 100).toFixed(0)}</span>
+                    {isAdmin ? (
+                      <div className="text-right text-sm">
+                        <div className="flex items-center gap-1 text-amber-600">
+                          <Star className="w-3.5 h-3.5" />
+                          <span className="font-semibold">{Number(sk?.qualityScore ?? 100).toFixed(0)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">quality score</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">quality score</p>
-                    </div>
+                    ) : null}
                     {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
                 </div>
@@ -297,8 +362,54 @@ export default function WorkerProfiles() {
 
               {isOpen && (
                 <CardContent className="pt-0 space-y-5">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Pay rates</p>
+                    {isAdmin ? (
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Hourly rate</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={rates.hourlyRate}
+                            onChange={(event) => updateRateEdit(sub, "hourlyRate", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Rate per metre</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={rates.ratePerMetre}
+                            onChange={(event) => updateRateEdit(sub, "ratePerMetre", event.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            size="sm"
+                            onClick={() => updateRatesMutation.mutate({ subId: sub.id, rates })}
+                            disabled={updateRatesMutation.isPending}
+                          >
+                            Save rates
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-md border bg-background px-3 py-2">
+                          <p className="text-xs text-muted-foreground">Hourly rate</p>
+                          <p className="mt-1 text-lg font-semibold">
+                            {sub.hourlyRate != null ? `$${Number(sub.hourlyRate).toFixed(2)}/hr` : "Not set"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Experience */}
-                  <div className="flex items-center gap-4">
+                  {isAdmin ? <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <Label className="text-xs">Experience Level</Label>
                       <Select value={edit.experienceLevel ?? "intermediate"} onValueChange={(v) => updateEdit(sub.id, "experienceLevel", v)}>
@@ -320,10 +431,10 @@ export default function WorkerProfiles() {
                         onChange={(e) => updateEdit(sub.id, "yearsExperience", Number(e.target.value))}
                       />
                     </div>
-                  </div>
+                  </div> : null}
 
                   {/* Skills grid */}
-                  {["Products", "Job Types"].map((group) => (
+                  {isAdmin ? ["Products", "Job Types"].map((group) => (
                     <div key={group}>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{group}</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -338,7 +449,7 @@ export default function WorkerProfiles() {
                         ))}
                       </div>
                     </div>
-                  ))}
+                  )) : null}
 
                   {/* Credentials */}
                   <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
@@ -433,7 +544,7 @@ export default function WorkerProfiles() {
                   </div>
 
                   {/* Notes */}
-                  <div>
+                  {isAdmin ? <div>
                     <Label className="text-xs">Notes</Label>
                     <Textarea
                       className="mt-1 text-sm"
@@ -442,10 +553,10 @@ export default function WorkerProfiles() {
                       onChange={(e) => updateEdit(sub.id, "notes", e.target.value)}
                       placeholder="Special skills, certifications, or notes…"
                     />
-                  </div>
+                  </div> : null}
 
                   {/* Performance scores (read-only) */}
-                  {sk && (
+                  {isAdmin && sk && (
                     <div className="grid grid-cols-4 gap-3 p-3 bg-muted/30 rounded-lg text-xs">
                       <div><p className="text-muted-foreground">Punctuality</p><p className="font-semibold">{Number(sk.punctualityScore).toFixed(0)}/100</p></div>
                       <div><p className="text-muted-foreground">Photo Compliance</p><p className="font-semibold">{Number(sk.photoComplianceScore).toFixed(0)}/100</p></div>
@@ -454,7 +565,9 @@ export default function WorkerProfiles() {
                     </div>
                   )}
 
-                  <Button size="sm" onClick={() => saveMutation.mutate({ subId: sub.id, data: edit })}>Save Profile</Button>
+                  {isAdmin ? (
+                    <Button size="sm" onClick={() => saveMutation.mutate({ subId: sub.id, data: edit })}>Save Profile</Button>
+                  ) : null}
                 </CardContent>
               )}
             </Card>

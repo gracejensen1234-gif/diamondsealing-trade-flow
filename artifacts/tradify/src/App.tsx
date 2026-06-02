@@ -116,6 +116,9 @@ function WorkerRoutes() {
         <Route path="/" component={FieldView} />
         <Route path="/field" component={FieldView} />
         <Route path="/field/jobs/:id" component={FieldJobDetail} />
+        <Route path="/worker-profiles" component={WorkerProfiles} />
+        <Route path="/weekly-invoices" component={WeeklyInvoices} />
+        <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
         <Route path="/notifications" component={NotificationCentre} />
         <Route component={FieldView} />
       </Switch>

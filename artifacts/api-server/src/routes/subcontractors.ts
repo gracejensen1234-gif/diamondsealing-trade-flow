@@ -20,6 +20,7 @@ function serializeSubcontractor(sub: typeof subcontractorsTable.$inferSelect, in
     email: sub.email,
     phone: sub.phone,
     abn: sub.abn,
+    hourlyRate: sub.hourlyRate ? Number(sub.hourlyRate) : null,
     active: sub.active,
     createdAt: sub.createdAt,
   };
@@ -58,6 +59,7 @@ router.post("/subcontractors", requireAdmin, async (req, res) => {
     phone: parsed.data.phone ?? null,
     abn: parsed.data.abn ?? null,
     ratePerMetre: parsed.data.ratePerMetre != null ? String(parsed.data.ratePerMetre) : null,
+    hourlyRate: parsed.data.hourlyRate != null ? String(parsed.data.hourlyRate) : null,
     active: parsed.data.active ?? true,
   }).returning();
   return res.status(201).json(serializeSubcontractor(sub, true));
@@ -87,6 +89,7 @@ router.patch("/subcontractors/:id", requireAdmin, async (req, res) => {
   if (body.data.phone !== undefined) updates.phone = body.data.phone;
   if (body.data.abn !== undefined) updates.abn = body.data.abn;
   if (body.data.ratePerMetre !== undefined) updates.ratePerMetre = String(body.data.ratePerMetre);
+  if (body.data.hourlyRate !== undefined) updates.hourlyRate = String(body.data.hourlyRate);
   if (body.data.active !== undefined) updates.active = body.data.active;
   const [sub] = await db
     .update(subcontractorsTable)

@@ -16,6 +16,16 @@ function formatLineHours(hours?: number | null) {
   return hours && hours > 0 ? `${hours.toFixed(2)} hrs` : null;
 }
 
+function lineQuantityLabel(item: { payBasis?: string; hoursWorked?: number | null; metersCompleted: number }) {
+  if (item.payBasis === "hours") return `${(item.hoursWorked ?? 0).toFixed(2)} hrs`;
+  return `${item.metersCompleted}m`;
+}
+
+function lineRateLabel(item: { payBasis?: string; hourlyRate?: number | null; ratePerMetre: number }) {
+  if (item.payBasis === "hours") return `$${(item.hourlyRate ?? 0).toFixed(2)}/hr`;
+  return `$${item.ratePerMetre.toFixed(2)}/m`;
+}
+
 export default function WeeklyInvoiceDetail() {
   const { id } = useParams();
   const { toast } = useToast();
@@ -107,7 +117,7 @@ export default function WeeklyInvoiceDetail() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Job</TableHead>
-                    <TableHead className="text-right">Metres</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right">Rate</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
@@ -127,9 +137,14 @@ export default function WeeklyInvoiceDetail() {
                             Hours: {formatLineHours(item.hoursWorked)}
                           </div>
                         )}
+                        {item.hourlyRate != null && item.hourlyRate > 0 ? (
+                          <div className="mt-1 text-xs font-medium text-muted-foreground">
+                            Hourly rate: ${item.hourlyRate.toFixed(2)}/hr
+                          </div>
+                        ) : null}
                       </TableCell>
-                      <TableCell className="text-right">{item.metersCompleted}m</TableCell>
-                      <TableCell className="text-right">${item.ratePerMetre.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{lineQuantityLabel(item)}</TableCell>
+                      <TableCell className="text-right">{lineRateLabel(item)}</TableCell>
                       <TableCell className="text-right font-medium">${item.amount.toFixed(2)}</TableCell>
                     </TableRow>
                   ))}

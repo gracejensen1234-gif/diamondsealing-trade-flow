@@ -106,6 +106,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       title: "Field",
       items: [
         { name: "Field View", href: "/field", icon: Smartphone },
+        { name: "My Profile", href: "/worker-profiles", icon: HardHat },
+        { name: "My Invoices", href: "/weekly-invoices", icon: FileSpreadsheet },
         { name: "Notifications", href: "/notifications", icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
       ],
     },

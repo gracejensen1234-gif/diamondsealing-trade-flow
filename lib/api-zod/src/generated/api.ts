@@ -811,6 +811,7 @@ export const ListSubcontractorsResponseItem = zod.object({
   "phone": zod.string().nullish(),
   "abn": zod.string().nullish(),
   "ratePerMetre": zod.number().nullish(),
+  "hourlyRate": zod.number().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -826,6 +827,7 @@ export const CreateSubcontractorBody = zod.object({
   "phone": zod.string().optional(),
   "abn": zod.string().optional(),
   "ratePerMetre": zod.number().optional(),
+  "hourlyRate": zod.number().optional(),
   "active": zod.boolean().optional()
 })
 
@@ -841,6 +843,7 @@ export const GetSubcontractorResponse = zod.object({
   "phone": zod.string().nullish(),
   "abn": zod.string().nullish(),
   "ratePerMetre": zod.number().nullish(),
+  "hourlyRate": zod.number().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -856,6 +859,7 @@ export const UpdateSubcontractorBody = zod.object({
   "phone": zod.string().optional(),
   "abn": zod.string().optional(),
   "ratePerMetre": zod.number().optional(),
+  "hourlyRate": zod.number().optional(),
   "active": zod.boolean().optional()
 })
 
@@ -866,6 +870,7 @@ export const UpdateSubcontractorResponse = zod.object({
   "phone": zod.string().nullish(),
   "abn": zod.string().nullish(),
   "ratePerMetre": zod.number().nullish(),
+  "hourlyRate": zod.number().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -1569,6 +1574,9 @@ export const ListWeeklyInvoicesResponseItem = zod.object({
   "dispatchDate": zod.coerce.date().optional(),
   "metersCompleted": zod.number(),
   "ratePerMetre": zod.number(),
+  "hourlyRate": zod.number().nullish(),
+  "hourlyAmount": zod.number().nullish(),
+  "payBasis": zod.enum(['metres', 'hours', 'unset']).optional(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
   "reportId": zod.number().optional(),
@@ -1614,6 +1622,9 @@ export const GetWeeklyInvoiceResponse = zod.object({
   "dispatchDate": zod.coerce.date().optional(),
   "metersCompleted": zod.number(),
   "ratePerMetre": zod.number(),
+  "hourlyRate": zod.number().nullish(),
+  "hourlyAmount": zod.number().nullish(),
+  "payBasis": zod.enum(['metres', 'hours', 'unset']).optional(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
   "reportId": zod.number().optional(),
@@ -1654,6 +1665,9 @@ export const UpdateWeeklyInvoiceResponse = zod.object({
   "dispatchDate": zod.coerce.date().optional(),
   "metersCompleted": zod.number(),
   "ratePerMetre": zod.number(),
+  "hourlyRate": zod.number().nullish(),
+  "hourlyAmount": zod.number().nullish(),
+  "payBasis": zod.enum(['metres', 'hours', 'unset']).optional(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
   "reportId": zod.number().optional(),
@@ -1692,6 +1706,9 @@ export const SubmitWeeklyInvoiceResponse = zod.object({
   "dispatchDate": zod.coerce.date().optional(),
   "metersCompleted": zod.number(),
   "ratePerMetre": zod.number(),
+  "hourlyRate": zod.number().nullish(),
+  "hourlyAmount": zod.number().nullish(),
+  "payBasis": zod.enum(['metres', 'hours', 'unset']).optional(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
   "reportId": zod.number().optional(),

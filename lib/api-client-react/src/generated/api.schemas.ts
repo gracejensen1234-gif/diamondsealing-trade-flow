@@ -445,6 +445,8 @@ export interface Subcontractor {
   abn?: string | null;
   /** @nullable */
   ratePerMetre?: number | null;
+  /** @nullable */
+  hourlyRate?: number | null;
   active: boolean;
   createdAt: string;
 }
@@ -456,6 +458,7 @@ export interface SubcontractorInput {
   phone?: string;
   abn?: string;
   ratePerMetre?: number;
+  hourlyRate?: number;
   active?: boolean;
 }
 
@@ -465,6 +468,7 @@ export interface SubcontractorUpdate {
   phone?: string;
   abn?: string;
   ratePerMetre?: number;
+  hourlyRate?: number;
   active?: boolean;
 }
 
@@ -782,6 +786,11 @@ export interface WeeklyInvoiceLineItem {
   dispatchDate?: string;
   metersCompleted: number;
   ratePerMetre: number;
+  /** @nullable */
+  hourlyRate?: number | null;
+  /** @nullable */
+  hourlyAmount?: number | null;
+  payBasis?: 'metres' | 'hours' | 'unset';
   amount: number;
   stockCost?: number;
   reportId?: number;

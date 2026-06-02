@@ -134,6 +134,11 @@ export default function WeeklyInvoices() {
                 <div className="text-sm text-muted-foreground mt-2 bg-muted px-3 py-1 rounded-full">
                   {inv.totalMetres}m Completed
                 </div>
+                {inv.lineItems?.some((item) => (item.hoursWorked ?? 0) > 0) ? (
+                  <div className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                    {inv.lineItems.reduce((sum, item) => sum + (item.hoursWorked ?? 0), 0).toFixed(2)} hrs recorded
+                  </div>
+                ) : null}
               </CardContent>
               <CardFooter className="pt-4 border-t gap-2 flex-wrap">
                 <Button asChild variant="outline" className="flex-1">

@@ -32,6 +32,9 @@ type WeeklyInvoiceLineItem = {
   dispatchDate?: string | null;
   metersCompleted?: number | string | null;
   ratePerMetre?: number | string | null;
+  hourlyRate?: number | string | null;
+  hourlyAmount?: number | string | null;
+  payBasis?: "metres" | "hours" | "unset";
   amount?: number | string | null;
   reportId?: number | null;
   hoursWorked?: number | string | null;
@@ -55,6 +58,7 @@ type XeroInvoiceResponse = {
 type WeeklyInvoiceBuild = {
   lineItems: Array<WeeklyInvoiceLineItem & { stockCost?: number }>;
   totalMetres: number;
+  totalHours: number;
   subtotal: number;
   tax: number;
   total: number;
@@ -164,6 +168,23 @@ function xeroLineDescription(inv: typeof weeklyInvoicesTable.$inferSelect, item:
   return details.length ? `${base} - ${details.join(" - ")}` : base;
 }
 
+function linePayBasis(item: WeeklyInvoiceLineItem) {
+  if (item.payBasis === "hours" || item.payBasis === "metres") return item.payBasis;
+  return Number(item.ratePerMetre ?? 0) > 0 ? "metres" : Number(item.hourlyRate ?? 0) > 0 ? "hours" : "unset";
+}
+
+function xeroLineQuantity(item: WeeklyInvoiceLineItem) {
+  return linePayBasis(item) === "hours"
+    ? Number(item.hoursWorked ?? 0)
+    : Number(item.metersCompleted ?? 0);
+}
+
+function xeroLineUnitAmount(item: WeeklyInvoiceLineItem) {
+  return linePayBasis(item) === "hours"
+    ? Number(item.hourlyRate ?? 0)
+    : Number(item.ratePerMetre ?? 0);
+}
+
 function submittedReportIds(invoices: Array<typeof weeklyInvoicesTable.$inferSelect>) {
   const reportIds = new Set<number>();
   for (const invoice of invoices) {
@@ -181,6 +202,7 @@ async function buildWeeklyInvoiceValues(
   reports: Array<typeof jobReportsTable.$inferSelect>,
 ): Promise<WeeklyInvoiceBuild> {
   const ratePerMetre = sub.ratePerMetre ? Number(sub.ratePerMetre) : 0;
+  const hourlyRate = sub.hourlyRate ? Number(sub.hourlyRate) : 0;
   const items = await Promise.all(reports.map(async (r) => {
     const [job] = r.jobId
       ? await db.select().from(jobsTable).where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
@@ -189,7 +211,11 @@ async function buildWeeklyInvoiceValues(
       ? await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.id, r.jobAssignmentId), eq(jobAssignmentsTable.companyId, tenantId)))
       : [null];
     const metres = Number(r.metersCompleted);
-    const amount = metres * ratePerMetre;
+    const hoursWorked = reportHours(r, assignment);
+    const hours = Number(hoursWorked ?? 0);
+    const hourlyAmount = hours * hourlyRate;
+    const payBasis: WeeklyInvoiceLineItem["payBasis"] = ratePerMetre > 0 ? "metres" : hourlyRate > 0 ? "hours" : "unset";
+    const amount = payBasis === "hours" ? hourlyAmount : metres * ratePerMetre;
     return {
       jobId: r.jobId,
       jobTitle: job?.title ?? "Unknown Job",
@@ -197,19 +223,24 @@ async function buildWeeklyInvoiceValues(
       dispatchDate: r.dispatchDate ?? null,
       metersCompleted: metres,
       ratePerMetre,
+      hourlyRate,
+      hourlyAmount: money(hourlyAmount),
+      payBasis,
       amount: money(amount),
       stockCost: 0,
       reportId: r.id,
-      hoursWorked: reportHours(r, assignment),
+      hoursWorked,
       jobDescription: invoiceJobDescription(r, job, assignment),
     };
   }));
   const totalMetres = items.reduce((sum, item) => sum + Number(item.metersCompleted ?? 0), 0);
+  const totalHours = items.reduce((sum, item) => sum + Number(item.hoursWorked ?? 0), 0);
   const subtotal = items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
   const tax = subtotal * 0.1;
   return {
     lineItems: items,
     totalMetres: money(totalMetres),
+    totalHours: money(totalHours),
     subtotal: money(subtotal),
     tax: money(tax),
     total: money(subtotal + tax),
@@ -278,6 +309,9 @@ async function buildEarningsSummary(tenantId: number, subcontractorId: number, w
     totalWorkMinutes,
     totalHours: Number((totalWorkMinutes / 60).toFixed(2)),
     ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : 0,
+    hourlyRate: sub.hourlyRate ? Number(sub.hourlyRate) : 0,
+    completedInvoiceHours: earnedValues.totalHours,
+    uninvoicedInvoiceHours: toInvoiceValues.totalHours,
     completedMetres: earnedValues.totalMetres,
     earnedSubtotal: earnedValues.subtotal,
     earnedTax: earnedValues.tax,
@@ -446,8 +480,8 @@ async function buildXeroCsv(inv: typeof weeklyInvoicesTable.$inferSelect, subNam
       invoiceDate,
       dueDate,
       xeroLineDescription(inv, item),
-      String(Number(item.metersCompleted ?? 0).toFixed(2)),
-      String(Number(item.ratePerMetre ?? 0).toFixed(2)),
+      String(xeroLineQuantity(item).toFixed(2)),
+      String(xeroLineUnitAmount(item).toFixed(2)),
       accountCode,
       taxType,
     ]);
@@ -494,8 +528,8 @@ async function createXeroDraftBill(inv: typeof weeklyInvoicesTable.$inferSelect,
           LineAmountTypes: "Exclusive",
           LineItems: invoiceLines.map((item) => ({
             Description: xeroLineDescription(inv, item),
-            Quantity: Number(item.metersCompleted ?? 0),
-            UnitAmount: Number(item.ratePerMetre ?? 0),
+            Quantity: xeroLineQuantity(item),
+            UnitAmount: xeroLineUnitAmount(item),
             AccountCode: accountCode,
             TaxType: getXeroTaxType(),
           })),
@@ -561,8 +595,10 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
   if (!prepared.invoice) {
     return res.status(400).json({ error: "No uninvoiced completed work for this week" });
   }
-  if (!prepared.sub.ratePerMetre || Number(prepared.sub.ratePerMetre) <= 0) {
-    return res.status(400).json({ error: "Rate per metre must be set before sending an invoice to Xero" });
+  const hasMetreRate = Boolean(prepared.sub.ratePerMetre && Number(prepared.sub.ratePerMetre) > 0);
+  const hasHourlyRate = Boolean(prepared.sub.hourlyRate && Number(prepared.sub.hourlyRate) > 0);
+  if (!hasMetreRate && !hasHourlyRate) {
+    return res.status(400).json({ error: "A metre rate or hourly rate must be set before sending an invoice to Xero" });
   }
 
   let xeroInvoiceId: string;

@@ -11,6 +11,7 @@ export const subcontractorsTable = pgTable("subcontractors", {
   vehiclePlate: text("vehicle_plate"),
   abn: text("abn"),
   ratePerMetre: numeric("rate_per_metre", { precision: 8, scale: 2 }),
+  hourlyRate: numeric("hourly_rate", { precision: 8, scale: 2 }),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
