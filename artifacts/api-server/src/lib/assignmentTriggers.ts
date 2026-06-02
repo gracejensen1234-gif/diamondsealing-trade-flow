@@ -32,8 +32,12 @@ const MAX_JOBS_PER_DAY = 4;
 
 type JobRow = typeof jobsTable.$inferSelect;
 type CustomerRow = typeof customersTable.$inferSelect;
-type BuilderProfileRow = typeof builderProfilesTable.$inferSelect;
 type WorkerSkillsRow = typeof workerSkillsTable.$inferSelect;
+type StockRequirements = {
+  productKeywords: string[];
+  colourKeywords: string[];
+  label: string;
+};
 
 type TriggerName = "created" | "updated";
 
@@ -108,7 +112,9 @@ function inferJobType(text: string) {
 }
 
 function inferProductType(text: string) {
-  if (text.includes("sikaflex") || text.includes("sika")) return "sikaflex";
+  if (text.includes("sikaflex")) return "sikaflex";
+  if (text.includes("sikasil")) return "silicone";
+  if (text.includes("sika")) return "sikaflex";
   if (text.includes("fire")) return "fire_rated";
   if (text.includes("waterproof")) return "waterproofing";
   return "silicone";
@@ -244,22 +250,38 @@ function checkSkillRules(
   };
 }
 
-function stockKeywords(productType: string, colours: unknown) {
-  const keywords = [productType.replace("_", " ")];
-  if (productType === "sikaflex") keywords.push("sika");
-  if (productType === "fire_rated") keywords.push("fire");
-  if (productType === "waterproofing") keywords.push("waterproof");
-  if (Array.isArray(colours)) {
-    for (const colour of colours) {
-      if (typeof colour === "string" && colour.trim()) keywords.push(colour.trim().toLowerCase());
-    }
-  }
-  return keywords.filter(Boolean);
+function productKeywords(productType: string) {
+  if (productType === "sikaflex") return ["sikaflex", "sika flex"];
+  if (productType === "fire_rated") return ["fire rated", "fire-rated", "fire"];
+  if (productType === "waterproofing") return ["waterproofing", "waterproof"];
+  return ["silicone", "sikasil", "sika sil"];
 }
 
-function stockItemMatches(item: typeof stockItemsTable.$inferSelect, keywords: string[]) {
+function stockRequirements(productType: string, colours: unknown): StockRequirements {
+  const colourKeywords: string[] = [];
+  if (Array.isArray(colours)) {
+    for (const colour of colours) {
+      if (typeof colour === "string" && colour.trim()) colourKeywords.push(colour.trim().toLowerCase());
+    }
+  }
+  const productLabel = productType.replace("_", " ");
+  const label = colourKeywords.length > 0
+    ? `${productLabel} in ${colourKeywords.join(", ")}`
+    : productLabel;
+  return {
+    productKeywords: productKeywords(productType),
+    colourKeywords,
+    label,
+  };
+}
+
+function stockItemMatches(item: typeof stockItemsTable.$inferSelect, requirements: StockRequirements) {
   const haystack = [item.name, item.colour].filter(Boolean).join(" ").toLowerCase();
-  return keywords.some((keyword) => haystack.includes(keyword));
+  const productMatch = requirements.productKeywords.some((keyword) => haystack.includes(keyword));
+  const colourMatch =
+    requirements.colourKeywords.length === 0 ||
+    requirements.colourKeywords.some((keyword) => haystack.includes(keyword));
+  return productMatch && colourMatch;
 }
 
 async function loadCustomer(job: JobRow, tenantId: number) {
@@ -399,7 +421,7 @@ export async function runJobAssignmentTriggers({
   const productType = inferProductType(bag);
   const jobType = inferJobType(bag);
   const suburb = inferSuburb(job, customer);
-  const requiredStockKeywords = stockKeywords(productType, job.requiredColours);
+  const requiredStock = stockRequirements(productType, job.requiredColours);
 
   const [subs, allSkills, allLeave, sameDayAssignments, nearbyAssignments, stockItems, inventory] = await Promise.all([
     db
@@ -466,7 +488,7 @@ export async function runJobAssignmentTriggers({
     inventoryBySub.set(row.subcontractorId, subInventory);
   }
 
-  const relevantStockItems = stockItems.filter((item) => stockItemMatches(item, requiredStockKeywords));
+  const relevantStockItems = stockItems.filter((item) => stockItemMatches(item, requiredStock));
 
   const candidates = subs.map((sub): Candidate => {
     const skills = skillBySub.get(sub.id) ?? null;
@@ -552,7 +574,7 @@ export async function runJobAssignmentTriggers({
         reasons.push("Required product/colour appears to be in subcontractor stock");
         score += 8;
       } else {
-        stockShortfall.push(`No matching stock for ${requiredStockKeywords.join(", ")}`);
+        stockShortfall.push(`No matching stock for ${requiredStock.label}`);
         warnings.push("Matching stock is not currently assigned to this employee/subcontractor");
         score -= 15;
       }
