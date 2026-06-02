@@ -228,6 +228,9 @@ router.post("/dispatch/:id/arrive", async (req, res) => {
     return res.status(403).json({ error: "You can only mark your own assigned jobs" });
   }
   if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
+  if (!isAdmin(req) && existing.status !== "pending") {
+    return res.status(400).json({ error: "Only pending jobs can be checked in" });
+  }
 
   const [a] = await db.update(jobAssignmentsTable).set({
     status: "arrived",
@@ -249,6 +252,9 @@ router.post("/dispatch/:id/depart", async (req, res) => {
     return res.status(403).json({ error: "You can only mark your own assigned jobs" });
   }
   if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
+  if (!isAdmin(req) && existing.status !== "arrived" && existing.status !== "in_progress") {
+    return res.status(400).json({ error: "Check in to this job before checking out" });
+  }
 
   const [a] = await db.update(jobAssignmentsTable).set({
     status: "completed",
