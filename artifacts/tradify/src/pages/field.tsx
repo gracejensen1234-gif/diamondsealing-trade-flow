@@ -146,6 +146,14 @@ type SubmitCurrentInvoiceResponse = {
   csvDownloadUrl?: string;
 };
 
+type FieldWorkSession = {
+  status?: string | null;
+  clockedOnAt?: string | Date | null;
+  clockedOffAt?: string | Date | null;
+  breakStartAt?: string | Date | null;
+  totalBreakMinutes?: number | null;
+};
+
 async function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
   if (!navigator.geolocation) return null;
   return new Promise((resolve) =>
@@ -179,6 +187,29 @@ function formatCurrency(value: number) {
     style: "currency",
     currency: "AUD",
   }).format(Number.isFinite(value) ? value : 0);
+}
+
+function workedMinutesSoFar(session: FieldWorkSession | null | undefined, now: Date) {
+  if (!session?.clockedOnAt) return 0;
+  const clockedOnAt = new Date(session.clockedOnAt).getTime();
+  const clockedOffAt = session.clockedOffAt ? new Date(session.clockedOffAt).getTime() : now.getTime();
+  if (!Number.isFinite(clockedOnAt) || !Number.isFinite(clockedOffAt)) return 0;
+
+  let breakMinutes = session.totalBreakMinutes ?? 0;
+  if (session.status === "on_break" && session.breakStartAt) {
+    const breakStartedAt = new Date(session.breakStartAt).getTime();
+    if (Number.isFinite(breakStartedAt)) {
+      breakMinutes += Math.max(0, Math.round((now.getTime() - breakStartedAt) / 60000));
+    }
+  }
+
+  return Math.max(0, Math.round((clockedOffAt - clockedOnAt) / 60000) - breakMinutes);
+}
+
+function formatWorkedTime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes.toString().padStart(2, "0")}m`;
 }
 
 function textMatchesStock(item: FieldInventoryItem, requirement: string) {
@@ -225,6 +256,7 @@ export default function FieldView() {
 
   const [dismissedBanner, setDismissedBanner] = useState<number[]>([]);
   const [locationPrompt, setLocationPrompt] = useState<LocationPrompt | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
   // Push notification state
   const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
@@ -255,6 +287,11 @@ export default function FieldView() {
   // Check push status for Field View status messaging. The app-wide prompt handles enabling.
   useEffect(() => {
     setPushStatus(currentPushPermission());
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -759,6 +796,8 @@ export default function FieldView() {
 
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
   const isOnBreak = session?.status === "on_break";
+  const workedMinutesToday = useMemo(() => workedMinutesSoFar(session, currentTime), [session, currentTime]);
+  const workedTimeTodayLabel = formatWorkedTime(workedMinutesToday);
   const unreadCount = unreadData?.count ?? 0;
   const pushEnabled = Boolean(pushServerStatus?.enabled);
   const inventoryCalendarDates = useMemo(() => {
@@ -1035,6 +1074,17 @@ export default function FieldView() {
                       </span>
                     </div>
                   )}
+                  {session.clockedOnAt && (
+                    <div className="mt-2 rounded-md border bg-background px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          Hours worked so far today
+                        </span>
+                        <span className="text-base font-semibold">{workedTimeTodayLabel}</span>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Break time:</span>
                     <span className="font-medium">{session.totalBreakMinutes || 0} min</span>
@@ -1079,7 +1129,7 @@ export default function FieldView() {
                   <div className="rounded-md border bg-muted/30 px-3 py-2">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
-                      Hours worked
+                      Weekly hours
                     </div>
                     <p className="mt-1 text-lg font-semibold">{earningsSummary.totalHours.toFixed(2)}</p>
                   </div>
