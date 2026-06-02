@@ -20,6 +20,13 @@ function dateLabel(d: string) {
   return new Date(d).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
 }
 
+async function requestJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? "Request failed");
+  return data;
+}
+
 export default function WeeklyPlanner() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -37,18 +44,28 @@ export default function WeeklyPlanner() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => fetch("/api/weekly-planner/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weekStart, weekEnd: weekEndStr, adminNotes: notes }) }).then((r) => r.json()),
+    mutationFn: () => requestJson("/api/weekly-planner/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weekStart, weekEnd: weekEndStr, adminNotes: notes }) }),
     onSuccess: (data) => { setProposal(data); qc.invalidateQueries({ queryKey: ["weekly-planner"] }); toast({ title: "Weekly plan generated" }); },
     onError: () => toast({ title: "Generation failed", description: "Try again or check API settings", variant: "destructive" }),
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => fetch(`/api/weekly-planner/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "approved" }) }).then((r) => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["weekly-planner"] }); setProposal(null); toast({ title: "Plan approved and dispatched" }); },
+    mutationFn: (id: number) => requestJson(`/api/weekly-planner/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "approved" }) }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["weekly-planner"] });
+      qc.invalidateQueries({ queryKey: ["dispatch"] });
+      setProposal(null);
+      toast({ title: "Plan approved and dispatched", description: `${data.createdAssignments?.length ?? 0} work block(s) scheduled.` });
+    },
+    onError: (error) => toast({
+      title: "Could not dispatch plan",
+      description: error instanceof Error ? error.message : "Review the plan and try again.",
+      variant: "destructive",
+    }),
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: number) => fetch(`/api/weekly-planner/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "rejected" }) }).then((r) => r.json()),
+    mutationFn: (id: number) => requestJson(`/api/weekly-planner/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "rejected" }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["weekly-planner"] }); setProposal(null); toast({ title: "Plan rejected" }); },
   });
 
@@ -59,7 +76,7 @@ export default function WeeklyPlanner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Weekly AI Planner</h1>
           <p className="text-muted-foreground mt-1">Rule-triggered workforce allocation proposals for the week</p>
@@ -115,8 +132,40 @@ export default function WeeklyPlanner() {
             </div>
           )}
 
+          {/* Proposed worker schedules */}
+          {current.proposedSchedule && (
+            <div className="space-y-4">
+              {(current.proposedSchedule as any[]).map((worker) => (
+                <Card key={worker.subcontractorId ?? worker.subcontractorName}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{worker.subcontractorName}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {worker.assignments?.length > 0 ? (
+                      <div className="space-y-2">
+                        {worker.assignments.map((assignment: any, i: number) => (
+                          <div key={`${assignment.jobId}-${assignment.date}-${i}`} className="flex flex-col gap-2 rounded-lg bg-muted/40 p-2 sm:flex-row sm:items-center sm:gap-3">
+                            <div className="h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
+                            <p className="text-sm font-medium">{assignment.date ? dateLabel(assignment.date) : "Unscheduled"}</p>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                            <p className="flex-1 text-sm text-muted-foreground">{assignment.jobTitle}</p>
+                            {assignment.workArea && <Badge variant="secondary" className="text-xs">{assignment.workArea}</Badge>}
+                            {assignment.routeNote && <Badge variant="outline" className="text-xs">{assignment.routeNote}</Badge>}
+                            {assignment.suburb && <span className="text-xs text-muted-foreground">{assignment.suburb}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No assignments proposed.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
           {/* Daily assignments */}
-          {current.dailyAssignments && (
+          {!current.proposedSchedule && current.dailyAssignments && (
             <div className="space-y-4">
               {Object.entries(current.dailyAssignments as Record<string, any[]>).map(([date, assignments]) => (
                 <Card key={date}>
@@ -145,7 +194,7 @@ export default function WeeklyPlanner() {
           )}
 
           {/* Flat assignments fallback */}
-          {!current.dailyAssignments && current.assignments?.length > 0 && (
+          {!current.proposedSchedule && !current.dailyAssignments && current.assignments?.length > 0 && (
             <Card>
               <CardContent className="pt-4 space-y-2">
                 {(current.assignments as any[]).map((a: any, i: number) => (

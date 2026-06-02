@@ -18,6 +18,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { companyId } from "../lib/auth.js";
+import { createAndSendNotification } from "../lib/notificationService.js";
 
 const router = Router();
 
@@ -338,7 +339,18 @@ router.post("/allocation/recommend", async (req, res) => {
 
 // POST /allocation/confirm
 router.post("/allocation/confirm", async (req, res) => {
-  const { recommendationId, subcontractorId, overrideReason } = req.body;
+  const {
+    recommendationId,
+    subcontractorId,
+    overrideReason,
+    workArea,
+    timeWindow,
+    plannedStartTime,
+    plannedEndTime,
+    estimatedMetres,
+    requiredColours,
+    notes,
+  } = req.body;
   if (!recommendationId || !subcontractorId) return res.status(400).json({ error: "recommendationId and subcontractorId required" });
   const tenantId = companyId(req);
   const [sub] = await db
@@ -347,9 +359,99 @@ router.post("/allocation/confirm", async (req, res) => {
     .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
   if (!sub) return res.status(400).json({ error: "Employee/subcontractor not found for this company" });
 
+  const [recommendation] = await db
+    .select()
+    .from(allocationRecommendationsTable)
+    .where(and(eq(allocationRecommendationsTable.id, Number(recommendationId)), eq(allocationRecommendationsTable.companyId, tenantId)));
+  if (!recommendation) return res.status(404).json({ error: "Recommendation not found" });
+
+  const [job] = await db
+    .select()
+    .from(jobsTable)
+    .where(and(eq(jobsTable.id, recommendation.jobId), eq(jobsTable.companyId, tenantId)));
+  if (!job) return res.status(404).json({ error: "Job not found for this recommendation" });
+
+  const dispatchDate = recommendation.requestedDate;
+  const [existingAssignment] = recommendation.jobAssignmentId
+    ? await db
+      .select()
+      .from(jobAssignmentsTable)
+      .where(and(eq(jobAssignmentsTable.id, recommendation.jobAssignmentId), eq(jobAssignmentsTable.companyId, tenantId)))
+    : [];
+  if (existingAssignment && existingAssignment.status !== "pending") {
+    return res.status(409).json({ error: "This assignment is already active or completed. Review it from Dispatch before changing it." });
+  }
+
+  let scheduledOrder = existingAssignment?.scheduledOrder ?? 1;
+  if (!existingAssignment || existingAssignment.subcontractorId !== Number(subcontractorId) || existingAssignment.dispatchDate !== dispatchDate) {
+    const existingForSub = await db
+      .select({ scheduledOrder: jobAssignmentsTable.scheduledOrder })
+      .from(jobAssignmentsTable)
+      .where(
+        and(
+          eq(jobAssignmentsTable.companyId, tenantId),
+          eq(jobAssignmentsTable.dispatchDate, dispatchDate),
+          eq(jobAssignmentsTable.subcontractorId, Number(subcontractorId)),
+        ),
+      );
+    scheduledOrder = existingForSub.reduce((max, assignment) => Math.max(max, assignment.scheduledOrder), 0) + 1;
+  }
+
+  const blockColours = Array.isArray(requiredColours)
+    ? requiredColours.filter((colour): colour is string => typeof colour === "string" && colour.trim().length > 0)
+    : Array.isArray(job.requiredColours)
+      ? job.requiredColours
+      : [];
+  const assignmentValues = {
+    companyId: tenantId,
+    dispatchDate,
+    scheduledOrder,
+    jobId: job.id,
+    subcontractorId: Number(subcontractorId),
+    workArea: typeof workArea === "string" && workArea.trim() ? workArea.trim() : null,
+    timeWindow: typeof timeWindow === "string" && timeWindow.trim() ? timeWindow.trim() : "full_day",
+    plannedStartTime: typeof plannedStartTime === "string" && plannedStartTime.trim() ? plannedStartTime.trim() : null,
+    plannedEndTime: typeof plannedEndTime === "string" && plannedEndTime.trim() ? plannedEndTime.trim() : null,
+    estimatedMetres: estimatedMetres != null && Number.isFinite(Number(estimatedMetres)) ? String(Number(estimatedMetres)) : null,
+    builderContactName: job.builderContactName ?? null,
+    builderContactPhone: job.builderContactPhone ?? null,
+    requiredColours: blockColours,
+    notes: typeof notes === "string" && notes.trim() ? notes.trim() : null,
+    status: "pending" as const,
+  };
+
+  let assignment: typeof jobAssignmentsTable.$inferSelect | undefined;
+  if (existingAssignment) {
+    [assignment] = await db
+      .update(jobAssignmentsTable)
+      .set({
+        dispatchDate: assignmentValues.dispatchDate,
+        scheduledOrder: assignmentValues.scheduledOrder,
+        jobId: assignmentValues.jobId,
+        subcontractorId: assignmentValues.subcontractorId,
+        workArea: assignmentValues.workArea,
+        timeWindow: assignmentValues.timeWindow,
+        plannedStartTime: assignmentValues.plannedStartTime,
+        plannedEndTime: assignmentValues.plannedEndTime,
+        estimatedMetres: assignmentValues.estimatedMetres,
+        builderContactName: assignmentValues.builderContactName,
+        builderContactPhone: assignmentValues.builderContactPhone,
+        requiredColours: assignmentValues.requiredColours,
+        notes: assignmentValues.notes,
+        status: assignmentValues.status,
+      })
+      .where(and(eq(jobAssignmentsTable.id, existingAssignment.id), eq(jobAssignmentsTable.companyId, tenantId)))
+      .returning();
+  }
+  if (!assignment) {
+    [assignment] = await db.insert(jobAssignmentsTable).values(assignmentValues).returning();
+  }
+  if (!assignment) return res.status(500).json({ error: "Could not create dispatch assignment" });
+
   const [saved] = await db
     .update(allocationRecommendationsTable)
     .set({
+      jobAssignmentId: assignment.id,
       selectedSubcontractorId: Number(subcontractorId),
       selectionMethod: overrideReason ? "manual_override" : "auto",
       overrideReason,
@@ -357,7 +459,22 @@ router.post("/allocation/confirm", async (req, res) => {
     .where(and(eq(allocationRecommendationsTable.id, Number(recommendationId)), eq(allocationRecommendationsTable.companyId, tenantId)))
     .returning();
 
-  return res.json(saved);
+  try {
+    await createAndSendNotification({
+      subcontractorId: Number(subcontractorId),
+      type: "new_job",
+      title: "New job assigned",
+      body: `${job.title}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${job.address ? ` at ${job.address}` : ""}`,
+      priority: "high",
+      actionUrl: "/field",
+      linkedEntityType: "job_assignment",
+      linkedEntityId: assignment.id,
+    });
+  } catch (err) {
+    req.log.warn({ err, assignmentId: assignment.id }, "Failed to send allocation confirmation notification");
+  }
+
+  return res.json({ ...saved, jobAssignmentId: assignment.id, assignment });
 });
 
 // POST /weekly-planner/generate
@@ -448,6 +565,13 @@ router.get("/weekly-planner", async (req, res) => {
 // PATCH /weekly-planner/:id
 router.patch("/weekly-planner/:id", async (req, res) => {
   const { status, adminNotes } = req.body;
+  const tenantId = companyId(req);
+  const [existing] = await db
+    .select()
+    .from(weeklyPlannerProposalsTable)
+    .where(and(eq(weeklyPlannerProposalsTable.id, Number(req.params.id)), eq(weeklyPlannerProposalsTable.companyId, tenantId)));
+  if (!existing) return res.status(404).json({ error: "Not found" });
+
   const updates: Record<string, unknown> = {};
   if (status) updates.status = status;
   if (adminNotes !== undefined) updates.adminNotes = adminNotes;
@@ -456,10 +580,107 @@ router.patch("/weekly-planner/:id", async (req, res) => {
   const [row] = await db
     .update(weeklyPlannerProposalsTable)
     .set(updates)
-    .where(and(eq(weeklyPlannerProposalsTable.id, Number(req.params.id)), eq(weeklyPlannerProposalsTable.companyId, companyId(req))))
+    .where(and(eq(weeklyPlannerProposalsTable.id, Number(req.params.id)), eq(weeklyPlannerProposalsTable.companyId, tenantId)))
     .returning();
-  if (!row) return res.status(404).json({ error: "Not found" });
-  return res.json(row);
+
+  const createdAssignments: Array<typeof jobAssignmentsTable.$inferSelect> = [];
+  if (status === "approved") {
+    const proposedSchedule = Array.isArray(existing.proposedSchedule) ? existing.proposedSchedule as Array<{
+      subcontractorId?: number;
+      subcontractorName?: string;
+      assignments?: Array<{
+        date?: string;
+        jobId?: number;
+        routeNote?: string;
+        workArea?: string;
+        estimatedMetres?: number;
+        requiredColours?: string[];
+      }>;
+    }> : [];
+
+    for (const workerSchedule of proposedSchedule) {
+      const subcontractorId = Number(workerSchedule.subcontractorId);
+      if (!subcontractorId || !Array.isArray(workerSchedule.assignments)) continue;
+
+      for (const proposed of workerSchedule.assignments) {
+        const jobId = Number(proposed.jobId);
+        const dispatchDate = proposed.date || existing.weekStart;
+        if (!jobId || !dispatchDate) continue;
+
+        const [job] = await db
+          .select()
+          .from(jobsTable)
+          .where(and(eq(jobsTable.id, jobId), eq(jobsTable.companyId, tenantId)));
+        if (!job) continue;
+
+        const proposedWorkArea = typeof proposed.workArea === "string" && proposed.workArea.trim() ? proposed.workArea.trim() : null;
+        const existingBlocks = await db
+          .select({ id: jobAssignmentsTable.id, workArea: jobAssignmentsTable.workArea })
+          .from(jobAssignmentsTable)
+          .where(
+            and(
+              eq(jobAssignmentsTable.companyId, tenantId),
+              eq(jobAssignmentsTable.jobId, jobId),
+              eq(jobAssignmentsTable.dispatchDate, dispatchDate),
+              eq(jobAssignmentsTable.subcontractorId, subcontractorId),
+            ),
+          );
+        const alreadyScheduled = existingBlocks.some((block) => (
+          proposedWorkArea ? block.workArea === proposedWorkArea : !block.workArea
+        ));
+        if (alreadyScheduled) continue;
+
+        const existingForSub = await db
+          .select({ scheduledOrder: jobAssignmentsTable.scheduledOrder })
+          .from(jobAssignmentsTable)
+          .where(
+            and(
+              eq(jobAssignmentsTable.companyId, tenantId),
+              eq(jobAssignmentsTable.dispatchDate, dispatchDate),
+              eq(jobAssignmentsTable.subcontractorId, subcontractorId),
+            ),
+          );
+        const scheduledOrder = existingForSub.reduce((max, assignment) => Math.max(max, assignment.scheduledOrder), 0) + 1;
+
+        const [assignment] = await db
+          .insert(jobAssignmentsTable)
+          .values({
+            companyId: tenantId,
+            dispatchDate,
+            scheduledOrder,
+            jobId,
+            subcontractorId,
+            workArea: proposedWorkArea,
+            timeWindow: "full_day",
+            estimatedMetres: proposed.estimatedMetres != null && Number.isFinite(Number(proposed.estimatedMetres)) ? String(Number(proposed.estimatedMetres)) : null,
+            builderContactName: job.builderContactName ?? null,
+            builderContactPhone: job.builderContactPhone ?? null,
+            requiredColours: Array.isArray(proposed.requiredColours) ? proposed.requiredColours : Array.isArray(job.requiredColours) ? job.requiredColours : [],
+            notes: proposed.routeNote ?? "Created from approved weekly planner proposal.",
+            status: "pending",
+          })
+          .returning();
+        createdAssignments.push(assignment);
+
+        try {
+          await createAndSendNotification({
+            subcontractorId,
+            type: "new_job",
+            title: "New job assigned",
+            body: `${job.title}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${job.address ? ` at ${job.address}` : ""}`,
+            priority: "high",
+            actionUrl: "/field",
+            linkedEntityType: "job_assignment",
+            linkedEntityId: assignment.id,
+          });
+        } catch (err) {
+          req.log.warn({ err, assignmentId: assignment.id }, "Failed to send weekly planner assignment notification");
+        }
+      }
+    }
+  }
+
+  return res.json({ ...row, createdAssignments });
 });
 
 export default router;
