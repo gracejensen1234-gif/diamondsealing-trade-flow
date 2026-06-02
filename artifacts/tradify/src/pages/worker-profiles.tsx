@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronUp, DollarSign, FileCheck2, HardHat, ImageIcon, Star, Trash2, Upload, UserPlus } from "lucide-react";
+import { ChevronDown, ChevronUp, DollarSign, FileCheck2, HardHat, ImageIcon, KeyRound, Star, Trash2, Upload, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   CREDENTIAL_TYPES,
@@ -43,9 +43,10 @@ export default function WorkerProfiles() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
   const [rateEdits, setRateEdits] = useState<Record<number, { hourlyRate: string; ratePerMetre: string }>>({});
+  const [accountDrafts, setAccountDrafts] = useState<Record<number, { email: string; temporaryPassword: string }>>({});
   const [credentialDrafts, setCredentialDrafts] = useState<Record<number, CredentialDraft>>({});
   const [showNewWorker, setShowNewWorker] = useState(false);
-  const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "", hourlyRate: "" });
+  const [newWorker, setNewWorker] = useState({ name: "", email: "", phone: "", abn: "", hourlyRate: "", temporaryPassword: "" });
 
   const { data: subs = [] } = useQuery({
     queryKey: ["subcontractors"],
@@ -70,8 +71,8 @@ export default function WorkerProfiles() {
   });
 
   const createWorkerMutation = useMutation({
-    mutationFn: (data: typeof newWorker) =>
-      fetch("/api/subcontractors", {
+    mutationFn: async (data: typeof newWorker) => {
+      const createResponse = await fetch("/api/subcontractors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -82,15 +83,35 @@ export default function WorkerProfiles() {
           hourlyRate: Number(data.hourlyRate) > 0 ? Number(data.hourlyRate) : undefined,
           active: true,
         }),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? "Could not add employee/subcontractor");
-        return r.json();
-      }),
-    onSuccess: () => {
+      });
+      if (!createResponse.ok) {
+        throw new Error((await createResponse.json().catch(() => null))?.error ?? "Could not add employee/subcontractor");
+      }
+
+      const sub = await createResponse.json();
+      if (data.temporaryPassword) {
+        const accountResponse = await fetch(`/api/subcontractors/${sub.id}/worker-account`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            name: data.name,
+            password: data.temporaryPassword,
+          }),
+        });
+        if (!accountResponse.ok) {
+          throw new Error((await accountResponse.json().catch(() => null))?.error ?? "Employee/subcontractor was added, but the app login could not be created");
+        }
+        return { sub, loginCreated: true };
+      }
+
+      return { sub, loginCreated: false };
+    },
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["subcontractors"] });
-      setNewWorker({ name: "", email: "", phone: "", abn: "", hourlyRate: "" });
+      setNewWorker({ name: "", email: "", phone: "", abn: "", hourlyRate: "", temporaryPassword: "" });
       setShowNewWorker(false);
-      toast({ title: "Employee/subcontractor added" });
+      toast({ title: result.loginCreated ? "Employee/subcontractor and login added" : "Employee/subcontractor added" });
     },
     onError: (error) => {
       toast({
@@ -122,6 +143,40 @@ export default function WorkerProfiles() {
       toast({
         title: "Could not save pay rates",
         description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const workerAccountMutation = useMutation({
+    mutationFn: async ({ sub, draft }: { sub: any; draft: { email: string; temporaryPassword: string } }) => {
+      const response = await fetch(`/api/subcontractors/${sub.id}/worker-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: draft.email,
+          name: sub.name,
+          password: draft.temporaryPassword,
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Could not set employee/subcontractor login");
+      return response.json();
+    },
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: ["subcontractors"] });
+      setAccountDrafts((prev) => ({
+        ...prev,
+        [variables.sub.id]: {
+          email: prev[variables.sub.id]?.email ?? variables.sub.email ?? "",
+          temporaryPassword: "",
+        },
+      }));
+      toast({ title: "Employee/subcontractor login ready" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not set employee/subcontractor login",
+        description: error instanceof Error ? error.message : "Check the login email and temporary password.",
         variant: "destructive",
       });
     },
@@ -205,8 +260,22 @@ export default function WorkerProfiles() {
     };
   }
 
+  function getAccountDraft(sub: any) {
+    return accountDrafts[sub.id] ?? {
+      email: sub.email ?? "",
+      temporaryPassword: "",
+    };
+  }
+
   function updateRateEdit(sub: any, key: "hourlyRate" | "ratePerMetre", value: string) {
     setRateEdits((prev) => ({ ...prev, [sub.id]: { ...getRateEdit(sub), [key]: value } }));
+  }
+
+  function updateAccountDraft(sub: any, key: "email" | "temporaryPassword", value: string) {
+    setAccountDrafts((prev) => {
+      const existing = prev[sub.id] ?? { email: sub.email ?? "", temporaryPassword: "" };
+      return { ...prev, [sub.id]: { ...existing, [key]: value } };
+    });
   }
 
   function updateEdit(subId: number, key: string, value: any) {
@@ -250,7 +319,7 @@ export default function WorkerProfiles() {
 
       {isAdmin && showNewWorker ? (
         <Card>
-          <CardContent className="grid gap-4 pt-6 md:grid-cols-5">
+          <CardContent className="grid gap-4 pt-6 md:grid-cols-3 xl:grid-cols-6">
             <div className="space-y-2">
               <Label htmlFor="newWorkerName">Name</Label>
               <Input
@@ -298,12 +367,21 @@ export default function WorkerProfiles() {
                 onChange={(event) => setNewWorker((worker) => ({ ...worker, hourlyRate: event.target.value }))}
               />
             </div>
-            <div className="flex gap-2 md:col-span-5">
+            <div className="space-y-2">
+              <Label htmlFor="newWorkerTemporaryPassword">Temporary password</Label>
+              <Input
+                id="newWorkerTemporaryPassword"
+                value={newWorker.temporaryPassword}
+                onChange={(event) => setNewWorker((worker) => ({ ...worker, temporaryPassword: event.target.value }))}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="flex gap-2 md:col-span-6">
               <Button
                 onClick={() => createWorkerMutation.mutate(newWorker)}
-                disabled={!newWorker.name || !newWorker.email || createWorkerMutation.isPending}
+                disabled={!newWorker.name || !newWorker.email || Boolean(newWorker.temporaryPassword && newWorker.temporaryPassword.length < 6) || createWorkerMutation.isPending}
               >
-                {createWorkerMutation.isPending ? "Adding..." : "Add employee/subcontractor"}
+                {createWorkerMutation.isPending ? "Adding..." : newWorker.temporaryPassword ? "Add and set login" : "Add employee/subcontractor"}
               </Button>
               <Button variant="outline" onClick={() => setShowNewWorker(false)}>Cancel</Button>
             </div>
@@ -316,6 +394,7 @@ export default function WorkerProfiles() {
           const sk = skillMap.get(sub.id);
           const edit = getEdit(sub.id, sk);
           const rates = getRateEdit(sub);
+          const accountDraft = getAccountDraft(sub);
           const subCredentials = credentialsBySub.get(sub.id) ?? [];
           const credentialDraft = getCredentialDraft(sub.id);
           const isOpen = expanded === sub.id;
@@ -407,6 +486,44 @@ export default function WorkerProfiles() {
                       </div>
                     )}
                   </div>
+
+                  {isAdmin ? (
+                    <div className="rounded-lg border bg-muted/20 p-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">App login</p>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                        <div className="space-y-1">
+                          <Label className="text-xs" htmlFor={`workerLoginEmail-${sub.id}`}>Login email</Label>
+                          <Input
+                            id={`workerLoginEmail-${sub.id}`}
+                            type="email"
+                            value={accountDraft.email}
+                            onChange={(event) => updateAccountDraft(sub, "email", event.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs" htmlFor={`workerLoginPassword-${sub.id}`}>Temporary password</Label>
+                          <Input
+                            id={`workerLoginPassword-${sub.id}`}
+                            value={accountDraft.temporaryPassword}
+                            onChange={(event) => updateAccountDraft(sub, "temporaryPassword", event.target.value)}
+                            autoComplete="new-password"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => workerAccountMutation.mutate({ sub, draft: accountDraft })}
+                            disabled={!accountDraft.email || accountDraft.temporaryPassword.length < 6 || workerAccountMutation.isPending}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            {workerAccountMutation.isPending ? "Saving..." : "Set login"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Experience */}
                   {isAdmin ? <div className="flex items-center gap-4">

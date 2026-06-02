@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { subcontractorsTable } from "@workspace/db";
+import { appUsersTable, subcontractorsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import {
   CreateSubcontractorBody,
@@ -8,9 +8,10 @@ import {
   UpdateSubcontractorParams,
   UpdateSubcontractorBody,
 } from "@workspace/api-zod";
-import { canAccessSubcontractor, companyId, isAdmin, requireAdmin } from "../lib/auth.js";
+import { canAccessSubcontractor, companyId, hashPassword, isAdmin, requireAdmin } from "../lib/auth.js";
 
 const router = Router();
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function serializeSubcontractor(sub: typeof subcontractorsTable.$inferSelect, includeAdminFields: boolean) {
   const base = {
@@ -63,6 +64,104 @@ router.post("/subcontractors", requireAdmin, async (req, res) => {
     active: parsed.data.active ?? true,
   }).returning();
   return res.status(201).json(serializeSubcontractor(sub, true));
+});
+
+router.post("/subcontractors/:id/worker-account", requireAdmin, async (req, res) => {
+  const subId = Number(req.params.id);
+  if (!Number.isInteger(subId) || subId <= 0) return res.status(400).json({ error: "Invalid employee/subcontractor id" });
+
+  const loginEmail = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const temporaryPassword = typeof req.body?.password === "string" ? req.body.password : "";
+  const loginName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+
+  if (!EMAIL_PATTERN.test(loginEmail)) return res.status(400).json({ error: "A valid login email is required" });
+  if (temporaryPassword.length < 6 || temporaryPassword.length > 128) {
+    return res.status(400).json({ error: "Temporary password must be at least 6 characters" });
+  }
+  if (loginName.length > 120) return res.status(400).json({ error: "Login name is too long" });
+
+  const tenantId = companyId(req);
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, subId), eq(subcontractorsTable.companyId, tenantId)));
+  if (!sub) return res.status(404).json({ error: "Employee/subcontractor profile not found" });
+
+  const [existingByEmail] = await db
+    .select()
+    .from(appUsersTable)
+    .where(eq(appUsersTable.email, loginEmail))
+    .limit(1);
+  const [existingForSubcontractor] = await db
+    .select()
+    .from(appUsersTable)
+    .where(and(
+      eq(appUsersTable.companyId, tenantId),
+      eq(appUsersTable.role, "worker"),
+      eq(appUsersTable.subcontractorId, sub.id),
+    ))
+    .limit(1);
+
+  if (existingByEmail) {
+    if (existingByEmail.companyId !== tenantId) {
+      return res.status(409).json({ error: "This email is already used by another company account" });
+    }
+    if (existingByEmail.role !== "worker") {
+      return res.status(409).json({ error: "This email belongs to an admin account" });
+    }
+    if (existingByEmail.subcontractorId && existingByEmail.subcontractorId !== sub.id) {
+      return res.status(409).json({ error: "This email is already linked to another employee/subcontractor" });
+    }
+  }
+  if (existingByEmail && existingForSubcontractor && existingByEmail.id !== existingForSubcontractor.id) {
+    return res.status(409).json({ error: "This employee/subcontractor already has a different login account" });
+  }
+
+  const passwordHash = await hashPassword(temporaryPassword);
+  const displayName = loginName || sub.name;
+  const userValues = {
+    companyId: tenantId,
+    name: displayName,
+    email: loginEmail,
+    role: "worker" as const,
+    subcontractorId: sub.id,
+    passwordHash,
+    active: true,
+    updatedAt: new Date(),
+  };
+
+  const account = await db.transaction(async (tx) => {
+    const existingAccount = existingByEmail ?? existingForSubcontractor;
+    const [savedAccount] = existingAccount
+      ? await tx.update(appUsersTable)
+        .set(userValues)
+        .where(eq(appUsersTable.id, existingAccount.id))
+        .returning()
+      : await tx.insert(appUsersTable)
+        .values(userValues)
+        .returning();
+
+    if (sub.email !== loginEmail) {
+      await tx
+        .update(subcontractorsTable)
+        .set({ email: loginEmail, active: true })
+        .where(and(eq(subcontractorsTable.id, sub.id), eq(subcontractorsTable.companyId, tenantId)));
+    }
+
+    return savedAccount;
+  });
+
+  return res.json({
+    user: {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: account.role,
+      subcontractorId: account.subcontractorId,
+      active: account.active,
+    },
+    temporaryPasswordSet: true,
+  });
 });
 
 router.get("/subcontractors/:id", async (req, res) => {
