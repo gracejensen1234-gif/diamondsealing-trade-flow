@@ -7,6 +7,7 @@ export const xeroSettingsTable = pgTable("xero_settings", {
   connected: boolean("connected").notNull().default(false),
   tenantId: text("tenant_id"),
   tenantName: text("tenant_name"),
+  connectionId: text("connection_id"),
   clientId: text("client_id"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),

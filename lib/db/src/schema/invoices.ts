@@ -24,6 +24,8 @@ export const invoicesTable = pgTable("invoices", {
   tax: numeric("tax", { precision: 10, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   dueDate: text("due_date"),
+  xeroInvoiceId: text("xero_invoice_id"),
+  xeroLastSyncedAt: timestamp("xero_last_synced_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

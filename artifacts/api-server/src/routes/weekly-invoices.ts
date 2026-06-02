@@ -7,7 +7,6 @@ import {
   subcontractorsTable,
   jobsTable,
   workSessionsTable,
-  xeroSettingsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import {
@@ -20,9 +19,9 @@ import {
 } from "@workspace/api-zod";
 import { dateOnlyOrToday } from "../lib/date-utils.js";
 import { companyId, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
+import { getStoredXeroSettings, getUsableXeroSettings } from "../lib/xero.js";
 
 const router = Router();
-const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
 const XERO_INVOICES_URL = "https://api.xero.com/api.xro/2.0/Invoices";
 
 type WeeklyInvoiceLineItem = {
@@ -39,13 +38,6 @@ type WeeklyInvoiceLineItem = {
   reportId?: number | null;
   hoursWorked?: number | string | null;
   jobDescription?: string | null;
-};
-
-type XeroTokenResponse = {
-  access_token: string;
-  refresh_token?: string;
-  expires_in?: number;
-  scope?: string;
 };
 
 type XeroInvoiceResponse = {
@@ -374,82 +366,8 @@ async function upsertCurrentWeeklyInvoice(tenantId: number, subcontractorId: num
   return { sub, invoice: created, values };
 }
 
-function getXeroClientId(settings: typeof xeroSettingsTable.$inferSelect) {
-  return process.env.XERO_CLIENT_ID?.trim() || settings.clientId?.trim() || "";
-}
-
-function getXeroClientSecret() {
-  return process.env.XERO_CLIENT_SECRET?.trim() || "";
-}
-
 function getXeroTaxType() {
   return process.env.XERO_TAX_TYPE?.trim() || "INPUT";
-}
-
-async function getStoredXeroSettings(tenantId: number) {
-  const [settings] = await db
-    .select()
-    .from(xeroSettingsTable)
-    .where(eq(xeroSettingsTable.companyId, tenantId));
-  return settings ?? null;
-}
-
-async function refreshXeroAccessToken(settings: typeof xeroSettingsTable.$inferSelect) {
-  const tenantId = settings.companyId ?? 0;
-  const clientId = getXeroClientId(settings);
-  const clientSecret = getXeroClientSecret();
-  if (!clientId || !clientSecret || !settings.refreshToken) {
-    throw new Error("Xero is not connected. Use the CSV export, or configure Xero OAuth credentials and connect again.");
-  }
-
-  const response = await fetch(XERO_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: settings.refreshToken,
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Xero token refresh failed: ${text}`);
-  }
-
-  const token = (await response.json()) as XeroTokenResponse;
-  const [updated] = await db
-    .update(xeroSettingsTable)
-    .set({
-      accessToken: token.access_token,
-      refreshToken: token.refresh_token ?? settings.refreshToken,
-      tokenExpiresAt: new Date(Date.now() + (token.expires_in ?? 1800) * 1000),
-      tokenScope: token.scope ?? settings.tokenScope ?? null,
-    })
-    .where(and(eq(xeroSettingsTable.id, settings.id), eq(xeroSettingsTable.companyId, tenantId)))
-    .returning();
-
-  return updated;
-}
-
-async function getUsableXeroSettings(tenantId: number) {
-  let settings = await getStoredXeroSettings(tenantId);
-  if (!settings?.connected || !settings.tenantId) {
-    throw new Error("Xero is not connected. Download the Xero CSV instead, or connect Xero from Settings.");
-  }
-
-  const expiresAt = settings.tokenExpiresAt?.getTime() ?? 0;
-  if (!settings.accessToken || expiresAt < Date.now() + 120_000) {
-    settings = await refreshXeroAccessToken(settings);
-  }
-
-  if (!settings.accessToken || !settings.tenantId) {
-    throw new Error("Xero connection is missing an access token or tenant.");
-  }
-
-  return settings;
 }
 
 async function buildXeroCsv(inv: typeof weeklyInvoicesTable.$inferSelect, subName: string | null) {
