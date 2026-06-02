@@ -47,8 +47,8 @@ export default function Allocation() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Smart Job Allocation</h1>
-        <p className="text-muted-foreground mt-1">AI-powered employee/subcontractor recommendations based on skills, stock, proximity and builder tier</p>
+        <h1 className="text-2xl font-bold">Trigger-Based Job Allocation</h1>
+        <p className="text-muted-foreground mt-1">Rule-based employee/subcontractor assignment using availability, skills, stock, location and builder rules</p>
       </div>
 
       {/* Request form */}
@@ -116,7 +116,7 @@ export default function Allocation() {
           </div>
           <Button onClick={run} disabled={recommendMutation.isPending}>
             <Sparkles className="w-4 h-4 mr-2" />
-            {recommendMutation.isPending ? "Analysing…" : "Get Recommendations"}
+            {recommendMutation.isPending ? "Checking rules..." : "Run Trigger Rules"}
           </Button>
         </CardContent>
       </Card>

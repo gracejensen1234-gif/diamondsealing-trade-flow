@@ -62,7 +62,7 @@ export default function WeeklyPlanner() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Weekly AI Planner</h1>
-          <p className="text-muted-foreground mt-1">AI-generated workforce allocation proposals for the week</p>
+          <p className="text-muted-foreground mt-1">Rule-triggered workforce allocation proposals for the week</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={prevWeek}>←</Button>

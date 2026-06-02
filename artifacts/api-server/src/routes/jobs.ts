@@ -12,6 +12,8 @@ import {
 } from "@workspace/api-zod";
 import { dateOnly } from "../lib/date-utils.js";
 import { companyId } from "../lib/auth.js";
+import { runJobAssignmentTriggers, type AssignmentTriggerResult } from "../lib/assignmentTriggers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -26,6 +28,22 @@ async function enrichJob(job: typeof jobsTable.$inferSelect) {
     customerName = c?.name ?? null;
   }
   return { ...job, customerName };
+}
+
+async function runAssignmentTriggerSafely(
+  tenantId: number,
+  job: typeof jobsTable.$inferSelect,
+  trigger: "created" | "updated",
+): Promise<AssignmentTriggerResult> {
+  try {
+    return await runJobAssignmentTriggers({ tenantId, job, trigger });
+  } catch (err) {
+    logger.warn({ err, jobId: job.id, trigger }, "Job assignment trigger failed");
+    return {
+      status: "skipped",
+      reason: "Assignment trigger failed; job was saved but needs manual allocation review",
+    };
+  }
 }
 
 router.get("/jobs", async (req, res) => {
@@ -102,8 +120,11 @@ router.post("/jobs", async (req, res) => {
     entityType: "job",
   });
 
-  const enriched = await enrichJob(job);
-  return res.status(201).json(enriched);
+  const [enriched, assignmentTrigger] = await Promise.all([
+    enrichJob(job),
+    runAssignmentTriggerSafely(tenantId, job, "created"),
+  ]);
+  return res.status(201).json({ ...enriched, assignmentTrigger });
 });
 
 router.get("/jobs/:id", async (req, res) => {
@@ -171,8 +192,30 @@ router.patch("/jobs/:id", async (req, res) => {
     });
   }
 
-  const enriched = await enrichJob(job);
-  return res.json(enriched);
+  const triggerFieldsChanged = [
+    "title",
+    "description",
+    "status",
+    "customerId",
+    "address",
+    "builderContactName",
+    "builderContactPhone",
+    "requiredColours",
+    "scheduledDate",
+    "dueDate",
+    "notes",
+  ].some((field) => Object.prototype.hasOwnProperty.call(body.data, field));
+
+  const [enriched, assignmentTrigger] = await Promise.all([
+    enrichJob(job),
+    triggerFieldsChanged
+      ? runAssignmentTriggerSafely(tenantId, job, "updated")
+      : Promise.resolve<AssignmentTriggerResult>({
+          status: "skipped",
+          reason: "No assignment trigger fields changed",
+        }),
+  ]);
+  return res.json({ ...enriched, assignmentTrigger });
 });
 
 router.delete("/jobs/:id", async (req, res) => {
