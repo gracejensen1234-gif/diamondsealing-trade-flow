@@ -36,6 +36,8 @@ import {
 } from "@/lib/worker-credentials";
 import {
   type LeaveRequest,
+  dateFromInputValue,
+  dateInputValue,
   formatDayOffDate,
   leaveStatusBadgeVariant,
   leaveStatusLabel,
@@ -43,7 +45,7 @@ import {
 } from "@/lib/leave-requests";
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
-  Bell, BellOff, X, ChevronRight, Navigation, CheckCircle2, XCircle,
+  Bell, BellOff, X, ChevronLeft, ChevronRight, Navigation, CheckCircle2, XCircle,
   CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload,
 } from "lucide-react";
 
@@ -116,6 +118,12 @@ export default function FieldView() {
   const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
   const [credentialDraft, setCredentialDraft] = useState(emptyCredentialDraft);
   const [leaveForm, setLeaveForm] = useState({ dayOffDate: todayDateInputValue(), reason: "" });
+  const [selectedDispatchDate, setSelectedDispatchDate] = useState(() => todayDateInputValue());
+  const today = todayDateInputValue();
+  const selectedDispatchParams = { subcontractorId: subId, date: selectedDispatchDate };
+  const todayDispatchParams = { subcontractorId: subId, date: today };
+  const isViewingToday = selectedDispatchDate === today;
+  const selectedDispatchDateLabel = isViewingToday ? "Today" : formatDayOffDate(selectedDispatchDate);
 
   useEffect(() => {
     if (isWorker) {
@@ -136,6 +144,10 @@ export default function FieldView() {
   useEffect(() => {
     setPushStatus(currentPushPermission());
   }, []);
+
+  useEffect(() => {
+    if (selectedDispatchDate < today) setSelectedDispatchDate(today);
+  }, [selectedDispatchDate, today]);
 
   // ─── Location verification helper ────────────────────────────────────────
   const requestLocationVerification = useCallback(
@@ -224,8 +236,13 @@ export default function FieldView() {
   );
 
   const { data: dispatchList, isLoading: loadingDispatch, refetch: refetchDispatch } = useListDispatch(
-    { subcontractorId: subId, date: new Date().toISOString().split("T")[0] },
-    { query: { enabled: !!subId, queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) } }
+    selectedDispatchParams,
+    { query: { enabled: !!subId, queryKey: getListDispatchQueryKey(selectedDispatchParams) } }
+  );
+
+  const { data: todayDispatchList, isLoading: loadingTodayDispatch } = useListDispatch(
+    todayDispatchParams,
+    { query: { enabled: !!subId, queryKey: getListDispatchQueryKey(todayDispatchParams) } }
   );
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -437,7 +454,7 @@ export default function FieldView() {
     mutation: {
       onSuccess: () => {
         toast({ title: "Checked in to job" });
-        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
+        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey(todayDispatchParams) });
       },
     },
   });
@@ -446,7 +463,7 @@ export default function FieldView() {
     mutation: {
       onSuccess: () => {
         toast({ title: "Checked out of job" });
-        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
+        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey(todayDispatchParams) });
       },
     },
   });
@@ -455,15 +472,22 @@ export default function FieldView() {
     mutation: {
       onSuccess: () => {
         toast({ title: "Work started" });
-        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ subcontractorId: subId, date: new Date().toISOString().split("T")[0] }) });
+        if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey(todayDispatchParams) });
       },
     },
   });
 
+  function moveDispatchDate(days: number) {
+    const next = dateFromInputValue(selectedDispatchDate);
+    next.setDate(next.getDate() + days);
+    const nextValue = dateInputValue(next);
+    setSelectedDispatchDate(nextValue < today ? today : nextValue);
+  }
+
   // ─── Action handlers with location verification ───────────────────────────
   const handleClockOn = useCallback(async () => {
     if (!subId) return;
-    const locationJob = dispatchList?.find(
+    const locationJob = todayDispatchList?.find(
       (assignment) => assignment.status !== "completed" && Boolean(assignment.jobAddress),
     );
     const verification = await requestLocationVerification("clock_on", "clock-on", {
@@ -481,11 +505,11 @@ export default function FieldView() {
       return;
     }
     clockOn.mutate({ data: { subcontractorId: subId, locationVerificationId: verification.id } });
-  }, [subId, dispatchList, requestLocationVerification, clockOn]);
+  }, [subId, todayDispatchList, requestLocationVerification, clockOn]);
 
   const handleClockOff = useCallback(async () => {
     if (!subId) return;
-    const unfinishedJobs = dispatchList?.filter((assignment) => assignment.status !== "completed") ?? [];
+    const unfinishedJobs = todayDispatchList?.filter((assignment) => assignment.status !== "completed") ?? [];
     if (unfinishedJobs.length > 0) {
       toast({
         title: "Check out of today's jobs first",
@@ -494,7 +518,7 @@ export default function FieldView() {
       });
       return;
     }
-    const locationJob = [...(dispatchList ?? [])]
+    const locationJob = [...(todayDispatchList ?? [])]
       .filter((assignment) => assignment.status === "completed" && Boolean(assignment.jobAddress))
       .sort((a, b) => b.scheduledOrder - a.scheduledOrder)[0];
     await requestLocationVerification("clock_off", "clock-off", {
@@ -503,9 +527,10 @@ export default function FieldView() {
       workSessionId: session?.id,
     });
     clockOff.mutate({ data: { subcontractorId: subId } });
-  }, [subId, dispatchList, session?.id, requestLocationVerification, clockOff, toast]);
+  }, [subId, todayDispatchList, session?.id, requestLocationVerification, clockOff, toast]);
 
   const handleMarkArrived = useCallback(async (assignmentId: number, jobAddress?: string) => {
+    if (!isViewingToday) return;
     if (session?.status !== "active" && session?.status !== "on_break") {
       toast({
         title: "Clock on for the day first",
@@ -520,9 +545,10 @@ export default function FieldView() {
       workSessionId: session?.id,
     });
     markArrived.mutate({ id: assignmentId });
-  }, [requestLocationVerification, session?.id, session?.status, markArrived, toast]);
+  }, [isViewingToday, requestLocationVerification, session?.id, session?.status, markArrived, toast]);
 
   const handleMarkDeparted = useCallback(async (assignmentId: number, jobAddress?: string) => {
+    if (!isViewingToday) return;
     if (session?.status !== "active" && session?.status !== "on_break") {
       toast({
         title: "Clock on for the day first",
@@ -537,9 +563,8 @@ export default function FieldView() {
       workSessionId: session?.id,
     });
     markDeparted.mutate({ id: assignmentId });
-  }, [requestLocationVerification, session?.id, session?.status, markDeparted, toast]);
+  }, [isViewingToday, requestLocationVerification, session?.id, session?.status, markDeparted, toast]);
 
-  const today = new Date().toISOString().split("T")[0];
   const isClockedOn = session?.status === "active" || session?.status === "on_break";
   const isOnBreak = session?.status === "on_break";
   const unreadCount = unreadData?.count ?? 0;
@@ -723,7 +748,7 @@ export default function FieldView() {
                   className="w-full h-16 text-lg"
                   size="lg"
                   onClick={handleClockOn}
-                  disabled={clockOn.isPending || !!locationPrompt}
+                  disabled={clockOn.isPending || loadingTodayDispatch || !!locationPrompt}
                 >
                   <Play className="mr-2 h-6 w-6" /> CLOCK ON FOR DAY
                 </Button>
@@ -752,7 +777,7 @@ export default function FieldView() {
                     variant="destructive"
                     className="h-14"
                     onClick={handleClockOff}
-                    disabled={clockOff.isPending || !!locationPrompt}
+                    disabled={clockOff.isPending || loadingTodayDispatch || !!locationPrompt}
                   >
                     <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
                   </Button>
@@ -952,10 +977,55 @@ export default function FieldView() {
         </Card>
       ) : null}
 
-      {/* Today's jobs */}
+      {/* Job schedule */}
       {subId && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Today's Job Check-Ins</h2>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Job Schedule</h2>
+                <p className="text-sm text-muted-foreground">{selectedDispatchDateLabel}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDispatchDate(today)}
+                disabled={isViewingToday}
+              >
+                Today
+              </Button>
+            </div>
+            <div className="grid grid-cols-[2.5rem_1fr_2.5rem] gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => moveDispatchDate(-1)}
+                disabled={isViewingToday}
+                title="Previous day"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Input
+                type="date"
+                value={selectedDispatchDate}
+                min={today}
+                onChange={(event) => setSelectedDispatchDate(event.target.value || today)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => moveDispatchDate(1)}
+                title="Next day"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           {loadingDispatch ? (
             <div className="space-y-3">
               <Skeleton className="h-32 w-full" />
@@ -965,7 +1035,7 @@ export default function FieldView() {
             <Card>
               <CardContent className="p-6 text-center text-muted-foreground">
                 <BriefcaseIcon className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                <p>No jobs assigned for today.</p>
+                <p>No jobs assigned for {isViewingToday ? "today" : selectedDispatchDateLabel}.</p>
               </CardContent>
             </Card>
           ) : (
@@ -1036,40 +1106,49 @@ export default function FieldView() {
                     )}
                   </CardContent>
                   <CardFooter className="p-4 pt-0 flex gap-2">
-                    {assignment.status === "pending" && (
-                      <Button
-                        className="w-full"
-                        onClick={() => handleMarkArrived(assignment.id, assignment.jobAddress ?? undefined)}
-                        disabled={markArrived.isPending || !!locationPrompt}
-                      >
-                        Check In to Job
-                      </Button>
-                    )}
-                    {(assignment.status === "arrived" || assignment.status === "in_progress") && (
-                      <div className="flex w-full gap-2">
-                        {assignment.status === "arrived" && (
+                    {isViewingToday ? (
+                      <>
+                        {assignment.status === "pending" && (
                           <Button
-                            variant="secondary"
-                            className="flex-1"
-                            onClick={() => startWork.mutate({ id: assignment.id, data: { status: "in_progress" } })}
-                            disabled={startWork.isPending}
+                            className="w-full"
+                            onClick={() => handleMarkArrived(assignment.id, assignment.jobAddress ?? undefined)}
+                            disabled={markArrived.isPending || !!locationPrompt}
                           >
-                            Start Work
+                            Check In to Job
                           </Button>
                         )}
-                        <Button
-                          className="flex-1"
-                          onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
-                          disabled={markDeparted.isPending || !!locationPrompt}
-                        >
-                          Check Out of Job
-                        </Button>
+                        {(assignment.status === "arrived" || assignment.status === "in_progress") && (
+                          <div className="flex w-full gap-2">
+                            {assignment.status === "arrived" && (
+                              <Button
+                                variant="secondary"
+                                className="flex-1"
+                                onClick={() => startWork.mutate({ id: assignment.id, data: { status: "in_progress" } })}
+                                disabled={startWork.isPending}
+                              >
+                                Start Work
+                              </Button>
+                            )}
+                            <Button
+                              className="flex-1"
+                              onClick={() => handleMarkDeparted(assignment.id, assignment.jobAddress ?? undefined)}
+                              disabled={markDeparted.isPending || !!locationPrompt}
+                            >
+                              Check Out of Job
+                            </Button>
+                          </div>
+                        )}
+                        {assignment.status === "completed" && (
+                          <Button asChild variant="outline" className="w-full">
+                            <Link href={`/field/jobs/${assignment.id}`}>Submit Job Report</Link>
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                        <CalendarDays className="h-4 w-4 shrink-0" />
+                        <span>Scheduled for {selectedDispatchDateLabel}</span>
                       </div>
-                    )}
-                    {assignment.status === "completed" && (
-                      <Button asChild variant="outline" className="w-full">
-                        <Link href={`/field/jobs/${assignment.id}`}>Submit Job Report</Link>
-                      </Button>
                     )}
                   </CardFooter>
                 </Card>
