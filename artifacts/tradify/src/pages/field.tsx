@@ -853,6 +853,7 @@ export default function FieldView() {
     earningsSummary.uninvoicedLineItemCount > 0 &&
     earningsSummary.ratePerMetre > 0,
   );
+  const currentInvoiceId = earningsSummary?.draftInvoiceId ?? earningsSummary?.submittedInvoiceId ?? null;
 
   function handleCredentialUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -1172,6 +1173,23 @@ export default function FieldView() {
                   <Send className="mr-2 h-4 w-4" />
                   {submitCurrentInvoiceMutation.isPending ? "Sending to Xero..." : "Send current invoice to Xero"}
                 </Button>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Button asChild variant="outline">
+                    <Link href="/weekly-invoices">
+                      <Receipt className="mr-2 h-4 w-4" />
+                      My invoices
+                    </Link>
+                  </Button>
+                  {currentInvoiceId ? (
+                    <Button asChild variant="outline">
+                      <Link href={`/weekly-invoices/${currentInvoiceId}`}>
+                        <FileCheck2 className="mr-2 h-4 w-4" />
+                        Current invoice
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
 
                 {earningsSummary.submittedAt ? (
                   <p className="text-xs text-muted-foreground">

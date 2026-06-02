@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   weeklyInvoicesTable,
+  jobAssignmentsTable,
   jobReportsTable,
   subcontractorsTable,
   jobsTable,
@@ -33,6 +34,8 @@ type WeeklyInvoiceLineItem = {
   ratePerMetre?: number | string | null;
   amount?: number | string | null;
   reportId?: number | null;
+  hoursWorked?: number | string | null;
+  jobDescription?: string | null;
 };
 
 type XeroTokenResponse = {
@@ -120,6 +123,47 @@ function lineItems(inv: typeof weeklyInvoicesTable.$inferSelect) {
   return Array.isArray(inv.lineItems) ? (inv.lineItems as WeeklyInvoiceLineItem[]) : [];
 }
 
+function hoursFromAssignment(assignment: typeof jobAssignmentsTable.$inferSelect | null | undefined) {
+  if (!assignment?.arrivedAt || !assignment.departedAt) return null;
+  const minutes = Math.max(
+    0,
+    Math.round((new Date(assignment.departedAt).getTime() - new Date(assignment.arrivedAt).getTime()) / 60000),
+  );
+  return money(minutes / 60);
+}
+
+function reportHours(
+  report: typeof jobReportsTable.$inferSelect,
+  assignment: typeof jobAssignmentsTable.$inferSelect | null | undefined,
+) {
+  const enteredHours = report.hoursWorked == null ? 0 : Number(report.hoursWorked);
+  return enteredHours > 0 ? money(enteredHours) : hoursFromAssignment(assignment);
+}
+
+function invoiceJobDescription(
+  report: typeof jobReportsTable.$inferSelect,
+  job: typeof jobsTable.$inferSelect | null | undefined,
+  assignment: typeof jobAssignmentsTable.$inferSelect | null | undefined,
+) {
+  return (
+    report.workDescription?.trim() ||
+    report.generalNotes?.trim() ||
+    assignment?.workArea?.trim() ||
+    job?.description?.trim() ||
+    job?.notes?.trim() ||
+    null
+  );
+}
+
+function xeroLineDescription(inv: typeof weeklyInvoicesTable.$inferSelect, item: WeeklyInvoiceLineItem) {
+  const base = `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`;
+  const details = [
+    item.jobDescription?.trim(),
+    item.hoursWorked != null && Number(item.hoursWorked) > 0 ? `${Number(item.hoursWorked).toFixed(2)} hours` : null,
+  ].filter(Boolean);
+  return details.length ? `${base} - ${details.join(" - ")}` : base;
+}
+
 function submittedReportIds(invoices: Array<typeof weeklyInvoicesTable.$inferSelect>) {
   const reportIds = new Set<number>();
   for (const invoice of invoices) {
@@ -141,6 +185,9 @@ async function buildWeeklyInvoiceValues(
     const [job] = r.jobId
       ? await db.select().from(jobsTable).where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
       : [null];
+    const [assignment] = r.jobAssignmentId
+      ? await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.id, r.jobAssignmentId), eq(jobAssignmentsTable.companyId, tenantId)))
+      : [null];
     const metres = Number(r.metersCompleted);
     const amount = metres * ratePerMetre;
     return {
@@ -153,6 +200,8 @@ async function buildWeeklyInvoiceValues(
       amount: money(amount),
       stockCost: 0,
       reportId: r.id,
+      hoursWorked: reportHours(r, assignment),
+      jobDescription: invoiceJobDescription(r, job, assignment),
     };
   }));
   const totalMetres = items.reduce((sum, item) => sum + Number(item.metersCompleted ?? 0), 0);
@@ -396,7 +445,7 @@ async function buildXeroCsv(inv: typeof weeklyInvoicesTable.$inferSelect, subNam
       invoiceNumber,
       invoiceDate,
       dueDate,
-      `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`,
+      xeroLineDescription(inv, item),
       String(Number(item.metersCompleted ?? 0).toFixed(2)),
       String(Number(item.ratePerMetre ?? 0).toFixed(2)),
       accountCode,
@@ -444,7 +493,7 @@ async function createXeroDraftBill(inv: typeof weeklyInvoicesTable.$inferSelect,
           Status: "DRAFT",
           LineAmountTypes: "Exclusive",
           LineItems: invoiceLines.map((item) => ({
-            Description: `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`,
+            Description: xeroLineDescription(inv, item),
             Quantity: Number(item.metersCompleted ?? 0),
             UnitAmount: Number(item.ratePerMetre ?? 0),
             AccountCode: accountCode,
@@ -572,31 +621,7 @@ router.post("/weekly-invoices/generate", async (req, res) => {
     );
     if (existing[0]) continue;
 
-    const ratePerMetre = sub.ratePerMetre ? Number(sub.ratePerMetre) : 0;
-
-    const lineItems = await Promise.all(subReports.map(async (r) => {
-      const [job] = r.jobId
-        ? await db.select().from(jobsTable).where(and(eq(jobsTable.id, r.jobId), eq(jobsTable.companyId, tenantId)))
-        : [null];
-      const metres = Number(r.metersCompleted);
-      const amount = metres * ratePerMetre;
-      return {
-        jobId: r.jobId,
-        jobTitle: job?.title ?? "Unknown Job",
-        jobAddress: job?.address ?? null,
-        dispatchDate: r.dispatchDate ?? weekStart,
-        metersCompleted: metres,
-        ratePerMetre,
-        amount: Number(amount.toFixed(2)),
-        stockCost: 0,
-        reportId: r.id,
-      };
-    }));
-
-    const totalMetres = lineItems.reduce((s, l) => s + l.metersCompleted, 0);
-    const subtotal = lineItems.reduce((s, l) => s + l.amount, 0);
-    const tax = subtotal * 0.1;
-    const total = subtotal + tax;
+    const values = await buildWeeklyInvoiceValues(tenantId, sub, subReports);
 
     const [inv] = await db.insert(weeklyInvoicesTable).values({
       subcontractorId: sub.id,
@@ -604,11 +629,11 @@ router.post("/weekly-invoices/generate", async (req, res) => {
       weekStartDate: weekStart,
       weekEndDate: weekEnd,
       status: "draft",
-      lineItems,
-      totalMetres: String(totalMetres.toFixed(2)),
-      subtotal: String(subtotal.toFixed(2)),
-      tax: String(tax.toFixed(2)),
-      total: String(total.toFixed(2)),
+      lineItems: values.lineItems,
+      totalMetres: String(values.totalMetres.toFixed(2)),
+      subtotal: String(values.subtotal.toFixed(2)),
+      tax: String(values.tax.toFixed(2)),
+      total: String(values.total.toFixed(2)),
     }).returning();
     created.push(inv);
   }

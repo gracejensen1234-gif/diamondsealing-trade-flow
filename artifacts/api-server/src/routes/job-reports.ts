@@ -52,6 +52,7 @@ async function enrichReport(r: typeof jobReportsTable.$inferSelect) {
     jobTitle: job?.title ?? null,
     subcontractorName: sub?.name ?? null,
     metersCompleted: Number(r.metersCompleted),
+    hoursWorked: r.hoursWorked == null ? null : Number(r.hoursWorked),
     photos: Array.isArray(r.photos) ? r.photos : [],
     silikoneColoursUsed: Array.isArray(r.silikoneColoursUsed) ? r.silikoneColoursUsed : [],
     stockUsed: enrichedStock,
@@ -135,11 +136,13 @@ router.post("/job-reports", async (req, res) => {
       subcontractorId: parsed.data.subcontractorId,
       dispatchDate: dateOnlyOrToday(parsed.data.dispatchDate),
       metersCompleted: String(parsed.data.metersCompleted),
+      hoursWorked: parsed.data.hoursWorked != null ? String(parsed.data.hoursWorked) : null,
       photos: parsed.data.photos,
       silikoneColoursUsed: parsed.data.silikoneColoursUsed ?? [],
       stockUsed,
       issueType: parsed.data.issueType,
       issueDescription: parsed.data.issueDescription ?? null,
+      workDescription: parsed.data.workDescription?.trim() || null,
       generalNotes: parsed.data.generalNotes ?? null,
     })
     .returning();

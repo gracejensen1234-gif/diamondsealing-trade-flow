@@ -678,12 +678,16 @@ export interface JobReport {
   /** @nullable */
   dispatchDate?: string | null;
   metersCompleted: number;
+  /** @nullable */
+  hoursWorked?: number | null;
   photos: string[];
   silikoneColoursUsed: string[];
   stockUsed: StockUsageItem[];
   issueType: JobReportIssueType;
   /** @nullable */
   issueDescription?: string | null;
+  /** @nullable */
+  workDescription?: string | null;
   /** @nullable */
   generalNotes?: string | null;
   createdAt: string;
@@ -707,12 +711,14 @@ export interface JobReportInput {
   subcontractorId: number;
   dispatchDate?: string;
   metersCompleted: number;
+  hoursWorked?: number;
   /** @minItems 1 */
   photos: string[];
   silikoneColoursUsed: string[];
   stockUsed: StockUsageInput[];
   issueType: JobReportInputIssueType;
   issueDescription?: string;
+  workDescription?: string;
   generalNotes?: string;
 }
 
@@ -779,6 +785,10 @@ export interface WeeklyInvoiceLineItem {
   amount: number;
   stockCost?: number;
   reportId?: number;
+  /** @nullable */
+  hoursWorked?: number | null;
+  /** @nullable */
+  jobDescription?: string | null;
 }
 
 export type WeeklyInvoiceStatus = typeof WeeklyInvoiceStatus[keyof typeof WeeklyInvoiceStatus];

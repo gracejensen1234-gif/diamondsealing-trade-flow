@@ -103,6 +103,11 @@ export default function AdminReports() {
                   <div className="bg-primary/10 text-primary px-3 py-1 rounded-full font-bold text-lg">
                     {report.metersCompleted}m
                   </div>
+                  {report.hoursWorked ? (
+                    <div className="text-xs font-medium text-muted-foreground">
+                      {report.hoursWorked.toFixed(2)} hrs
+                    </div>
+                  ) : null}
                 </div>
               </CardHeader>
               
@@ -119,6 +124,13 @@ export default function AdminReports() {
                       </div>
                     )}
                     
+                    {report.workDescription && (
+                      <div className="text-sm bg-muted p-3 rounded-md">
+                        <span className="font-semibold block mb-1">Invoice description:</span>
+                        {report.workDescription}
+                      </div>
+                    )}
+
                     {report.generalNotes && (
                       <div className="text-sm bg-muted p-3 rounded-md">
                         <span className="font-semibold block mb-1">Notes:</span>

@@ -1361,6 +1361,7 @@ export const ListJobReportsResponseItem = zod.object({
   "subcontractorName": zod.string().nullish(),
   "dispatchDate": zod.coerce.date().nullish(),
   "metersCompleted": zod.number(),
+  "hoursWorked": zod.number().nullish(),
   "photos": zod.array(zod.string()),
   "silikoneColoursUsed": zod.array(zod.string()),
   "stockUsed": zod.array(zod.object({
@@ -1371,6 +1372,7 @@ export const ListJobReportsResponseItem = zod.object({
 })),
   "issueType": zod.enum(['none', 'excessive_cleaning', 'site_not_ready', 'unsafe_environment', 'builder_complaint', 'other']),
   "issueDescription": zod.string().nullish(),
+  "workDescription": zod.string().nullish(),
   "generalNotes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -1389,6 +1391,7 @@ export const CreateJobReportBody = zod.object({
   "subcontractorId": zod.number(),
   "dispatchDate": zod.coerce.date().optional(),
   "metersCompleted": zod.number(),
+  "hoursWorked": zod.number().optional(),
   "photos": zod.array(zod.string()).min(1),
   "silikoneColoursUsed": zod.array(zod.string()),
   "stockUsed": zod.array(zod.object({
@@ -1397,6 +1400,7 @@ export const CreateJobReportBody = zod.object({
 })),
   "issueType": zod.enum(['none', 'excessive_cleaning', 'site_not_ready', 'unsafe_environment', 'builder_complaint', 'other']),
   "issueDescription": zod.string().optional(),
+  "workDescription": zod.string().optional(),
   "generalNotes": zod.string().optional()
 })
 
@@ -1414,6 +1418,7 @@ export const GetJobReportResponse = zod.object({
   "subcontractorName": zod.string().nullish(),
   "dispatchDate": zod.coerce.date().nullish(),
   "metersCompleted": zod.number(),
+  "hoursWorked": zod.number().nullish(),
   "photos": zod.array(zod.string()),
   "silikoneColoursUsed": zod.array(zod.string()),
   "stockUsed": zod.array(zod.object({
@@ -1424,6 +1429,7 @@ export const GetJobReportResponse = zod.object({
 })),
   "issueType": zod.enum(['none', 'excessive_cleaning', 'site_not_ready', 'unsafe_environment', 'builder_complaint', 'other']),
   "issueDescription": zod.string().nullish(),
+  "workDescription": zod.string().nullish(),
   "generalNotes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -1565,7 +1571,9 @@ export const ListWeeklyInvoicesResponseItem = zod.object({
   "ratePerMetre": zod.number(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
-  "reportId": zod.number().optional()
+  "reportId": zod.number().optional(),
+  "hoursWorked": zod.number().nullish(),
+  "jobDescription": zod.string().nullish()
 })).optional(),
   "totalMetres": zod.number(),
   "subtotal": zod.number(),
@@ -1608,7 +1616,9 @@ export const GetWeeklyInvoiceResponse = zod.object({
   "ratePerMetre": zod.number(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
-  "reportId": zod.number().optional()
+  "reportId": zod.number().optional(),
+  "hoursWorked": zod.number().nullish(),
+  "jobDescription": zod.string().nullish()
 })).optional(),
   "totalMetres": zod.number(),
   "subtotal": zod.number(),
@@ -1646,7 +1656,9 @@ export const UpdateWeeklyInvoiceResponse = zod.object({
   "ratePerMetre": zod.number(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
-  "reportId": zod.number().optional()
+  "reportId": zod.number().optional(),
+  "hoursWorked": zod.number().nullish(),
+  "jobDescription": zod.string().nullish()
 })).optional(),
   "totalMetres": zod.number(),
   "subtotal": zod.number(),
@@ -1682,7 +1694,9 @@ export const SubmitWeeklyInvoiceResponse = zod.object({
   "ratePerMetre": zod.number(),
   "amount": zod.number(),
   "stockCost": zod.number().optional(),
-  "reportId": zod.number().optional()
+  "reportId": zod.number().optional(),
+  "hoursWorked": zod.number().nullish(),
+  "jobDescription": zod.string().nullish()
 })).optional(),
   "totalMetres": zod.number(),
   "subtotal": zod.number(),

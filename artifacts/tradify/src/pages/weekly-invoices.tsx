@@ -9,12 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/lib/auth";
 import { Download, FileSpreadsheet, Send, Info, Eye } from "lucide-react";
 
 export default function WeeklyInvoices() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("all");
+  const isWorker = user?.role === "worker";
   
   // Get this week's Monday
   const thisMonday = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -66,8 +69,10 @@ export default function WeeklyInvoices() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Weekly Invoices</h1>
-          <p className="text-muted-foreground mt-2">Manage and sync subcontractor pay to Xero.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{isWorker ? "My Invoices" : "Weekly Invoices"}</h1>
+          <p className="text-muted-foreground mt-2">
+            {isWorker ? "View your submitted job reports and weekly invoice totals." : "Manage and sync subcontractor pay to Xero."}
+          </p>
         </div>
         
         <div className="flex items-center gap-4">
@@ -81,17 +86,21 @@ export default function WeeklyInvoices() {
             </SelectContent>
           </Select>
 
-          <Button onClick={handleGenerate} disabled={generateInvoices.isPending}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" /> 
-            Generate This Week
-          </Button>
+          {!isWorker && (
+            <Button onClick={handleGenerate} disabled={generateInvoices.isPending}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Generate This Week
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
+      {!isWorker && (
+        <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
         <Info className="h-5 w-5 shrink-0" />
         <p>Invoices are generated from completed job reports. If the direct Xero API connection is not ready, download the Xero CSV and import it as a draft bill in Xero.</p>
-      </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {isLoading ? (
@@ -130,12 +139,14 @@ export default function WeeklyInvoices() {
                 <Button asChild variant="outline" className="flex-1">
                   <Link href={`/weekly-invoices/${inv.id}`}><Eye className="h-4 w-4 mr-2" /> View</Link>
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={() => downloadXeroCsv(inv.id)}>
-                  <Download className="h-4 w-4 mr-2" /> CSV
-                </Button>
-                {inv.status === 'draft' && (
-                  <Button 
-                    className="flex-1" 
+                {!isWorker && (
+                  <Button variant="outline" className="flex-1" onClick={() => downloadXeroCsv(inv.id)}>
+                    <Download className="h-4 w-4 mr-2" /> CSV
+                  </Button>
+                )}
+                {!isWorker && inv.status === 'draft' && (
+                  <Button
+                    className="flex-1"
                     onClick={() => submitInvoice.mutate({ id: inv.id })}
                     disabled={submitInvoice.isPending}
                   >

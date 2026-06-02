@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useListDispatch, useListStockItems, useCreateJobReport, getListDispatchQueryKey, getListJobReportsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,7 +77,28 @@ export default function FieldJobDetail() {
   const [stockUsed, setStockUsed] = useState<Record<number, number>>({});
   const [issueType, setIssueType] = useState<string>("none");
   const [issueDescription, setIssueDescription] = useState("");
+  const [hoursWorked, setHoursWorked] = useState("");
+  const [workDescription, setWorkDescription] = useState("");
   const [notes, setNotes] = useState("");
+  const initializedAssignmentRef = useRef<number | null>(null);
+
+  const checkedJobHours = useMemo(() => {
+    if (!assignment?.arrivedAt) return null;
+    const start = new Date(assignment.arrivedAt).getTime();
+    const end = assignment.departedAt ? new Date(assignment.departedAt).getTime() : Date.now();
+    const hours = Math.max(0, (end - start) / 3_600_000);
+    return Number.isFinite(hours) && hours > 0 ? Number(hours.toFixed(2)) : null;
+  }, [assignment?.arrivedAt, assignment?.departedAt]);
+
+  useEffect(() => {
+    if (!assignment) return;
+    if (initializedAssignmentRef.current === assignment.id) return;
+    initializedAssignmentRef.current = assignment.id;
+    if (checkedJobHours) {
+      setHoursWorked(checkedJobHours.toFixed(2));
+    }
+    setWorkDescription(assignment.workArea || assignment.jobDescription || assignment.notes || "");
+  }, [assignment, checkedJobHours]);
 
   const createReport = useCreateJobReport({
     mutation: {
@@ -126,6 +147,8 @@ export default function FieldJobDetail() {
         stockUsed: stockPayload,
         issueType: issueType as any,
         issueDescription: issueType !== "none" ? issueDescription : undefined,
+        hoursWorked: Number(hoursWorked) > 0 ? Number(hoursWorked) : undefined,
+        workDescription: workDescription.trim() || undefined,
         generalNotes: notes
       }
     });
@@ -187,6 +210,28 @@ export default function FieldJobDetail() {
               className="text-lg h-12"
               value={meters}
               onChange={(e) => setMeters(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-base">Hours Worked</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.25"
+              placeholder={checkedJobHours ? checkedJobHours.toFixed(2) : "e.g. 3.5"}
+              className="text-lg h-12"
+              value={hoursWorked}
+              onChange={(e) => setHoursWorked(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-base">Invoice Work Description</Label>
+            <Textarea
+              placeholder="e.g. Unit 4 bathrooms, balconies, pool coping"
+              value={workDescription}
+              onChange={(e) => setWorkDescription(e.target.value)}
             />
           </div>
 

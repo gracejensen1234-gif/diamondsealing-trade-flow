@@ -12,11 +12,13 @@ export const jobReportsTable = pgTable("job_reports", {
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractorsTable.id),
   dispatchDate: text("dispatch_date"),
   metersCompleted: numeric("meters_completed", { precision: 8, scale: 2 }).notNull().default("0"),
+  hoursWorked: numeric("hours_worked", { precision: 8, scale: 2 }),
   photos: jsonb("photos").notNull().default([]),
   silikoneColoursUsed: jsonb("silikone_colours_used").notNull().default([]),
   stockUsed: jsonb("stock_used").notNull().default([]),
   issueType: text("issue_type").notNull().default("none"),
   issueDescription: text("issue_description"),
+  workDescription: text("work_description"),
   generalNotes: text("general_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
