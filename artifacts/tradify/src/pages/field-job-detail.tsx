@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { useListDispatch, useListStockItems, useCreateJobReport, getListDispatchQueryKey, getListJobReportsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useListDispatch, useCreateJobReport, getListDispatchQueryKey, getListJobReportsQueryKey } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,30 @@ const timeWindowLabels: Record<string, string> = {
   afternoon: "Afternoon",
   custom: "Custom time",
 };
+
+type ReportInventoryItem = {
+  id: number;
+  stockItemId: number;
+  stockItemName: string;
+  colour?: string | null;
+  unit?: string | null;
+  currentQuantity: number;
+};
+
+function formatQty(quantity: number, unit?: string | null) {
+  return `${Number(quantity).toLocaleString("en-AU", { maximumFractionDigits: 2 })} ${unit ?? "unit"}`;
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object" && "error" in data) {
+      const message = (data as { error?: unknown }).error;
+      if (typeof message === "string") return message;
+    }
+  }
+  return error instanceof Error ? error.message : "Try again.";
+}
 
 function compressPhoto(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -69,12 +93,11 @@ export default function FieldJobDetail() {
     { query: { queryKey: getListDispatchQueryKey({ date: today, subcontractorId }), enabled: !!id } }
   );
   const assignment = dispatchList?.find(a => a.id === Number(id));
-  const { data: stockItems, isLoading: loadingStock } = useListStockItems();
-
   const [meters, setMeters] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [colours, setColours] = useState<string[]>([]);
   const [stockUsed, setStockUsed] = useState<Record<number, number>>({});
+  const [stockUsageChecked, setStockUsageChecked] = useState(false);
   const [issueType, setIssueType] = useState<string>("none");
   const [issueDescription, setIssueDescription] = useState("");
   const [hoursWorked, setHoursWorked] = useState("");
@@ -89,6 +112,26 @@ export default function FieldJobDetail() {
     const hours = Math.max(0, (end - start) / 3_600_000);
     return Number.isFinite(hours) && hours > 0 ? Number(hours.toFixed(2)) : null;
   }, [assignment?.arrivedAt, assignment?.departedAt]);
+
+  const inventorySubcontractorId = assignment?.subcontractorId ?? undefined;
+  const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery<ReportInventoryItem[]>({
+    queryKey: ["field-report-inventory", inventorySubcontractorId],
+    queryFn: async () => {
+      const response = await fetch(`/api/sub-inventory/${inventorySubcontractorId}`);
+      if (!response.ok) throw new Error("Could not load inventory");
+      return response.json();
+    },
+    enabled: Boolean(inventorySubcontractorId),
+  });
+
+  const stockUsageWithinInventory = useMemo(() => {
+    const inventoryByStockId = new Map(inventoryItems.map((item) => [item.stockItemId, item]));
+    return Object.entries(stockUsed).every(([stockItemId, quantity]) => {
+      if (!quantity || quantity <= 0) return true;
+      const item = inventoryByStockId.get(Number(stockItemId));
+      return Boolean(item && quantity <= item.currentQuantity);
+    });
+  }, [inventoryItems, stockUsed]);
 
   useEffect(() => {
     if (!assignment) return;
@@ -105,8 +148,20 @@ export default function FieldJobDetail() {
       onSuccess: () => {
         toast({ title: "Job report submitted successfully" });
         queryClient.invalidateQueries({ queryKey: getListJobReportsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["field-report-inventory", assignment?.subcontractorId] });
+        queryClient.invalidateQueries({ queryKey: ["field-inventory", assignment?.subcontractorId] });
+        queryClient.invalidateQueries({ queryKey: ["field-inventory-transactions", assignment?.subcontractorId] });
+        queryClient.invalidateQueries({ queryKey: ["sub-inventory"] });
+        queryClient.invalidateQueries({ queryKey: ["sub-inventory-transactions"] });
         setLocation("/field");
-      }
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not submit job report",
+          description: errorMessage(error),
+          variant: "destructive",
+        });
+      },
     }
   });
 
@@ -154,9 +209,9 @@ export default function FieldJobDetail() {
     });
   };
 
-  const isValid = Number(meters) > 0 && photos.length > 0;
+  const isValid = Number(meters) > 0 && photos.length > 0 && stockUsageChecked && stockUsageWithinInventory;
 
-  if (loadingAssignment || loadingStock) {
+  if (loadingAssignment || loadingInventory) {
     return <div className="p-4 space-y-4 max-w-md mx-auto"><Skeleton className="h-10 w-32" /><Skeleton className="h-64 w-full" /></div>;
   }
 
@@ -290,22 +345,53 @@ export default function FieldJobDetail() {
           </div>
 
           <div className="space-y-3">
-            <Label className="text-base">Stock Used (Optional)</Label>
-            <div className="space-y-3 border rounded-md p-3">
-              {stockItems?.map(item => (
-                <div key={item.id} className="flex items-center justify-between gap-2">
-                  <span className="text-sm">{item.name} <span className="text-muted-foreground text-xs">({item.unit})</span></span>
-                  <Input 
-                    type="number" 
-                    min="0"
-                    placeholder="0"
-                    className="w-20 h-8"
-                    value={stockUsed[item.id] || ""}
-                    onChange={(e) => setStockUsed(prev => ({...prev, [item.id]: Number(e.target.value)}))}
-                  />
-                </div>
-              ))}
+            <Label className="text-base">Stock Used <span className="text-destructive">*</span></Label>
+            <div className="space-y-3 rounded-md border p-3">
+              {inventoryItems.length > 0 ? (
+                inventoryItems.map(item => {
+                  const quantity = stockUsed[item.stockItemId] ?? 0;
+                  const tooHigh = quantity > item.currentQuantity;
+                  return (
+                    <div key={item.id} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{item.stockItemName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.colour ?? "No colour recorded"} · Held: {formatQty(item.currentQuantity, item.unit)}
+                          </p>
+                        </div>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={item.currentQuantity}
+                          step="0.01"
+                          placeholder="0"
+                          className="h-9 w-24"
+                          value={stockUsed[item.stockItemId] || ""}
+                          onChange={(e) => setStockUsed(prev => ({ ...prev, [item.stockItemId]: Number(e.target.value) }))}
+                        />
+                      </div>
+                      {tooHigh ? (
+                        <p className="text-xs text-destructive">More than current stock held</p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">No inventory has been recorded for this employee/subcontractor yet.</p>
+              )}
+              <div className="flex items-center gap-2 border-t pt-3">
+                <Checkbox
+                  id="stock-usage-checked"
+                  checked={stockUsageChecked}
+                  onCheckedChange={(checked) => setStockUsageChecked(Boolean(checked))}
+                />
+                <label htmlFor="stock-usage-checked" className="text-sm font-medium leading-none">
+                  Stock usage checked
+                </label>
+              </div>
             </div>
+            {!stockUsageChecked ? <p className="text-xs text-destructive">Confirm stock usage before submitting</p> : null}
           </div>
 
           <div className="space-y-3">

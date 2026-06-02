@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   jobReportsTable, jobsTable, subcontractorsTable,
   stockItemsTable, activityTable, jobAssignmentsTable,
+  inventoryTransactionsTable, subInventoryTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
@@ -120,46 +121,114 @@ router.post("/job-reports", async (req, res) => {
     if (assignment.subcontractorId !== parsed.data.subcontractorId) {
       return res.status(403).json({ error: "This report must match the assigned employee/subcontractor" });
     }
+    const [existingReport] = await db
+      .select({ id: jobReportsTable.id })
+      .from(jobReportsTable)
+      .where(and(
+        eq(jobReportsTable.jobAssignmentId, parsed.data.jobAssignmentId),
+        eq(jobReportsTable.companyId, companyId(req)),
+      ))
+      .limit(1);
+    if (existingReport) return res.status(409).json({ error: "A report has already been submitted for this work block" });
   }
 
-  const stockUsed = (parsed.data.stockUsed ?? []).map((s) => ({
-    stockItemId: s.stockItemId,
-    quantityUsed: Number(s.quantityUsed),
-  }));
+  const stockByItemId = new Map<number, number>();
+  for (const usage of parsed.data.stockUsed ?? []) {
+    const quantityUsed = Number(usage.quantityUsed);
+    if (!Number.isFinite(quantityUsed) || quantityUsed < 0) {
+      return res.status(400).json({ error: "Stock quantities must be zero or higher" });
+    }
+    if (quantityUsed === 0) continue;
+    stockByItemId.set(usage.stockItemId, (stockByItemId.get(usage.stockItemId) ?? 0) + quantityUsed);
+  }
+  const stockUsed = Array.from(stockByItemId.entries()).map(([stockItemId, quantityUsed]) => ({ stockItemId, quantityUsed }));
+  const tenantId = companyId(req);
 
-  const [report] = await db
-    .insert(jobReportsTable)
-    .values({
-      companyId: companyId(req),
-      jobId: parsed.data.jobId,
-      jobAssignmentId: parsed.data.jobAssignmentId ?? null,
-      subcontractorId: parsed.data.subcontractorId,
-      dispatchDate: dateOnlyOrToday(parsed.data.dispatchDate),
-      metersCompleted: String(parsed.data.metersCompleted),
-      hoursWorked: parsed.data.hoursWorked != null ? String(parsed.data.hoursWorked) : null,
-      photos: parsed.data.photos,
-      silikoneColoursUsed: parsed.data.silikoneColoursUsed ?? [],
-      stockUsed,
-      issueType: parsed.data.issueType,
-      issueDescription: parsed.data.issueDescription ?? null,
-      workDescription: parsed.data.workDescription?.trim() || null,
-      generalNotes: parsed.data.generalNotes ?? null,
-    })
-    .returning();
+  const inventoryRows = new Map<number, typeof subInventoryTable.$inferSelect>();
+  for (const usage of stockUsed) {
+    const [stockItem] = await db
+      .select({ id: stockItemsTable.id, name: stockItemsTable.name, unit: stockItemsTable.unit })
+      .from(stockItemsTable)
+      .where(and(eq(stockItemsTable.id, usage.stockItemId), eq(stockItemsTable.companyId, tenantId)));
+    if (!stockItem) return res.status(400).json({ error: `Stock item #${usage.stockItemId} is not set up for this company` });
 
-  if (parsed.data.jobAssignmentId) {
-    await db
-      .update(jobAssignmentsTable)
-      .set({ status: "completed", departedAt: new Date() })
-      .where(and(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId), eq(jobAssignmentsTable.companyId, companyId(req))));
+    const [inventory] = await db
+      .select()
+      .from(subInventoryTable)
+      .where(and(
+        eq(subInventoryTable.companyId, tenantId),
+        eq(subInventoryTable.subcontractorId, parsed.data.subcontractorId),
+        eq(subInventoryTable.stockItemId, usage.stockItemId),
+      ))
+      .limit(1);
+    if (!inventory) return res.status(400).json({ error: `${stockItem.name} has not been issued to this employee/subcontractor yet` });
+
+    const currentQuantity = Number(inventory.currentQuantity);
+    if (currentQuantity < usage.quantityUsed) {
+      return res.status(400).json({
+        error: `${stockItem.name}: only ${currentQuantity} ${stockItem.unit} currently recorded, but ${usage.quantityUsed} was entered`,
+      });
+    }
+    inventoryRows.set(usage.stockItemId, inventory);
   }
 
-  await db.insert(activityTable).values({
-    companyId: companyId(req),
-    type: "job_report_submitted",
-    description: `Job report submitted — ${parsed.data.metersCompleted}m completed`,
-    entityId: report.id,
-    entityType: "job_report",
+  const report = await db.transaction(async (tx) => {
+    const [createdReport] = await tx
+      .insert(jobReportsTable)
+      .values({
+        companyId: tenantId,
+        jobId: parsed.data.jobId,
+        jobAssignmentId: parsed.data.jobAssignmentId ?? null,
+        subcontractorId: parsed.data.subcontractorId,
+        dispatchDate: dateOnlyOrToday(parsed.data.dispatchDate),
+        metersCompleted: String(parsed.data.metersCompleted),
+        hoursWorked: parsed.data.hoursWorked != null ? String(parsed.data.hoursWorked) : null,
+        photos: parsed.data.photos,
+        silikoneColoursUsed: parsed.data.silikoneColoursUsed ?? [],
+        stockUsed,
+        issueType: parsed.data.issueType,
+        issueDescription: parsed.data.issueDescription ?? null,
+        workDescription: parsed.data.workDescription?.trim() || null,
+        generalNotes: parsed.data.generalNotes ?? null,
+      })
+      .returning();
+
+    for (const usage of stockUsed) {
+      const inventory = inventoryRows.get(usage.stockItemId);
+      if (!inventory) continue;
+      const nextQuantity = Number(inventory.currentQuantity) - usage.quantityUsed;
+      await tx.insert(inventoryTransactionsTable).values({
+        companyId: tenantId,
+        subcontractorId: parsed.data.subcontractorId,
+        stockItemId: usage.stockItemId,
+        transactionType: "used_on_job",
+        quantity: usage.quantityUsed.toString(),
+        jobAssignmentId: parsed.data.jobAssignmentId ?? null,
+        referenceNote: `Job report #${createdReport.id} - ${parsed.data.metersCompleted}m completed`,
+        recordedBy: req.authUser?.email ?? "field",
+      });
+      await tx
+        .update(subInventoryTable)
+        .set({ currentQuantity: nextQuantity.toString(), updatedAt: new Date() })
+        .where(and(eq(subInventoryTable.id, inventory.id), eq(subInventoryTable.companyId, tenantId)));
+    }
+
+    if (parsed.data.jobAssignmentId) {
+      await tx
+        .update(jobAssignmentsTable)
+        .set({ status: "completed", departedAt: new Date() })
+        .where(and(eq(jobAssignmentsTable.id, parsed.data.jobAssignmentId), eq(jobAssignmentsTable.companyId, tenantId)));
+    }
+
+    await tx.insert(activityTable).values({
+      companyId: tenantId,
+      type: "job_report_submitted",
+      description: `Job report submitted — ${parsed.data.metersCompleted}m completed${stockUsed.length ? `, ${stockUsed.length} stock item${stockUsed.length === 1 ? "" : "s"} used` : ""}`,
+      entityId: createdReport.id,
+      entityType: "job_report",
+    });
+
+    return createdReport;
   });
 
   return res.status(201).json(await enrichReport(report));
