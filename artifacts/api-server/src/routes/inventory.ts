@@ -13,6 +13,7 @@ import { companyId, requireAdmin, requireSubcontractorAccess, workerSubcontracto
 const router = Router();
 type InventoryTransactionType = typeof inventoryTransactionsTable.$inferSelect["transactionType"];
 type RestockRequestStatus = typeof restockRequestsTable.$inferSelect["status"];
+const inventoryTransactionTypes: InventoryTransactionType[] = ["issued", "returned", "used_on_job", "adjustment", "restock"];
 
 async function buildInventoryItem(row: typeof subInventoryTable.$inferSelect) {
   const tenantId = row.companyId ?? 0;
@@ -120,6 +121,14 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
   if (!subcontractorId || !stockItemId || !transactionType || quantity === undefined) {
     return res.status(400).json({ error: "subcontractorId, stockItemId, transactionType, quantity required" });
   }
+  const transactionTypeValue = String(transactionType) as InventoryTransactionType;
+  if (!inventoryTransactionTypes.includes(transactionTypeValue)) {
+    return res.status(400).json({ error: "Invalid inventory transaction type" });
+  }
+  const numericQuantity = Number(quantity);
+  if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+    return res.status(400).json({ error: "Quantity must be greater than zero" });
+  }
   const tenantId = companyId(req);
   const [sub] = await db
     .select()
@@ -139,21 +148,6 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
     if (!assignment) return res.status(400).json({ error: "Job assignment not found for this company" });
   }
 
-  const [txn] = await db.insert(inventoryTransactionsTable).values({
-    companyId: tenantId,
-    subcontractorId: Number(subcontractorId),
-    stockItemId: Number(stockItemId),
-    transactionType,
-    quantity: quantity.toString(),
-    jobAssignmentId: jobAssignmentId ? Number(jobAssignmentId) : null,
-    referenceNote,
-    recordedBy,
-  }).returning();
-
-  // Update sub_inventory running total
-  const direction = ["issued", "restock"].includes(transactionType) ? 1 : -1;
-  const qty = Number(quantity) * direction;
-
   const existing = await db
     .select()
     .from(subInventoryTable)
@@ -164,24 +158,49 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
     ))
     .limit(1);
 
-  if (existing.length) {
-    await db
-      .update(subInventoryTable)
-      .set({
-        currentQuantity: (Number(existing[0].currentQuantity) + qty).toString(),
-        lastIssuedAt: transactionType === "issued" ? new Date() : existing[0].lastIssuedAt,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(subInventoryTable.id, existing[0].id), eq(subInventoryTable.companyId, tenantId)));
-  } else {
-    await db.insert(subInventoryTable).values({
+  const direction = ["issued", "restock"].includes(transactionTypeValue) ? 1 : -1;
+  const quantityChange = numericQuantity * direction;
+  if (!existing.length && quantityChange < 0) {
+    return res.status(400).json({ error: `${stockItem.name} has not been issued to this employee/subcontractor yet` });
+  }
+  const nextQuantity = Number(existing[0]?.currentQuantity ?? 0) + quantityChange;
+  if (nextQuantity < 0) {
+    return res.status(400).json({ error: `${stockItem.name}: transaction would reduce held stock below zero` });
+  }
+
+  const txn = await db.transaction(async (tx) => {
+    const [recorded] = await tx.insert(inventoryTransactionsTable).values({
       companyId: tenantId,
       subcontractorId: Number(subcontractorId),
       stockItemId: Number(stockItemId),
-      currentQuantity: Math.max(0, qty).toString(),
-      lastIssuedAt: transactionType === "issued" ? new Date() : null,
-    });
-  }
+      transactionType: transactionTypeValue,
+      quantity: numericQuantity.toString(),
+      jobAssignmentId: jobAssignmentId ? Number(jobAssignmentId) : null,
+      referenceNote,
+      recordedBy,
+    }).returning();
+
+    if (existing.length) {
+      await tx
+        .update(subInventoryTable)
+        .set({
+          currentQuantity: nextQuantity.toString(),
+          lastIssuedAt: transactionTypeValue === "issued" ? new Date() : existing[0].lastIssuedAt,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(subInventoryTable.id, existing[0].id), eq(subInventoryTable.companyId, tenantId)));
+    } else {
+      await tx.insert(subInventoryTable).values({
+        companyId: tenantId,
+        subcontractorId: Number(subcontractorId),
+        stockItemId: Number(stockItemId),
+        currentQuantity: nextQuantity.toString(),
+        lastIssuedAt: transactionTypeValue === "issued" ? new Date() : null,
+      });
+    }
+
+    return recorded;
+  });
 
   return res.status(201).json(await buildTransaction(txn));
 });

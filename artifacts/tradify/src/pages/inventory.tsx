@@ -101,7 +101,7 @@ export default function Inventory() {
                 </div>
                 <div>
                   <Label>Quantity</Label>
-                  <Input type="number" className="mt-1" value={txForm.quantity} onChange={(e) => setTxForm((p) => ({ ...p, quantity: e.target.value }))} />
+                  <Input type="number" min="0.01" step="0.01" className="mt-1" value={txForm.quantity} onChange={(e) => setTxForm((p) => ({ ...p, quantity: e.target.value }))} />
                 </div>
               </div>
               <div>
@@ -122,7 +122,7 @@ export default function Inventory() {
                 <Input className="mt-1" value={txForm.notes} onChange={(e) => setTxForm((p) => ({ ...p, notes: e.target.value }))} />
               </div>
               <div className="flex gap-2 pt-2">
-                <Button className="flex-1" onClick={() => txMutation.mutate(txForm)} disabled={!txForm.subcontractorId || !txForm.stockItemId || !txForm.quantity}>Record</Button>
+                <Button className="flex-1" onClick={() => txMutation.mutate(txForm)} disabled={!txForm.subcontractorId || !txForm.stockItemId || Number(txForm.quantity) <= 0}>Record</Button>
                 <Button variant="outline" onClick={() => setTxOpen(false)}>Cancel</Button>
               </div>
             </div>
