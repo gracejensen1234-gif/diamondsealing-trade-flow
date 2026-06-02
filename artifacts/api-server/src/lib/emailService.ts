@@ -20,9 +20,13 @@ function emailFromAddress() {
     || "";
 }
 
+function smtpPassword() {
+  return process.env.SMTP_PASS?.replace(/\s+/g, "") || "";
+}
+
 export function inviteEmailReady() {
   return Boolean(
-    (process.env.SMTP_HOST?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim() && emailFromAddress())
+    (process.env.SMTP_HOST?.trim() && process.env.SMTP_USER?.trim() && smtpPassword() && emailFromAddress())
     || (process.env.RESEND_API_KEY?.trim() && emailFromAddress()),
   );
 }
@@ -103,7 +107,7 @@ async function sendWithSmtp(input: {
 }, from: string): Promise<EmailResult> {
   const host = process.env.SMTP_HOST?.trim();
   const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
+  const pass = smtpPassword();
   const port = Number(process.env.SMTP_PORT || 465);
   const replyTo = process.env.INVITE_EMAIL_REPLY_TO?.trim() || process.env.EMAIL_REPLY_TO?.trim();
   const fromAddress = emailAddressOnly(from);
