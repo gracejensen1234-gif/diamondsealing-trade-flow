@@ -132,6 +132,15 @@ export default function FieldJobDetail() {
       return Boolean(item && quantity <= item.currentQuantity);
     });
   }, [inventoryItems, stockUsed]);
+  const stockUsedTotal = useMemo(
+    () => Object.values(stockUsed).reduce((total, quantity) => total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0), 0),
+    [stockUsed],
+  );
+  const stockInventoryAvailable = useMemo(
+    () => inventoryItems.some((item) => Number(item.currentQuantity) > 0),
+    [inventoryItems],
+  );
+  const hasRecordedStockUsage = stockUsedTotal > 0;
 
   useEffect(() => {
     if (!assignment) return;
@@ -209,7 +218,7 @@ export default function FieldJobDetail() {
     });
   };
 
-  const isValid = Number(meters) > 0 && photos.length > 0 && stockUsageChecked && stockUsageWithinInventory;
+  const isValid = Number(meters) > 0 && photos.length > 0 && stockInventoryAvailable && hasRecordedStockUsage && stockUsageChecked && stockUsageWithinInventory;
 
   if (loadingAssignment || loadingInventory) {
     return <div className="p-4 space-y-4 max-w-md mx-auto"><Skeleton className="h-10 w-32" /><Skeleton className="h-64 w-full" /></div>;
@@ -367,6 +376,7 @@ export default function FieldJobDetail() {
                           step="0.01"
                           placeholder="0"
                           className="h-9 w-24"
+                          disabled={Number(item.currentQuantity) <= 0}
                           value={stockUsed[item.stockItemId] || ""}
                           onChange={(e) => setStockUsed(prev => ({ ...prev, [item.stockItemId]: Number(e.target.value) }))}
                         />
@@ -384,6 +394,7 @@ export default function FieldJobDetail() {
                 <Checkbox
                   id="stock-usage-checked"
                   checked={stockUsageChecked}
+                  disabled={!stockInventoryAvailable || !hasRecordedStockUsage}
                   onCheckedChange={(checked) => setStockUsageChecked(Boolean(checked))}
                 />
                 <label htmlFor="stock-usage-checked" className="text-sm font-medium leading-none">
@@ -391,7 +402,13 @@ export default function FieldJobDetail() {
                 </label>
               </div>
             </div>
-            {!stockUsageChecked ? <p className="text-xs text-destructive">Confirm stock usage before submitting</p> : null}
+            {!stockInventoryAvailable ? (
+              <p className="text-xs text-destructive">Admin must issue stock to this employee/subcontractor before the report can be submitted.</p>
+            ) : !hasRecordedStockUsage ? (
+              <p className="text-xs text-destructive">Enter at least one stock quantity used for this job.</p>
+            ) : !stockUsageChecked ? (
+              <p className="text-xs text-destructive">Confirm stock usage before submitting</p>
+            ) : null}
           </div>
 
           <div className="space-y-3">

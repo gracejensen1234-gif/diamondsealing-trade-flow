@@ -143,6 +143,9 @@ router.post("/job-reports", async (req, res) => {
   }
   const stockUsed = Array.from(stockByItemId.entries()).map(([stockItemId, quantityUsed]) => ({ stockItemId, quantityUsed }));
   const tenantId = companyId(req);
+  if (parsed.data.metersCompleted > 0 && stockUsed.length === 0) {
+    return res.status(400).json({ error: "Stock usage is required when submitting completed metres" });
+  }
 
   const inventoryRows = new Map<number, typeof subInventoryTable.$inferSelect>();
   for (const usage of stockUsed) {
