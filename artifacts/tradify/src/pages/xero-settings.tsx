@@ -167,7 +167,12 @@ export default function XeroSettings() {
 
       <div className="bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-300 p-4 rounded-lg flex gap-3 text-sm">
         <Info className="h-5 w-5 shrink-0" />
-        <p>Weekly invoices are prepared from completed job reports. Sync creates Xero drafts for review before sending.</p>
+        <p>
+          Connect your Xero account to automatically sync customer details, invoices and payment status.
+          <br />
+          <br />
+          Once connected, completed jobs can be sent directly to Xero, helping reduce admin time and keeping your accounts up to date.
+        </p>
       </div>
 
       {!isLoading && !platformConfigured && (
