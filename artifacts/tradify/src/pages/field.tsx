@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ChangeEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, type ChangeEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListSubcontractors,
@@ -46,7 +46,7 @@ import {
 import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronLeft, ChevronRight, Navigation, CheckCircle2, XCircle,
-  CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload,
+  CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload, Package, ArrowDown, ArrowUp,
 } from "lucide-react";
 
 const timeWindowLabels: Record<string, string> = {
@@ -73,6 +73,44 @@ type LocationVerificationResult = {
   withinBounds?: boolean | null;
 };
 
+type FieldInventoryItem = {
+  id: number;
+  stockItemId: number;
+  stockItemName: string;
+  colour?: string | null;
+  unit?: string | null;
+  currentQuantity: number;
+  updatedAt?: string;
+};
+
+type FieldInventoryTransaction = {
+  id: number;
+  stockItemId: number;
+  stockItemName: string;
+  colour?: string | null;
+  unit?: string | null;
+  transactionType: "issued" | "used_on_job" | "returned" | "adjustment" | "restock";
+  quantity: number;
+  jobAssignmentId?: number | null;
+  referenceNote?: string | null;
+  createdAt: string;
+};
+
+type FieldRestockRequest = {
+  id: number;
+  stockItemName: string;
+  colour?: string | null;
+  unit?: string | null;
+  quantityRequested: number;
+  quantityFulfilled?: number | null;
+  status: "pending" | "approved" | "fulfilled" | "rejected";
+  subNotes?: string | null;
+  adminNotes?: string | null;
+  urgency: "low" | "normal" | "high";
+  createdAt: string;
+  updatedAt: string;
+};
+
 async function getBrowserLocation(): Promise<GeolocationCoordinates | null> {
   if (!navigator.geolocation) return null;
   return new Promise((resolve) =>
@@ -94,6 +132,38 @@ async function postLocationVerification(payload: Record<string, unknown>) {
     if (res.ok) return (await res.json()) as LocationVerificationResult;
   } catch {}
   return null;
+}
+
+function formatQty(quantity: number, unit?: string | null) {
+  const display = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(1);
+  return `${display} ${unit ?? "units"}`;
+}
+
+function textMatchesStock(item: FieldInventoryItem, requirement: string) {
+  const required = requirement.toLowerCase().trim();
+  if (!required) return false;
+  const colour = (item.colour ?? "").toLowerCase().trim();
+  const haystack = `${item.stockItemName} ${item.colour ?? ""}`.toLowerCase();
+  return haystack.includes(required) || Boolean(colour && required.includes(colour));
+}
+
+function formatCalendarChip(value: string) {
+  const date = dateFromInputValue(value);
+  return {
+    weekday: date.toLocaleDateString("en-AU", { weekday: "short" }),
+    day: date.toLocaleDateString("en-AU", { day: "numeric" }),
+  };
+}
+
+function inventoryTransactionLabel(type: FieldInventoryTransaction["transactionType"]) {
+  const labels: Record<FieldInventoryTransaction["transactionType"], string> = {
+    issued: "Issued",
+    used_on_job: "Used",
+    returned: "Returned",
+    adjustment: "Adjusted",
+    restock: "Restocked",
+  };
+  return labels[type];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -244,6 +314,39 @@ export default function FieldView() {
     todayDispatchParams,
     { query: { enabled: !!subId, queryKey: getListDispatchQueryKey(todayDispatchParams) } }
   );
+
+  const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery<FieldInventoryItem[]>({
+    queryKey: ["field-inventory", subId],
+    queryFn: async () => {
+      if (!subId) return [];
+      const response = await fetch(`/api/sub-inventory/${subId}`);
+      if (!response.ok) throw new Error("Could not load inventory");
+      return response.json();
+    },
+    enabled: Boolean(subId),
+  });
+
+  const { data: inventoryTransactions = [], isLoading: loadingInventoryTransactions } = useQuery<FieldInventoryTransaction[]>({
+    queryKey: ["field-inventory-transactions", subId],
+    queryFn: async () => {
+      if (!subId) return [];
+      const response = await fetch(`/api/inventory-transactions?subcontractorId=${subId}`);
+      if (!response.ok) throw new Error("Could not load inventory movements");
+      return response.json();
+    },
+    enabled: Boolean(subId),
+  });
+
+  const { data: restockRequests = [], isLoading: loadingRestockRequests } = useQuery<FieldRestockRequest[]>({
+    queryKey: ["field-restock-requests", subId],
+    queryFn: async () => {
+      if (!subId) return [];
+      const response = await fetch(`/api/restock-requests?subcontractorId=${subId}`);
+      if (!response.ok) throw new Error("Could not load restock requests");
+      return response.json();
+    },
+    enabled: Boolean(subId),
+  });
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["unread-count", subId],
@@ -569,6 +672,42 @@ export default function FieldView() {
   const isOnBreak = session?.status === "on_break";
   const unreadCount = unreadData?.count ?? 0;
   const pushEnabled = Boolean(pushServerStatus?.enabled);
+  const inventoryCalendarDates = useMemo(() => {
+    const sixDaysOut = dateFromInputValue(today);
+    sixDaysOut.setDate(sixDaysOut.getDate() + 6);
+    const calendarStart = selectedDispatchDate > dateInputValue(sixDaysOut) ? selectedDispatchDate : today;
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = dateFromInputValue(calendarStart);
+      date.setDate(date.getDate() + index);
+      return dateInputValue(date);
+    });
+  }, [selectedDispatchDate, today]);
+  const selectedRequiredStock = useMemo(() => {
+    const values = (dispatchList ?? []).flatMap((assignment) => assignment.requiredColours ?? []);
+    return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  }, [dispatchList]);
+  const requiredStockStatus = useMemo(() => {
+    return selectedRequiredStock.map((requirement) => {
+      const matches = inventoryItems.filter((item) => item.currentQuantity > 0 && textMatchesStock(item, requirement));
+      const total = matches.reduce((sum, item) => sum + Number(item.currentQuantity), 0);
+      return { requirement, matches, total, unit: matches[0]?.unit ?? "units" };
+    });
+  }, [inventoryItems, selectedRequiredStock]);
+  const currentInventoryItems = useMemo(() => {
+    return [...inventoryItems]
+      .filter((item) => Number(item.currentQuantity) !== 0)
+      .sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
+  }, [inventoryItems]);
+  const selectedDayTransactions = useMemo(() => {
+    return inventoryTransactions
+      .filter((transaction) => dateInputValue(new Date(transaction.createdAt)) === selectedDispatchDate)
+      .slice(0, 8);
+  }, [inventoryTransactions, selectedDispatchDate]);
+  const openRestockRequests = useMemo(() => {
+    return restockRequests
+      .filter((request) => request.status === "pending" || request.status === "approved")
+      .slice(0, 5);
+  }, [restockRequests]);
 
   function handleCredentialUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -1156,6 +1295,160 @@ export default function FieldView() {
             </div>
           )}
         </div>
+      )}
+
+      {subId && (
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Package className="h-4 w-4 text-primary" />
+              Inventory Calendar
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 pt-2">
+            <div className="grid grid-cols-7 gap-1">
+              {inventoryCalendarDates.map((value) => {
+                const chip = formatCalendarChip(value);
+                const selected = value === selectedDispatchDate;
+                return (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={selected ? "default" : "outline"}
+                    className="h-14 flex-col gap-0 px-1 text-xs"
+                    onClick={() => setSelectedDispatchDate(value)}
+                  >
+                    <span>{chip.weekday}</span>
+                    <span className="text-base font-semibold leading-5">{chip.day}</span>
+                  </Button>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">Required for {selectedDispatchDateLabel}</p>
+                <Badge variant="outline">{selectedRequiredStock.length} item{selectedRequiredStock.length === 1 ? "" : "s"}</Badge>
+              </div>
+              {loadingInventory || loadingDispatch ? (
+                <Skeleton className="h-20 w-full" />
+              ) : requiredStockStatus.length > 0 ? (
+                <div className="space-y-2">
+                  {requiredStockStatus.map(({ requirement, matches, total, unit }) => (
+                    <div key={requirement} className="rounded-md border bg-background px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{requirement}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {matches.length > 0
+                              ? `${formatQty(total, unit)} currently recorded`
+                              : "No matching stock currently recorded"}
+                          </p>
+                        </div>
+                        <Badge variant={matches.length > 0 ? "secondary" : "destructive"}>
+                          {matches.length > 0 ? "In stock" : "Check"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  No stock requirements listed for this day.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Current stock held</p>
+              {loadingInventory ? (
+                <Skeleton className="h-20 w-full" />
+              ) : currentInventoryItems.length > 0 ? (
+                <div className="space-y-2">
+                  {currentInventoryItems.slice(0, 6).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.stockItemName}</p>
+                        <p className="text-xs text-muted-foreground">{item.colour ?? "No colour recorded"}</p>
+                      </div>
+                      <Badge variant={item.currentQuantity > 0 ? "secondary" : "destructive"}>
+                        {formatQty(item.currentQuantity, item.unit)}
+                      </Badge>
+                    </div>
+                  ))}
+                  {currentInventoryItems.length > 6 ? (
+                    <p className="text-xs text-muted-foreground">+{currentInventoryItems.length - 6} more item{currentInventoryItems.length - 6 === 1 ? "" : "s"}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  No inventory has been recorded for this employee/subcontractor yet.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Stock movements</p>
+              {loadingInventoryTransactions ? (
+                <Skeleton className="h-16 w-full" />
+              ) : selectedDayTransactions.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedDayTransactions.map((transaction) => {
+                    const isIncoming = transaction.transactionType === "issued" || transaction.transactionType === "restock";
+                    const MovementIcon = isIncoming ? ArrowDown : ArrowUp;
+                    return (
+                      <div key={transaction.id} className="flex items-center gap-3 rounded-md border bg-background px-3 py-2">
+                        <MovementIcon className={`h-4 w-4 shrink-0 ${isIncoming ? "text-green-600" : "text-amber-600"}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{transaction.stockItemName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {inventoryTransactionLabel(transaction.transactionType)}
+                            {transaction.referenceNote ? ` - ${transaction.referenceNote}` : ""}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{formatQty(transaction.quantity, transaction.unit)}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  No stock movements recorded for this day.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Restock requests</p>
+              {loadingRestockRequests ? (
+                <Skeleton className="h-16 w-full" />
+              ) : openRestockRequests.length > 0 ? (
+                <div className="space-y-2">
+                  {openRestockRequests.map((request) => (
+                    <div key={request.id} className="rounded-md border bg-background px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{request.stockItemName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Requested {formatQty(request.quantityRequested, request.unit)}
+                            {request.adminNotes ? ` - ${request.adminNotes}` : ""}
+                          </p>
+                        </div>
+                        <Badge variant={request.status === "approved" ? "default" : "secondary"}>
+                          {request.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  No open restock requests.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

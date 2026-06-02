@@ -8,7 +8,7 @@ import {
   stockItemsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { companyId } from "../lib/auth.js";
+import { companyId, requireAdmin, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
 type InventoryTransactionType = typeof inventoryTransactionsTable.$inferSelect["transactionType"];
@@ -77,7 +77,7 @@ async function buildRestockRequest(row: typeof restockRequestsTable.$inferSelect
 
 // GET /sub-inventory
 router.get("/sub-inventory", async (req, res) => {
-  const subcontractorId = req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined;
+  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
   const conditions = [eq(subInventoryTable.companyId, companyId(req))];
   if (subcontractorId) conditions.push(eq(subInventoryTable.subcontractorId, subcontractorId));
   const filtered = await db
@@ -91,6 +91,7 @@ router.get("/sub-inventory", async (req, res) => {
 // GET /sub-inventory/:subcontractorId
 router.get("/sub-inventory/:subcontractorId", async (req, res) => {
   const subcontractorId = Number(req.params.subcontractorId);
+  if (!requireSubcontractorAccess(req, res, subcontractorId)) return;
   const rows = await db
     .select()
     .from(subInventoryTable)
@@ -101,7 +102,8 @@ router.get("/sub-inventory/:subcontractorId", async (req, res) => {
 // GET /inventory-transactions
 router.get("/inventory-transactions", async (req, res) => {
   const conditions = [eq(inventoryTransactionsTable.companyId, companyId(req))];
-  if (req.query.subcontractorId) conditions.push(eq(inventoryTransactionsTable.subcontractorId, Number(req.query.subcontractorId)));
+  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  if (subcontractorId) conditions.push(eq(inventoryTransactionsTable.subcontractorId, subcontractorId));
   if (req.query.stockItemId) conditions.push(eq(inventoryTransactionsTable.stockItemId, Number(req.query.stockItemId)));
   if (req.query.transactionType) conditions.push(eq(inventoryTransactionsTable.transactionType, req.query.transactionType as InventoryTransactionType));
   const filtered = await db
@@ -113,7 +115,7 @@ router.get("/inventory-transactions", async (req, res) => {
 });
 
 // POST /inventory-transactions
-router.post("/inventory-transactions", async (req, res) => {
+router.post("/inventory-transactions", requireAdmin, async (req, res) => {
   const { subcontractorId, stockItemId, transactionType, quantity, jobAssignmentId, referenceNote, recordedBy } = req.body;
   if (!subcontractorId || !stockItemId || !transactionType || quantity === undefined) {
     return res.status(400).json({ error: "subcontractorId, stockItemId, transactionType, quantity required" });
@@ -187,7 +189,8 @@ router.post("/inventory-transactions", async (req, res) => {
 // GET /restock-requests
 router.get("/restock-requests", async (req, res) => {
   const conditions = [eq(restockRequestsTable.companyId, companyId(req))];
-  if (req.query.subcontractorId) conditions.push(eq(restockRequestsTable.subcontractorId, Number(req.query.subcontractorId)));
+  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  if (subcontractorId) conditions.push(eq(restockRequestsTable.subcontractorId, subcontractorId));
   if (req.query.status) conditions.push(eq(restockRequestsTable.status, req.query.status as RestockRequestStatus));
   const filtered = await db
     .select()
@@ -203,6 +206,7 @@ router.post("/restock-requests", async (req, res) => {
   if (!subcontractorId || !stockItemId || !quantityRequested) {
     return res.status(400).json({ error: "subcontractorId, stockItemId, quantityRequested required" });
   }
+  if (!requireSubcontractorAccess(req, res, Number(subcontractorId))) return;
   const tenantId = companyId(req);
   const [sub] = await db
     .select()
@@ -226,7 +230,7 @@ router.post("/restock-requests", async (req, res) => {
 });
 
 // PATCH /restock-requests/:id
-router.patch("/restock-requests/:id", async (req, res) => {
+router.patch("/restock-requests/:id", requireAdmin, async (req, res) => {
   const { status, quantityFulfilled, adminNotes } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (status) updates.status = status;

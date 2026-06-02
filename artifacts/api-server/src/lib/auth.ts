@@ -452,6 +452,9 @@ export function workerApiScope(req: Request, res: Response, next: NextFunction) 
     path.startsWith("/dispatch") ||
     path.startsWith("/job-reports") ||
     (method === "GET" && path === "/stock-items") ||
+    (method === "GET" && path.startsWith("/sub-inventory")) ||
+    (method === "GET" && path === "/inventory-transactions") ||
+    (path === "/restock-requests" && ["GET", "POST"].includes(method)) ||
     path.startsWith("/notifications") ||
     path.startsWith("/push-subscriptions") ||
     (path.startsWith("/worker-credentials") && ["GET", "POST", "DELETE"].includes(method)) ||
