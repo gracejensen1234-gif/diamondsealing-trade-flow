@@ -48,7 +48,7 @@ import {
   MapPin, Clock, RotateCcw, AlertTriangle, Play, Square, Pause,
   Bell, BellOff, X, ChevronLeft, ChevronRight, Navigation, CheckCircle2, XCircle,
   CalendarDays, FileCheck2, ImageIcon, Send, Trash2, Upload, Package, ArrowDown, ArrowUp,
-  DollarSign, Receipt,
+  DollarSign, Receipt, Home as HomeIcon, ListChecks,
 } from "lucide-react";
 
 const timeWindowLabels: Record<string, string> = {
@@ -57,6 +57,17 @@ const timeWindowLabels: Record<string, string> = {
   afternoon: "Afternoon",
   custom: "Custom time",
 };
+
+type FieldSection = "home" | "schedule" | "time_off" | "inventory" | "earnings" | "documents";
+
+const fieldSections: Array<{ id: FieldSection; label: string; icon: typeof HomeIcon; workerOnly?: boolean }> = [
+  { id: "home", label: "Home", icon: HomeIcon },
+  { id: "schedule", label: "Schedule", icon: CalendarDays },
+  { id: "time_off", label: "Time Off", icon: Send, workerOnly: true },
+  { id: "inventory", label: "Inventory", icon: Package },
+  { id: "earnings", label: "Earnings", icon: Receipt, workerOnly: true },
+  { id: "documents", label: "Documents", icon: FileCheck2, workerOnly: true },
+];
 
 // ─── Location verification ────────────────────────────────────────────────────
 
@@ -243,6 +254,11 @@ function inventoryTransactionLabel(type: FieldInventoryTransaction["transactionT
   return labels[type];
 }
 
+function mapsDirectionsUrl(address?: string | null) {
+  if (!address) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function FieldView() {
@@ -267,11 +283,13 @@ export default function FieldView() {
   const [credentialDraft, setCredentialDraft] = useState(emptyCredentialDraft);
   const [leaveForm, setLeaveForm] = useState({ dayOffDate: todayDateInputValue(), reason: "" });
   const [selectedDispatchDate, setSelectedDispatchDate] = useState(() => todayDateInputValue());
+  const [activeSection, setActiveSection] = useState<FieldSection>("home");
   const today = todayDateInputValue();
   const selectedDispatchParams = { subcontractorId: subId, date: selectedDispatchDate };
   const todayDispatchParams = { subcontractorId: subId, date: today };
   const isViewingToday = selectedDispatchDate === today;
   const selectedDispatchDateLabel = isViewingToday ? "Today" : formatDayOffDate(selectedDispatchDate);
+  const visibleSections = fieldSections.filter((section) => isWorker || !section.workerOnly);
 
   useEffect(() => {
     if (isWorker) {
@@ -696,6 +714,13 @@ export default function FieldView() {
         toast({ title: "Checked in to job" });
         if (subId) queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey(todayDispatchParams) });
       },
+      onError: (error) => {
+        toast({
+          title: "Could not check in",
+          description: error instanceof Error ? error.message : "Try again once you are at the job.",
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -727,9 +752,12 @@ export default function FieldView() {
   // ─── Action handlers with location verification ───────────────────────────
   const handleClockOn = useCallback(async () => {
     if (!subId) return;
-    const locationJob = todayDispatchList?.find(
-      (assignment) => assignment.status !== "completed" && Boolean(assignment.jobAddress),
-    );
+    const firstJob = [...(todayDispatchList ?? [])]
+      .filter((assignment) => assignment.status !== "completed")
+      .sort((a, b) => a.scheduledOrder - b.scheduledOrder)[0];
+    const locationJob = firstJob?.jobAddress
+      ? firstJob
+      : todayDispatchList?.find((assignment) => assignment.status !== "completed" && Boolean(assignment.jobAddress));
     const verification = await requestLocationVerification("clock_on", "clock-on", {
       jobAssignmentId: locationJob?.id,
       jobAddress: locationJob?.jobAddress ?? undefined,
@@ -744,8 +772,15 @@ export default function FieldView() {
       });
       return;
     }
-    clockOn.mutate({ data: { subcontractorId: subId, locationVerificationId: verification.id } });
-  }, [subId, todayDispatchList, requestLocationVerification, clockOn]);
+    try {
+      await clockOn.mutateAsync({ data: { subcontractorId: subId, locationVerificationId: verification.id } });
+      if (firstJob?.status === "pending") {
+        await markArrived.mutateAsync({ id: firstJob.id });
+      }
+    } catch {
+      // Mutation handlers show the user-facing error.
+    }
+  }, [subId, todayDispatchList, requestLocationVerification, clockOn, markArrived, toast]);
 
   const handleClockOff = useCallback(async () => {
     if (!subId) return;
@@ -761,11 +796,20 @@ export default function FieldView() {
     const locationJob = [...(todayDispatchList ?? [])]
       .filter((assignment) => assignment.status === "completed" && Boolean(assignment.jobAddress))
       .sort((a, b) => b.scheduledOrder - a.scheduledOrder)[0];
-    await requestLocationVerification("clock_off", "clock-off", {
+    const verification = await requestLocationVerification("clock_off", "clock-off", {
       jobAssignmentId: locationJob?.id,
       jobAddress: locationJob?.jobAddress ?? undefined,
       workSessionId: session?.id,
+      required: true,
     });
+    if (!verification?.id || verification.status === "skipped" || verification.status === "location_error") {
+      toast({
+        title: "Location required",
+        description: "Allow location access before clocking off for the day.",
+        variant: "destructive",
+      });
+      return;
+    }
     clockOff.mutate({ data: { subcontractorId: subId } });
   }, [subId, todayDispatchList, session?.id, requestLocationVerification, clockOff, toast]);
 
@@ -779,11 +823,20 @@ export default function FieldView() {
       });
       return;
     }
-    await requestLocationVerification("job_arrived", "job check-in", {
+    const verification = await requestLocationVerification("job_arrived", "job check-in", {
       jobAssignmentId: assignmentId,
       jobAddress,
       workSessionId: session?.id,
+      required: true,
     });
+    if (!verification?.id || verification.status === "skipped" || verification.status === "location_error") {
+      toast({
+        title: "Location required",
+        description: "Allow location access before checking in to this job.",
+        variant: "destructive",
+      });
+      return;
+    }
     markArrived.mutate({ id: assignmentId });
   }, [isViewingToday, requestLocationVerification, session?.id, session?.status, markArrived, toast]);
 
@@ -811,6 +864,22 @@ export default function FieldView() {
   const workedTimeTodayLabel = formatWorkedTime(workedMinutesToday);
   const unreadCount = unreadData?.count ?? 0;
   const pushEnabled = Boolean(pushServerStatus?.enabled);
+  const todayJobs = useMemo(
+    () => [...(todayDispatchList ?? [])].sort((a, b) => a.scheduledOrder - b.scheduledOrder),
+    [todayDispatchList],
+  );
+  const unfinishedTodayJobs = useMemo(
+    () => todayJobs.filter((assignment) => assignment.status !== "completed"),
+    [todayJobs],
+  );
+  const firstTodayJob = todayJobs.find((assignment) => assignment.status !== "completed");
+  const activeTodayJob = todayJobs.find(
+    (assignment) => assignment.status === "arrived" || assignment.status === "in_progress",
+  );
+  const nextPendingTodayJob = todayJobs.find((assignment) => assignment.status === "pending");
+  const nextFlowJob = activeTodayJob ?? nextPendingTodayJob ?? null;
+  const canClockOffForDay = isClockedOn && unfinishedTodayJobs.length === 0;
+  const isCurrentJobLast = Boolean(activeTodayJob && unfinishedTodayJobs.length === 1);
   const inventoryCalendarDates = useMemo(() => {
     const sixDaysOut = dateFromInputValue(today);
     sixDaysOut.setDate(sixDaysOut.getDate() + 6);
@@ -858,6 +927,19 @@ export default function FieldView() {
   );
   const currentInvoiceId = earningsSummary?.draftInvoiceId ?? earningsSummary?.submittedInvoiceId ?? null;
 
+  const openMapsForJob = useCallback((jobAddress?: string | null) => {
+    const directionsUrl = mapsDirectionsUrl(jobAddress);
+    if (!directionsUrl) {
+      toast({
+        title: "No job address",
+        description: "Admin needs to add an address before directions can open.",
+        variant: "destructive",
+      });
+      return;
+    }
+    window.open(directionsUrl, "_blank", "noopener,noreferrer");
+  }, [toast]);
+
   function handleCredentialUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.currentTarget.value = "";
@@ -891,7 +973,26 @@ export default function FieldView() {
         </div>
       </div>
 
-      {!pushEnabled && (
+      <div className="grid grid-cols-3 gap-2">
+        {visibleSections.map((section) => {
+          const Icon = section.icon;
+          const selected = activeSection === section.id;
+          return (
+            <Button
+              key={section.id}
+              type="button"
+              variant={selected ? "default" : "outline"}
+              className="h-16 flex-col gap-1 px-1 text-xs"
+              onClick={() => setActiveSection(section.id)}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="leading-tight">{section.label}</span>
+            </Button>
+          );
+        })}
+      </div>
+
+      {activeSection === "home" && !pushEnabled && (
         <PhoneSetupCard compact />
       )}
 
@@ -912,7 +1013,7 @@ export default function FieldView() {
                   )}
                   <span className="block mt-1 opacity-80">This is not continuous tracking.</span>
                   {locationPrompt.required && (
-                    <span className="block mt-1 font-medium">Location is required before clocking on.</span>
+                    <span className="block mt-1 font-medium">Location is required for this step.</span>
                   )}
                 </p>
                 <div className="flex gap-2 mt-3">
@@ -941,7 +1042,7 @@ export default function FieldView() {
       )}
 
       {/* Push denied reminder */}
-      {pushStatus === "denied" && subId && !pushEnabled && (
+      {activeSection === "home" && pushStatus === "denied" && subId && !pushEnabled && (
         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
           <BellOff className="h-3.5 w-3.5 flex-shrink-0" />
           <span>Notifications are blocked — enable them in browser settings to receive job alerts.</span>
@@ -949,7 +1050,7 @@ export default function FieldView() {
       )}
 
       {/* Push enabled status */}
-      {pushEnabled && subId && pushStatus !== "unsupported" && (
+      {activeSection === "home" && pushEnabled && subId && pushStatus !== "unsupported" && (
         <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
           <Bell className="h-3.5 w-3.5 flex-shrink-0" />
           <span>Push notifications are enabled for this employee/subcontractor.</span>
@@ -957,7 +1058,7 @@ export default function FieldView() {
       )}
 
       {/* Urgent / high-priority notification banners */}
-      {urgentNotifications && urgentNotifications.length > 0 && (
+      {activeSection === "home" && urgentNotifications && urgentNotifications.length > 0 && (
         <div className="space-y-2">
           {urgentNotifications.slice(0, 3).map((n) => (
             <Card
@@ -1003,6 +1104,7 @@ export default function FieldView() {
       )}
 
       {/* Identity + clock card */}
+      {activeSection === "home" && (
       <Card>
         <CardContent className="p-4 space-y-4">
           <div className="space-y-2">
@@ -1032,43 +1134,72 @@ export default function FieldView() {
           {subId && (
             <div className="space-y-4 pt-4 border-t">
               {!isClockedOn ? (
-                <Button
-                  className="w-full h-16 text-lg"
-                  size="lg"
-                  onClick={handleClockOn}
-                  disabled={clockOn.isPending || loadingTodayDispatch || !!locationPrompt}
-                >
-                  <Play className="mr-2 h-6 w-6" /> CLOCK ON FOR DAY
-                </Button>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {isOnBreak ? (
-                    <Button
-                      variant="outline"
-                      className="h-14"
-                      onClick={() => endBreak.mutate({ data: { subcontractorId: subId } })}
-                      disabled={endBreak.isPending}
-                    >
-                      <Play className="mr-2 h-5 w-5" /> END BREAK
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="h-14"
-                      onClick={() => startBreak.mutate({ data: { subcontractorId: subId } })}
-                      disabled={startBreak.isPending}
-                    >
-                      <Pause className="mr-2 h-5 w-5" /> START BREAK
-                    </Button>
-                  )}
+                <div className="space-y-3">
+                  {firstTodayJob ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">First job</p>
+                      <p className="mt-1 font-semibold">{firstTodayJob.jobTitle}</p>
+                      {firstTodayJob.workArea ? (
+                        <p className="text-xs text-muted-foreground">{firstTodayJob.workArea}</p>
+                      ) : null}
+                      {firstTodayJob.jobAddress ? (
+                        <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{firstTodayJob.jobAddress}</span>
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Clocking on here also checks you in to this first job after the location check.
+                      </p>
+                    </div>
+                  ) : null}
                   <Button
-                    variant="destructive"
-                    className="h-14"
-                    onClick={handleClockOff}
-                    disabled={clockOff.isPending || loadingTodayDispatch || !!locationPrompt}
+                    className="w-full h-16 text-lg"
+                    size="lg"
+                    onClick={handleClockOn}
+                    disabled={clockOn.isPending || markArrived.isPending || loadingTodayDispatch || !!locationPrompt}
                   >
-                    <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
+                    <Play className="mr-2 h-6 w-6" /> {firstTodayJob ? "CLOCK ON AT FIRST JOB" : "CLOCK ON FOR DAY"}
                   </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className={canClockOffForDay ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
+                    {isOnBreak ? (
+                      <Button
+                        variant="outline"
+                        className="h-14"
+                        onClick={() => endBreak.mutate({ data: { subcontractorId: subId } })}
+                        disabled={endBreak.isPending}
+                      >
+                        <Play className="mr-2 h-5 w-5" /> END BREAK
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="h-14"
+                        onClick={() => startBreak.mutate({ data: { subcontractorId: subId } })}
+                        disabled={startBreak.isPending}
+                      >
+                        <Pause className="mr-2 h-5 w-5" /> START BREAK
+                      </Button>
+                    )}
+                    {canClockOffForDay ? (
+                      <Button
+                        variant="destructive"
+                        className="h-14"
+                        onClick={handleClockOff}
+                        disabled={clockOff.isPending || loadingTodayDispatch || !!locationPrompt}
+                      >
+                        <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
+                      </Button>
+                    ) : null}
+                  </div>
+                  {!canClockOffForDay && unfinishedTodayJobs.length > 0 ? (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                      Final clock-off appears after the last job report has been submitted.
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -1107,8 +1238,144 @@ export default function FieldView() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {isWorker && subId ? (
+      {activeSection === "home" && subId ? (
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ListChecks className="h-4 w-4 text-primary" />
+              Today's Job Flow
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 pt-2">
+            {loadingTodayDispatch ? (
+              <div className="space-y-3">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : todayJobs.length === 0 ? (
+              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
+                No jobs assigned for today.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-md border bg-muted/30 px-2 py-2">
+                    <p className="text-lg font-semibold">{todayJobs.length - unfinishedTodayJobs.length}/{todayJobs.length}</p>
+                    <p className="text-[11px] text-muted-foreground">jobs done</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-2 py-2">
+                    <p className="truncate text-sm font-semibold">
+                      {nextFlowJob ? timeWindowLabels[nextFlowJob.timeWindow ?? "full_day"] ?? nextFlowJob.timeWindow : "Finished"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">current step</p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-2 py-2">
+                    <p className="text-lg font-semibold">{workedTimeTodayLabel}</p>
+                    <p className="text-[11px] text-muted-foreground">today</p>
+                  </div>
+                </div>
+
+                {!isClockedOn ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                    Start your day at the first job. The clock-on location check will also check you in there.
+                  </div>
+                ) : activeTodayJob ? (
+                  <div className="space-y-3 rounded-md border bg-background px-3 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          {isCurrentJobLast ? "Last job" : "Current job"}
+                        </p>
+                        <p className="mt-1 font-semibold">{activeTodayJob.jobTitle}</p>
+                        {activeTodayJob.workArea ? (
+                          <p className="text-xs text-muted-foreground">{activeTodayJob.workArea}</p>
+                        ) : null}
+                      </div>
+                      <Badge variant="default">{activeTodayJob.status.replace("_", " ")}</Badge>
+                    </div>
+                    {activeTodayJob.jobAddress ? (
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{activeTodayJob.jobAddress}</span>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {activeTodayJob.status === "arrived" ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => startWork.mutate({ id: activeTodayJob.id, data: { status: "in_progress" } })}
+                          disabled={startWork.isPending}
+                        >
+                          Start Work
+                        </Button>
+                      ) : null}
+                      <Button asChild className={activeTodayJob.status === "arrived" ? "" : "sm:col-span-2"}>
+                        <Link href={`/field/jobs/${activeTodayJob.id}`}>
+                          {isCurrentJobLast ? "Submit final report" : "Submit report & leave job"}
+                        </Link>
+                      </Button>
+                    </div>
+                    {!isCurrentJobLast ? (
+                      <p className="text-xs text-muted-foreground">
+                        After you submit the report, the next job will appear here with directions.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        After the final report, return here to clock off for the day.
+                      </p>
+                    )}
+                  </div>
+                ) : nextPendingTodayJob ? (
+                  <div className="space-y-3 rounded-md border bg-background px-3 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">
+                          {unfinishedTodayJobs.length === 1 ? "Last job" : "Next job"}
+                        </p>
+                        <p className="mt-1 font-semibold">{nextPendingTodayJob.jobTitle}</p>
+                        {nextPendingTodayJob.workArea ? (
+                          <p className="text-xs text-muted-foreground">{nextPendingTodayJob.workArea}</p>
+                        ) : null}
+                      </div>
+                      <Badge variant="outline">waiting</Badge>
+                    </div>
+                    {nextPendingTodayJob.jobAddress ? (
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{nextPendingTodayJob.jobAddress}</span>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => openMapsForJob(nextPendingTodayJob.jobAddress)}
+                      >
+                        <Navigation className="mr-2 h-4 w-4" />
+                        Open Maps
+                      </Button>
+                      <Button
+                        onClick={() => handleMarkArrived(nextPendingTodayJob.id, nextPendingTodayJob.jobAddress ?? undefined)}
+                        disabled={markArrived.isPending || !!locationPrompt}
+                      >
+                        Check in to job
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                    All jobs are complete. You can clock off for the day from the Home card above.
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeSection === "earnings" && isWorker && subId ? (
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1219,7 +1486,7 @@ export default function FieldView() {
         </Card>
       ) : null}
 
-      {isWorker && subId ? (
+      {activeSection === "time_off" && isWorker && subId ? (
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1295,7 +1562,7 @@ export default function FieldView() {
         </Card>
       ) : null}
 
-      {isWorker && subId ? (
+      {activeSection === "documents" && isWorker && subId ? (
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1388,7 +1655,7 @@ export default function FieldView() {
       ) : null}
 
       {/* Job schedule */}
-      {subId && (
+      {activeSection === "schedule" && subId && (
         <div className="space-y-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -1581,7 +1848,7 @@ export default function FieldView() {
         </div>
       )}
 
-      {subId && (
+      {activeSection === "inventory" && subId && (
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
