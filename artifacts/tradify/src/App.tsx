@@ -65,6 +65,12 @@ function AdminRoutes() {
 
         {/* Operations */}
         <Route path="/field" component={FieldView} />
+        <Route path="/field/home" component={FieldView} />
+        <Route path="/field/schedule" component={FieldView} />
+        <Route path="/field/time-off" component={FieldView} />
+        <Route path="/field/stock" component={FieldView} />
+        <Route path="/field/pay" component={FieldView} />
+        <Route path="/field/docs" component={FieldView} />
         <Route path="/field/jobs/:id" component={FieldJobDetail} />
         <Route path="/dispatch" component={Dispatch} />
         <Route path="/admin/reports" component={AdminReports} />
@@ -114,6 +120,12 @@ function WorkerRoutes() {
       <Switch>
         <Route path="/" component={FieldView} />
         <Route path="/field" component={FieldView} />
+        <Route path="/field/home" component={FieldView} />
+        <Route path="/field/schedule" component={FieldView} />
+        <Route path="/field/time-off" component={FieldView} />
+        <Route path="/field/stock" component={FieldView} />
+        <Route path="/field/pay" component={FieldView} />
+        <Route path="/field/docs" component={FieldView} />
         <Route path="/field/jobs/:id" component={FieldJobDetail} />
         <Route path="/worker-profiles" component={WorkerProfiles} />
         <Route path="/weekly-invoices" component={WeeklyInvoices} />

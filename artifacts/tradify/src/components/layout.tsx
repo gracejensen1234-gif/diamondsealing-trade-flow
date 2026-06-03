@@ -177,9 +177,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const workerNavGroups = [
     {
-      title: "Field",
+      title: "Employee App",
       items: [
-        { name: "Field View", href: "/field", icon: Smartphone },
+        { name: "Home", href: "/field/home", icon: Home },
+        { name: "Jobs", href: "/field/schedule", icon: Calendar },
+        { name: "Time Off", href: "/field/time-off", icon: CalendarRange },
+        { name: "Stock", href: "/field/stock", icon: Package },
+        { name: "Pay", href: "/field/pay", icon: FileSpreadsheet },
+        { name: "Docs", href: "/field/docs", icon: HardHat },
         {
           name: "Notifications",
           href: "/notifications",
