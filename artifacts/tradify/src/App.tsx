@@ -27,7 +27,6 @@ import AdminLive from "@/pages/admin-live";
 import AdminTimesheets from "@/pages/admin-timesheets";
 import WeeklyInvoices from "@/pages/weekly-invoices";
 import WeeklyInvoiceDetail from "@/pages/weekly-invoice-detail";
-import Stock from "@/pages/stock";
 import XeroSettings from "@/pages/xero-settings";
 
 // New Feature Pages
@@ -73,7 +72,6 @@ function AdminRoutes() {
         <Route path="/admin/timesheets" component={AdminTimesheets} />
         <Route path="/weekly-invoices" component={WeeklyInvoices} />
         <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
-        <Route path="/stock" component={Stock} />
         <Route path="/settings/xero" component={XeroSettings} />
         <Route path="/settings/staff-invites" component={StaffInvites} />
 
@@ -98,6 +96,7 @@ function AdminRoutes() {
 
         {/* Inventory & Suppliers */}
         <Route path="/inventory" component={Inventory} />
+        <Route path="/stock" component={Inventory} />
         <Route path="/suppliers" component={Suppliers} />
 
         {/* Notifications */}
@@ -134,11 +133,18 @@ function AuthenticatedRoutes() {
       <main className="flex min-h-screen items-center justify-center bg-sidebar text-sidebar-foreground">
         <div className="mx-4 flex max-w-sm flex-col items-center gap-3 text-center text-sm text-white/70">
           <div className="h-10 w-10 overflow-hidden rounded-md border border-white/15 bg-black">
-            <img src="/diamond-sealing-logo.jpeg" alt="Company logo" className="h-full w-full object-cover" />
+            <img
+              src="/diamond-sealing-logo.jpeg"
+              alt="Company logo"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div>
             <p className="font-medium text-white">Starting SealFlow...</p>
-            <p className="mt-1 text-xs text-white/55">If this is the first open in a while, it can take a moment to wake up.</p>
+            <p className="mt-1 text-xs text-white/55">
+              If this is the first open in a while, it can take a moment to wake
+              up.
+            </p>
           </div>
         </div>
       </main>

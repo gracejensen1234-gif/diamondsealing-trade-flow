@@ -1,11 +1,35 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Hammer, Users, FileText, Receipt, Calendar, Home,
-  Smartphone, ClipboardList, Radio, Clock, FileSpreadsheet, Package,
-  Settings, BarChart2, Trophy, Star, ShieldCheck, Truck,
-  Award, Brain, CalendarRange, TrendingUp, HardHat, Building2,
-  ScrollText, Bell, Menu, LogOut, UserPlus,
+  Hammer,
+  Users,
+  FileText,
+  Receipt,
+  Calendar,
+  Home,
+  Smartphone,
+  ClipboardList,
+  Radio,
+  Clock,
+  FileSpreadsheet,
+  Package,
+  Settings,
+  BarChart2,
+  Trophy,
+  Star,
+  ShieldCheck,
+  Truck,
+  Award,
+  Brain,
+  CalendarRange,
+  TrendingUp,
+  HardHat,
+  Building2,
+  ScrollText,
+  Bell,
+  Menu,
+  LogOut,
+  UserPlus,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,7 +46,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { user, logout } = useAuth();
-  const roleLabel = user?.role === "worker" ? "employee/subcontractor" : user?.role ?? "user";
+  const roleLabel =
+    user?.role === "worker" ? "employee/subcontractor" : (user?.role ?? "user");
 
   const subId = (() => {
     if (user?.role === "worker") return user.subcontractorId ?? undefined;
@@ -38,7 +63,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     queryKey: ["unread-count", subId],
     queryFn: () => {
       if (!subId) return Promise.resolve({ count: 0 });
-      return fetch(`/api/notifications/unread-count?subcontractorId=${subId}`).then((r) => r.json());
+      return fetch(
+        `/api/notifications/unread-count?subcontractorId=${subId}`,
+      ).then((r) => r.json());
     },
     enabled: !!subId,
     refetchInterval: 30000,
@@ -65,16 +92,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         { name: "Reports", href: "/admin/reports", icon: FileText },
         { name: "Live View", href: "/admin/live", icon: Radio },
         { name: "Timesheets", href: "/admin/timesheets", icon: Clock },
-        { name: "Weekly Invoices", href: "/weekly-invoices", icon: FileSpreadsheet },
+        {
+          name: "Weekly Invoices",
+          href: "/weekly-invoices",
+          icon: FileSpreadsheet,
+        },
       ],
     },
     {
       title: "Workforce",
       items: [
         { name: "Smart Allocation", href: "/allocation", icon: Brain },
-        { name: "Weekly Planner", href: "/weekly-planner", icon: CalendarRange },
-        { name: "Employee/Subcontractor Profiles", href: "/worker-profiles", icon: HardHat },
-        { name: "Builder Profiles", href: "/builder-profiles", icon: Building2 },
+        {
+          name: "Weekly Planner",
+          href: "/weekly-planner",
+          icon: CalendarRange,
+        },
+        {
+          name: "Employee/Subcontractor Profiles",
+          href: "/worker-profiles",
+          icon: HardHat,
+        },
+        {
+          name: "Builder Profiles",
+          href: "/builder-profiles",
+          icon: Building2,
+        },
       ],
     },
     {
@@ -95,11 +138,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ],
     },
     {
-      title: "Inventory",
+      title: "Worker Stock",
       items: [
-        { name: "Sub Inventory", href: "/inventory", icon: Package },
+        { name: "Worker Stock", href: "/inventory", icon: Package },
         { name: "Suppliers", href: "/suppliers", icon: Truck },
-        { name: "Stock", href: "/stock", icon: Package },
       ],
     },
     {
@@ -107,14 +149,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { name: "Field View", href: "/field", icon: Smartphone },
         { name: "My Profile", href: "/worker-profiles", icon: HardHat },
-        { name: "My Invoices", href: "/weekly-invoices", icon: FileSpreadsheet },
-        { name: "Notifications", href: "/notifications", icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
+        {
+          name: "My Invoices",
+          href: "/weekly-invoices",
+          icon: FileSpreadsheet,
+        },
+        {
+          name: "Notifications",
+          href: "/notifications",
+          icon: Bell,
+          badge: unreadCount > 0 ? unreadCount : undefined,
+        },
       ],
     },
     {
       title: "Settings",
       items: [
-        { name: "Staff Invites", href: "/settings/staff-invites", icon: UserPlus },
+        {
+          name: "Staff Invites",
+          href: "/settings/staff-invites",
+          icon: UserPlus,
+        },
         { name: "Xero Settings", href: "/settings/xero", icon: Settings },
       ],
     },
@@ -125,7 +180,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       title: "Field",
       items: [
         { name: "Field View", href: "/field", icon: Smartphone },
-        { name: "Notifications", href: "/notifications", icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
+        {
+          name: "Notifications",
+          href: "/notifications",
+          icon: Bell,
+          badge: unreadCount > 0 ? unreadCount : undefined,
+        },
       ],
     },
   ];
@@ -142,7 +202,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             className="h-full w-full object-cover"
           />
         </div>
-        <span className="min-w-0 text-lg font-bold tracking-tight">{user?.companyName ?? "Operations"}</span>
+        <span className="min-w-0 text-lg font-bold tracking-tight">
+          {user?.companyName ?? "Operations"}
+        </span>
       </div>
       <div className="flex-1 py-3 px-2 flex flex-col gap-4 overflow-y-auto">
         {navGroups.map((group) => (
@@ -182,8 +244,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <div className="border-t border-sidebar-border p-3">
         <div className="mb-2 min-w-0">
-          <p className="truncate text-sm font-medium">{user?.name ?? "Signed in"}</p>
-          <p className="truncate text-xs capitalize text-sidebar-foreground/55">{roleLabel}</p>
+          <p className="truncate text-sm font-medium">
+            {user?.name ?? "Signed in"}
+          </p>
+          <p className="truncate text-xs capitalize text-sidebar-foreground/55">
+            {roleLabel}
+          </p>
         </div>
         <Button
           variant="ghost"
@@ -229,7 +295,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               className="h-full w-full object-cover"
             />
           </div>
-          <span className="min-w-0 truncate text-base font-bold tracking-tight">{user?.companyName ?? "Operations"}</span>
+          <span className="min-w-0 truncate text-base font-bold tracking-tight">
+            {user?.companyName ?? "Operations"}
+          </span>
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto p-4 sm:p-6">{children}</div>
