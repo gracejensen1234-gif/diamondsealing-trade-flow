@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,18 @@ import {
   ArrowDown,
   ArrowUp,
   Pencil,
+  Camera,
+  Sparkles,
+  Trash2,
 } from "lucide-react";
 
 const emptyProductForm = { name: "", unit: "tube", colour: "" };
+const emptyIntakeForm = {
+  subcontractorId: "",
+  notes: "",
+  imageData: "",
+  fileName: "",
+};
 const emptyAdjustmentForm = {
   subcontractorId: "",
   stockItemId: "",
@@ -46,12 +55,62 @@ const movementLabels: Record<string, string> = {
   restock: "Worker pickup",
 };
 
+type IntakeSuggestion = {
+  stockItemId: number | null;
+  productName: string;
+  colour: string | null;
+  unit: string;
+  quantity: number | string;
+  confidence?: number;
+  evidence?: string;
+  needsReview?: boolean;
+};
+
+function stockItemLabel(item: any) {
+  return `${item.name}${item.colour ? ` - ${item.colour}` : ""} (${item.unit})`;
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readStockIntakeImage(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please upload a stock or receipt photo image.");
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  return new Promise<string>((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const maxSide = 1600;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return resolve(dataUrl);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
+}
+
 export default function Inventory() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [txOpen, setTxOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeFileLoading, setIntakeFileLoading] = useState(false);
   const [txForm, setTxForm] = useState({
     subcontractorId: "",
     stockItemId: "",
@@ -61,6 +120,10 @@ export default function Inventory() {
   });
   const [productForm, setProductForm] = useState({ ...emptyProductForm });
   const [adjustForm, setAdjustForm] = useState({ ...emptyAdjustmentForm });
+  const [intakeForm, setIntakeForm] = useState({ ...emptyIntakeForm });
+  const [intakeSuggestions, setIntakeSuggestions] = useState<
+    IntakeSuggestion[]
+  >([]);
   const [filterSub, setFilterSub] = useState("all");
 
   const { data: items = [] } = useQuery({
@@ -161,6 +224,80 @@ export default function Inventory() {
     },
   });
 
+  const analyseStockIntakeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/inventory-stock-intake/analyse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageData: intakeForm.imageData,
+          notes: intakeForm.notes || undefined,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not read stock photo",
+        );
+      return response.json() as Promise<{ suggestions: IntakeSuggestion[] }>;
+    },
+    onSuccess: (data) => {
+      setIntakeSuggestions(data.suggestions ?? []);
+      toast({
+        title:
+          (data.suggestions ?? []).length > 0
+            ? "Stock lines detected"
+            : "No stock lines found",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not read stock photo",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const applyStockIntakeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/inventory-stock-intake/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subcontractorId: Number(intakeForm.subcontractorId),
+          sourceNote: intakeForm.notes || intakeForm.fileName || undefined,
+          lines: intakeSuggestions.map((line) => ({
+            ...line,
+            quantity: Number(line.quantity),
+          })),
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not add stock",
+        );
+      return response.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sub-inventory"] });
+      qc.invalidateQueries({ queryKey: ["sub-inventory-transactions"] });
+      qc.invalidateQueries({ queryKey: ["stock-items"] });
+      setIntakeForm({ ...emptyIntakeForm });
+      setIntakeSuggestions([]);
+      setIntakeOpen(false);
+      toast({ title: "Stock added to employee/subcontractor" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not add stock",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const adjustStockMutation = useMutation({
     mutationFn: async (data: typeof adjustForm) => {
       const response = await fetch(
@@ -228,6 +365,68 @@ export default function Inventory() {
   const selectedAdjustmentProduct = (stockItems as any[]).find(
     (item: any) => String(item.id) === adjustForm.stockItemId,
   );
+  const intakeCanApply =
+    Boolean(intakeForm.subcontractorId) &&
+    intakeSuggestions.length > 0 &&
+    intakeSuggestions.every(
+      (line) =>
+        line.productName.trim() &&
+        Number(line.quantity) > 0 &&
+        line.unit.trim(),
+    );
+
+  async function handleStockIntakeFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    setIntakeFileLoading(true);
+    try {
+      const imageData = await readStockIntakeImage(file);
+      setIntakeForm((form) => ({
+        ...form,
+        imageData,
+        fileName: file.name,
+      }));
+      setIntakeSuggestions([]);
+    } catch (error) {
+      toast({
+        title: "Could not load photo",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIntakeFileLoading(false);
+    }
+  }
+
+  function updateIntakeSuggestion(
+    index: number,
+    updates: Partial<IntakeSuggestion>,
+  ) {
+    setIntakeSuggestions((lines) =>
+      lines.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, ...updates } : line,
+      ),
+    );
+  }
+
+  function selectIntakeStockItem(index: number, value: string) {
+    if (value === "new") {
+      updateIntakeSuggestion(index, { stockItemId: null });
+      return;
+    }
+    const item = (stockItems as any[]).find(
+      (stockItem: any) => String(stockItem.id) === value,
+    );
+    if (!item) return;
+    updateIntakeSuggestion(index, {
+      stockItemId: item.id,
+      productName: item.name,
+      colour: item.colour ?? null,
+      unit: item.unit,
+      needsReview: false,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -275,7 +474,7 @@ export default function Inventory() {
                       <SelectTrigger className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[100] max-h-72">
                         <SelectItem value="tube">Tube</SelectItem>
                         <SelectItem value="sausage">Sausage</SelectItem>
                         <SelectItem value="box">Box</SelectItem>
@@ -350,7 +549,7 @@ export default function Inventory() {
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select employee/subcontractor..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[100] max-h-72">
                       {activeSubs.map((s: any) => (
                         <SelectItem key={s.id} value={String(s.id)}>
                           {s.name}
@@ -370,7 +569,7 @@ export default function Inventory() {
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select product..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[100] max-h-72">
                       {(stockItems as any[]).map((item: any) => (
                         <SelectItem key={item.id} value={String(item.id)}>
                           {item.name}
@@ -444,6 +643,254 @@ export default function Inventory() {
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog open={intakeOpen} onOpenChange={setIntakeOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Camera className="w-4 h-4 mr-2" />
+                Photo Stock Intake
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Photo Stock Intake</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div>
+                  <Label>Employee/Subcontractor</Label>
+                  <Select
+                    value={intakeForm.subcontractorId}
+                    onValueChange={(v) =>
+                      setIntakeForm((p) => ({ ...p, subcontractorId: v }))
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select employee/subcontractor..." />
+                    </SelectTrigger>
+                    <SelectContent className="z-[100] max-h-72">
+                      {activeSubs.map((s: any) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted">
+                    <Camera className="h-4 w-4" />
+                    {intakeFileLoading
+                      ? "Loading photo..."
+                      : intakeForm.fileName || "Take photo / upload receipt"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleStockIntakeFile}
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    onClick={() => analyseStockIntakeMutation.mutate()}
+                    disabled={
+                      !intakeForm.imageData ||
+                      intakeFileLoading ||
+                      analyseStockIntakeMutation.isPending
+                    }
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    {analyseStockIntakeMutation.isPending
+                      ? "Reading..."
+                      : "Read Stock"}
+                  </Button>
+                </div>
+
+                {intakeForm.imageData ? (
+                  <img
+                    src={intakeForm.imageData}
+                    alt="Stock intake preview"
+                    className="max-h-44 w-full rounded-md border object-contain"
+                  />
+                ) : null}
+
+                <div>
+                  <Label>Receipt / pickup note</Label>
+                  <Input
+                    className="mt-1"
+                    value={intakeForm.notes}
+                    onChange={(e) =>
+                      setIntakeForm((p) => ({ ...p, notes: e.target.value }))
+                    }
+                    placeholder="Supplier, receipt number, pickup note..."
+                  />
+                </div>
+
+                {intakeSuggestions.length > 0 ? (
+                  <div className="space-y-3">
+                    {intakeSuggestions.map((line, index) => (
+                      <div
+                        key={`${line.productName}-${index}`}
+                        className="space-y-3 rounded-md border bg-muted/20 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">
+                              Stock line {index + 1}
+                            </p>
+                            {line.evidence ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {line.evidence}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {line.needsReview ? (
+                              <Badge variant="outline" className="text-xs">
+                                review
+                              </Badge>
+                            ) : null}
+                            {line.confidence !== undefined ? (
+                              <Badge variant="secondary" className="text-xs">
+                                {Math.round(Number(line.confidence) * 100)}%
+                              </Badge>
+                            ) : null}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() =>
+                                setIntakeSuggestions((lines) =>
+                                  lines.filter(
+                                    (_line, lineIndex) => lineIndex !== index,
+                                  ),
+                                )
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs">Existing product</Label>
+                          <Select
+                            value={
+                              line.stockItemId
+                                ? String(line.stockItemId)
+                                : "new"
+                            }
+                            onValueChange={(value) =>
+                              selectIntakeStockItem(index, value)
+                            }
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="z-[100] max-h-72">
+                              <SelectItem value="new">
+                                New product / unmatched
+                              </SelectItem>
+                              {(stockItems as any[]).map((item: any) => (
+                                <SelectItem
+                                  key={item.id}
+                                  value={String(item.id)}
+                                >
+                                  {stockItemLabel(item)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-[1fr_8rem_8rem]">
+                          <div>
+                            <Label className="text-xs">Product name</Label>
+                            <Input
+                              className="mt-1"
+                              value={line.productName}
+                              onChange={(e) =>
+                                updateIntakeSuggestion(index, {
+                                  productName: e.target.value,
+                                  stockItemId: null,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Colour</Label>
+                            <Input
+                              className="mt-1"
+                              value={line.colour ?? ""}
+                              onChange={(e) =>
+                                updateIntakeSuggestion(index, {
+                                  colour: e.target.value,
+                                  stockItemId: null,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Quantity</Label>
+                            <Input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              className="mt-1"
+                              value={line.quantity}
+                              onChange={(e) =>
+                                updateIntakeSuggestion(index, {
+                                  quantity: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs">Unit</Label>
+                          <Select
+                            value={line.unit}
+                            onValueChange={(value) =>
+                              updateIntakeSuggestion(index, {
+                                unit: value,
+                                stockItemId: null,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="z-[100] max-h-72">
+                              <SelectItem value="tube">Tube</SelectItem>
+                              <SelectItem value="sausage">Sausage</SelectItem>
+                              <SelectItem value="box">Box</SelectItem>
+                              <SelectItem value="roll">Roll</SelectItem>
+                              <SelectItem value="litre">Litre</SelectItem>
+                              <SelectItem value="each">Each</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+
+                    <Button
+                      className="w-full"
+                      onClick={() => applyStockIntakeMutation.mutate()}
+                      disabled={
+                        !intakeCanApply || applyStockIntakeMutation.isPending
+                      }
+                    >
+                      {applyStockIntakeMutation.isPending
+                        ? "Adding stock..."
+                        : "Add Stock to Selected Employee/Subcontractor"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={txOpen} onOpenChange={setTxOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -467,7 +914,7 @@ export default function Inventory() {
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select employee/subcontractor..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[100] max-h-72">
                       {activeSubs.map((s: any) => (
                         <SelectItem key={s.id} value={String(s.id)}>
                           {s.name}
@@ -488,7 +935,7 @@ export default function Inventory() {
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Select product..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[100] max-h-72">
                         {(stockItems as any[]).map((item: any) => (
                           <SelectItem key={item.id} value={String(item.id)}>
                             {item.name}
@@ -524,7 +971,7 @@ export default function Inventory() {
                     <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[100] max-h-72">
                       <SelectItem value="issued">
                         Worker picked up from supplier
                       </SelectItem>
@@ -608,7 +1055,7 @@ export default function Inventory() {
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[100] max-h-72">
                 <SelectItem value="all">
                   All Employees/Subcontractors
                 </SelectItem>

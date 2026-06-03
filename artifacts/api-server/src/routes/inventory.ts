@@ -14,6 +14,8 @@ import {
   requireSubcontractorAccess,
   workerSubcontractorId,
 } from "../lib/auth.js";
+import { getAuditModel, getOpenAIClient } from "../lib/openai-client.js";
+import type OpenAI from "openai";
 
 const router = Router();
 type InventoryTransactionType =
@@ -27,6 +29,120 @@ const inventoryTransactionTypes: InventoryTransactionType[] = [
   "adjustment",
   "restock",
 ];
+const stockUnits = ["tube", "sausage", "box", "roll", "litre", "each"];
+
+type StockIntakeSuggestion = {
+  stockItemId: number | null;
+  productName: string;
+  colour: string | null;
+  unit: string;
+  quantity: number;
+  confidence: number;
+  evidence: string;
+  needsReview: boolean;
+};
+
+function normalizeStockText(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function clampConfidence(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0.5;
+  const zeroToOne = numeric > 1 ? numeric / 100 : numeric;
+  return Math.max(0, Math.min(1, zeroToOne));
+}
+
+function cleanStockUnit(value: unknown) {
+  const normalized = normalizeStockText(value).replace(/\s/g, "");
+  if (normalized === "tubes") return "tube";
+  if (normalized === "sausages") return "sausage";
+  if (normalized === "boxes") return "box";
+  if (normalized === "rolls") return "roll";
+  if (normalized === "litres" || normalized === "liters") return "litre";
+  if (normalized === "each" || normalized === "ea") return "each";
+  return stockUnits.includes(normalized) ? normalized : "tube";
+}
+
+function findMatchingStockItem(
+  stockItems: (typeof stockItemsTable.$inferSelect)[],
+  productName: string,
+  colour: string | null,
+  unit?: string,
+) {
+  const nameText = normalizeStockText(productName);
+  const colourText = normalizeStockText(colour);
+  const unitText = normalizeStockText(unit);
+
+  return (
+    stockItems.find((item) => {
+      const itemName = normalizeStockText(item.name);
+      const itemColour = normalizeStockText(item.colour);
+      const itemUnit = normalizeStockText(item.unit);
+      const nameMatches =
+        itemName === nameText ||
+        itemName.includes(nameText) ||
+        nameText.includes(itemName);
+      const colourMatches =
+        !colourText ||
+        !itemColour ||
+        itemColour === colourText ||
+        itemColour.includes(colourText) ||
+        colourText.includes(itemColour);
+      const unitMatches = !unitText || itemUnit === unitText;
+      return nameMatches && colourMatches && unitMatches;
+    }) ?? null
+  );
+}
+
+function sanitizeStockIntakeSuggestion(
+  rawLine: unknown,
+  stockItems: (typeof stockItemsTable.$inferSelect)[],
+): StockIntakeSuggestion | null {
+  if (typeof rawLine !== "object" || rawLine === null) return null;
+  const raw = rawLine as Record<string, unknown>;
+  const productName = String(raw.productName ?? raw.name ?? "").trim();
+  const colour = String(raw.colour ?? raw.color ?? "").trim() || null;
+  const quantity = Number(raw.quantity);
+  if (!productName || !Number.isFinite(quantity) || quantity <= 0) return null;
+
+  const requestedStockItemId = Number(raw.stockItemId);
+  const validatedStockItem = Number.isFinite(requestedStockItemId)
+    ? stockItems.find((item) => item.id === requestedStockItemId)
+    : null;
+  const matchedStockItem =
+    validatedStockItem ??
+    findMatchingStockItem(
+      stockItems,
+      productName,
+      colour,
+      cleanStockUnit(raw.unit),
+    );
+  const unit = matchedStockItem?.unit ?? cleanStockUnit(raw.unit);
+  const confidence = clampConfidence(raw.confidence);
+
+  return {
+    stockItemId: matchedStockItem?.id ?? null,
+    productName: matchedStockItem?.name ?? productName,
+    colour: matchedStockItem?.colour ?? colour,
+    unit,
+    quantity,
+    confidence,
+    evidence: String(raw.evidence ?? raw.notes ?? "").trim(),
+    needsReview:
+      Boolean(raw.needsReview) || !matchedStockItem || confidence < 0.7,
+  };
+}
+
+function stockIntakeReferenceNote(sourceNote: unknown, evidence: unknown) {
+  return ["AI stock intake", sourceNote, evidence]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" - ");
+}
 
 async function buildInventoryItem(row: typeof subInventoryTable.$inferSelect) {
   const tenantId = row.companyId ?? 0;
@@ -201,12 +317,10 @@ router.patch(
         ),
       );
     if (!sub || !stockItem)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Employee/subcontractor or stock item not found for this company",
-        });
+      return res.status(400).json({
+        error:
+          "Employee/subcontractor or stock item not found for this company",
+      });
 
     const [existing] = await db
       .select()
@@ -318,12 +432,9 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
     !transactionType ||
     quantity === undefined
   ) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "subcontractorId, stockItemId, transactionType, quantity required",
-      });
+    return res.status(400).json({
+      error: "subcontractorId, stockItemId, transactionType, quantity required",
+    });
   }
   const transactionTypeValue = String(
     transactionType,
@@ -359,12 +470,9 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
       ),
     );
   if (!sub || !stockItem)
-    return res
-      .status(400)
-      .json({
-        error:
-          "Employee/subcontractor or stock item not found for this company",
-      });
+    return res.status(400).json({
+      error: "Employee/subcontractor or stock item not found for this company",
+    });
   if (jobAssignmentId) {
     const { jobAssignmentsTable } = await import("@workspace/db");
     const [assignment] = await db
@@ -399,20 +507,16 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
     : -1;
   const quantityChange = numericQuantity * direction;
   if (!existing.length && quantityChange < 0) {
-    return res
-      .status(400)
-      .json({
-        error: `${stockItem.name} has not been issued to this employee/subcontractor yet`,
-      });
+    return res.status(400).json({
+      error: `${stockItem.name} has not been issued to this employee/subcontractor yet`,
+    });
   }
   const nextQuantity =
     Number(existing[0]?.currentQuantity ?? 0) + quantityChange;
   if (nextQuantity < 0) {
-    return res
-      .status(400)
-      .json({
-        error: `${stockItem.name}: transaction would reduce held stock below zero`,
-      });
+    return res.status(400).json({
+      error: `${stockItem.name}: transaction would reduce held stock below zero`,
+    });
   }
 
   const txn = await db.transaction(async (tx) => {
@@ -463,6 +567,247 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
   return res.status(201).json(await buildTransaction(txn));
 });
 
+// POST /inventory-stock-intake/analyse
+router.post(
+  "/inventory-stock-intake/analyse",
+  requireAdmin,
+  async (req, res) => {
+    const imageData =
+      typeof req.body?.imageData === "string" ? req.body.imageData.trim() : "";
+    const notes =
+      typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+    if (!imageData.startsWith("data:image/")) {
+      return res
+        .status(400)
+        .json({ error: "Upload a stock or receipt photo image" });
+    }
+
+    const openai = getOpenAIClient();
+    if (!openai) {
+      return res.status(503).json({
+        error:
+          "OpenAI is not configured. Add OPENAI_API_KEY before using AI stock intake.",
+      });
+    }
+
+    const tenantId = companyId(req);
+    const stockItems = await db
+      .select()
+      .from(stockItemsTable)
+      .where(eq(stockItemsTable.companyId, tenantId))
+      .orderBy(stockItemsTable.name);
+
+    const knownProducts = stockItems
+      .map(
+        (item) =>
+          `ID ${item.id}: ${item.name}${item.colour ? `, ${item.colour}` : ""}, unit ${item.unit}`,
+      )
+      .join("\n");
+
+    const systemPrompt = `You are an inventory intake assistant for a joint sealing company.
+Read the uploaded stock photo, box label photo, or supplier receipt photo.
+Return only stock lines that are visible or strongly supported by the image.
+Match lines to known stock item IDs when possible.
+
+Rules:
+- Return JSON only with key "items".
+- Each item must contain: stockItemId (number or null), productName, colour, unit, quantity, confidence, evidence, needsReview.
+- Use unit values only: tube, sausage, box, roll, litre, each.
+- If a box quantity is visible, convert to the actual unit quantity. Example: 4 boxes x 12 tubes = quantity 48, unit tube.
+- If quantity is unclear, use the visible package count and set needsReview true.
+- Do not invent products or quantities.`;
+
+    const userContent: OpenAI.ChatCompletionContentPart[] = [
+      {
+        type: "text",
+        text: [
+          "Known stock items:",
+          knownProducts || "No stock items are set up yet.",
+          notes ? `Admin notes: ${notes}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+      {
+        type: "image_url",
+        image_url: { url: imageData, detail: "high" },
+      },
+    ];
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: getAuditModel(),
+        max_tokens: 1500,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+      });
+
+      const raw = response.choices[0]?.message?.content ?? "{}";
+      const parsed = JSON.parse(raw) as { items?: unknown[] };
+      const suggestions = (Array.isArray(parsed.items) ? parsed.items : [])
+        .map((item) => sanitizeStockIntakeSuggestion(item, stockItems))
+        .filter((item): item is StockIntakeSuggestion => Boolean(item));
+
+      return res.json({ suggestions });
+    } catch (error) {
+      req.log.error({ err: error }, "AI stock intake failed");
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not analyse stock photo",
+      });
+    }
+  },
+);
+
+// POST /inventory-stock-intake/apply
+router.post("/inventory-stock-intake/apply", requireAdmin, async (req, res) => {
+  const subcontractorId = Number(req.body?.subcontractorId);
+  const tenantId = companyId(req);
+  const sourceNote =
+    typeof req.body?.sourceNote === "string" ? req.body.sourceNote.trim() : "";
+  const lines: unknown[] = Array.isArray(req.body?.lines) ? req.body.lines : [];
+
+  if (!Number.isFinite(subcontractorId)) {
+    return res
+      .status(400)
+      .json({ error: "Employee/subcontractor is required" });
+  }
+  if (lines.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "At least one stock line is required" });
+  }
+
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(
+      and(
+        eq(subcontractorsTable.id, subcontractorId),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
+  if (!sub) {
+    return res.status(400).json({
+      error: "Employee/subcontractor not found for this company",
+    });
+  }
+
+  let stockItems = await db
+    .select()
+    .from(stockItemsTable)
+    .where(eq(stockItemsTable.companyId, tenantId));
+  const sanitizedLines = lines
+    .map((line: unknown) => sanitizeStockIntakeSuggestion(line, stockItems))
+    .filter((line): line is StockIntakeSuggestion => Boolean(line));
+
+  if (sanitizedLines.length === 0) {
+    return res.status(400).json({ error: "No valid stock lines to apply" });
+  }
+
+  const applied = await db.transaction(async (tx) => {
+    const appliedLines: Array<{
+      stockItemId: number;
+      productName: string;
+      colour: string | null;
+      unit: string;
+      quantity: number;
+    }> = [];
+
+    for (const line of sanitizedLines) {
+      let stockItem =
+        (line.stockItemId
+          ? stockItems.find((item) => item.id === line.stockItemId)
+          : null) ??
+        findMatchingStockItem(
+          stockItems,
+          line.productName,
+          line.colour,
+          line.unit,
+        );
+
+      if (!stockItem) {
+        [stockItem] = await tx
+          .insert(stockItemsTable)
+          .values({
+            companyId: tenantId,
+            name: line.productName,
+            unit: line.unit,
+            colour: line.colour,
+            currentStock: "0",
+          })
+          .returning();
+        stockItems = [...stockItems, stockItem];
+      }
+
+      const [existing] = await tx
+        .select()
+        .from(subInventoryTable)
+        .where(
+          and(
+            eq(subInventoryTable.companyId, tenantId),
+            eq(subInventoryTable.subcontractorId, subcontractorId),
+            eq(subInventoryTable.stockItemId, stockItem.id),
+          ),
+        )
+        .limit(1);
+      const nextQuantity =
+        Number(existing?.currentQuantity ?? 0) + Number(line.quantity);
+
+      await tx.insert(inventoryTransactionsTable).values({
+        companyId: tenantId,
+        subcontractorId,
+        stockItemId: stockItem.id,
+        transactionType: "issued",
+        quantity: Number(line.quantity).toString(),
+        referenceNote: stockIntakeReferenceNote(sourceNote, line.evidence),
+        recordedBy: "admin-ai-stock-intake",
+      });
+
+      if (existing) {
+        await tx
+          .update(subInventoryTable)
+          .set({
+            currentQuantity: nextQuantity.toString(),
+            lastIssuedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(subInventoryTable.id, existing.id),
+              eq(subInventoryTable.companyId, tenantId),
+            ),
+          );
+      } else {
+        await tx.insert(subInventoryTable).values({
+          companyId: tenantId,
+          subcontractorId,
+          stockItemId: stockItem.id,
+          currentQuantity: nextQuantity.toString(),
+          lastIssuedAt: new Date(),
+        });
+      }
+
+      appliedLines.push({
+        stockItemId: stockItem.id,
+        productName: stockItem.name,
+        colour: stockItem.colour,
+        unit: stockItem.unit,
+        quantity: line.quantity,
+      });
+    }
+
+    return appliedLines;
+  });
+
+  return res.status(201).json({ applied });
+});
+
 // GET /restock-requests
 router.get("/restock-requests", async (req, res) => {
   const conditions = [eq(restockRequestsTable.companyId, companyId(req))];
@@ -488,11 +833,9 @@ router.post("/restock-requests", async (req, res) => {
   const { subcontractorId, stockItemId, quantityRequested, subNotes, urgency } =
     req.body;
   if (!subcontractorId || !stockItemId || !quantityRequested) {
-    return res
-      .status(400)
-      .json({
-        error: "subcontractorId, stockItemId, quantityRequested required",
-      });
+    return res.status(400).json({
+      error: "subcontractorId, stockItemId, quantityRequested required",
+    });
   }
   if (!requireSubcontractorAccess(req, res, Number(subcontractorId))) return;
   const tenantId = companyId(req);
@@ -515,12 +858,9 @@ router.post("/restock-requests", async (req, res) => {
       ),
     );
   if (!sub || !stockItem)
-    return res
-      .status(400)
-      .json({
-        error:
-          "Employee/subcontractor or stock item not found for this company",
-      });
+    return res.status(400).json({
+      error: "Employee/subcontractor or stock item not found for this company",
+    });
   const [req_] = await db
     .insert(restockRequestsTable)
     .values({
