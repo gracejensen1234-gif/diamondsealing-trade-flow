@@ -1292,6 +1292,9 @@ export default function FieldView() {
     earningsSummary?.draftInvoiceId ??
     earningsSummary?.submittedInvoiceId ??
     null;
+  const activeSectionLabel =
+    fieldSections.find((section) => section.id === activeSection)?.label ??
+    "Home";
 
   const openMapsForJob = useCallback(
     (jobAddress?: string | null) => {
@@ -1331,7 +1334,9 @@ export default function FieldView() {
     <div className="max-w-md mx-auto space-y-4 pb-20">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Field View</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {activeSectionLabel}
+        </h1>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => refetchDispatch()}>
             <RotateCcw className="h-5 w-5" />
@@ -1371,8 +1376,6 @@ export default function FieldView() {
         </TabsList>
       </Tabs>
 
-      {activeSection === "home" && !pushEnabled && <PhoneSetupCard compact />}
-
       {/* Location consent prompt */}
       {locationPrompt && (
         <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-700 shadow-md">
@@ -1384,20 +1387,14 @@ export default function FieldView() {
                   Location check — {locationPrompt.eventLabel}
                 </p>
                 <p className="text-xs text-orange-800 dark:text-orange-300 mt-1">
-                  Your location will activate briefly to confirm you are at the
-                  job address.
+                  Confirm location for this step.
                   {locationPrompt.jobAddress && (
                     <span className="block mt-0.5 font-medium">
                       {locationPrompt.jobAddress}
                     </span>
                   )}
-                  <span className="block mt-1 opacity-80">
-                    This is not continuous tracking.
-                  </span>
                   {locationPrompt.required && (
-                    <span className="block mt-1 font-medium">
-                      Location is required for this step.
-                    </span>
+                    <span className="block mt-1 font-medium">Required.</span>
                   )}
                 </p>
                 <div className="flex gap-2 mt-3">
@@ -1432,23 +1429,7 @@ export default function FieldView() {
         !pushEnabled && (
           <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
             <BellOff className="h-3.5 w-3.5 flex-shrink-0" />
-            <span>
-              Notifications are blocked — enable them in browser settings to
-              receive job alerts.
-            </span>
-          </div>
-        )}
-
-      {/* Push enabled status */}
-      {activeSection === "home" &&
-        pushEnabled &&
-        subId &&
-        pushStatus !== "unsupported" && (
-          <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
-            <Bell className="h-3.5 w-3.5 flex-shrink-0" />
-            <span>
-              Push notifications are enabled for this employee/subcontractor.
-            </span>
+            <span>Notifications blocked. See Docs.</span>
           </div>
         )}
 
@@ -1559,9 +1540,6 @@ export default function FieldView() {
                             <span>{firstTodayJob.jobAddress}</span>
                           </div>
                         ) : null}
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Location check also checks you in to this first job.
-                        </p>
                       </div>
                     ) : null}
                     <Button
@@ -1632,51 +1610,28 @@ export default function FieldView() {
                     </div>
                     {!canClockOffForDay && unfinishedTodayJobs.length > 0 ? (
                       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        Clock off appears after the last job is finished.
+                        Finish jobs before clock off.
                       </div>
                     ) : null}
                   </div>
                 )}
 
                 {session && (
-                  <div className="bg-muted p-3 rounded-md text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status:</span>
-                      <span className="font-medium uppercase">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-md border bg-muted/40 px-3 py-2">
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="mt-1 font-semibold uppercase">
                         {session.status.replace("_", " ")}
-                      </span>
+                      </p>
                     </div>
-                    {session.clockedOnAt && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Clocked on:
-                        </span>
-                        <span className="font-medium">
-                          {new Date(session.clockedOnAt).toLocaleTimeString(
-                            [],
-                            { hour: "2-digit", minute: "2-digit" },
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {session.clockedOnAt && (
-                      <div className="mt-2 rounded-md border bg-background px-3 py-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="h-3.5 w-3.5" />
-                            Hours worked so far today
-                          </span>
-                          <span className="text-base font-semibold">
-                            {workedTimeTodayLabel}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Break time:</span>
-                      <span className="font-medium">
-                        {session.totalBreakMinutes || 0} min
-                      </span>
+                    <div className="rounded-md border bg-muted/40 px-3 py-2">
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        Hours
+                      </p>
+                      <p className="mt-1 text-base font-semibold">
+                        {workedTimeTodayLabel}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1691,7 +1646,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ListChecks className="h-4 w-4 text-primary" />
-              Work Today
+              Today
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4 pt-2">
@@ -1712,9 +1667,7 @@ export default function FieldView() {
                       {todayJobs.length - unfinishedTodayJobs.length}/
                       {todayJobs.length}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      jobs done
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">done</p>
                   </div>
                   <div className="rounded-md border bg-muted/30 px-2 py-2">
                     <p className="truncate text-sm font-semibold">
@@ -1724,22 +1677,19 @@ export default function FieldView() {
                           ] ?? nextFlowJob.timeWindow)
                         : "Finished"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      current step
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">step</p>
                   </div>
                   <div className="rounded-md border bg-muted/30 px-2 py-2">
                     <p className="text-lg font-semibold">
                       {workedTimeTodayLabel}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">today</p>
+                    <p className="text-[11px] text-muted-foreground">hours</p>
                   </div>
                 </div>
 
                 {!isClockedOn ? (
                   <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                    Start at the first job. Location check will check you in
-                    there.
+                    Start at first job.
                   </div>
                 ) : activeTodayJob ? (
                   <div className="space-y-3 rounded-md border bg-background px-3 py-3">
@@ -1795,17 +1745,6 @@ export default function FieldView() {
                         </Link>
                       </Button>
                     </div>
-                    {!isCurrentJobLast ? (
-                      <p className="text-xs text-muted-foreground">
-                        After you submit the report, the next job will appear
-                        here with directions.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        After the final report, return here to clock off for the
-                        day.
-                      </p>
-                    )}
                   </div>
                 ) : nextPendingTodayJob ? (
                   <div className="space-y-3 rounded-md border bg-background px-3 py-3">
@@ -1859,8 +1798,7 @@ export default function FieldView() {
                   </div>
                 ) : (
                   <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                    All jobs are complete. You can clock off for the day from
-                    the Home card above.
+                    Ready to clock off.
                   </div>
                 )}
               </>
@@ -2123,138 +2061,141 @@ export default function FieldView() {
       ) : null}
 
       {activeSection === "documents" && isWorker && subId ? (
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileCheck2 className="h-4 w-4 text-primary" />
-              Docs
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 pt-2">
-            {credentials.length > 0 ? (
-              <div className="grid gap-2">
-                {credentials.map((credential) => (
-                  <div
-                    key={credential.id}
-                    className="flex gap-3 rounded-md border bg-background p-2"
-                  >
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
-                      <img
-                        src={credential.imageData}
-                        alt={credential.label}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">
-                        {credential.label}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {credential.expiryDate
-                          ? `Expires ${new Date(credential.expiryDate).toLocaleDateString("en-AU")}`
-                          : "No expiry date"}
-                      </p>
-                      {credential.notes ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                          {credential.notes}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        deleteCredentialMutation.mutate(credential.id)
-                      }
-                      disabled={deleteCredentialMutation.isPending}
-                      title="Delete document"
+        <div className="space-y-3">
+          {!pushEnabled ? <PhoneSetupCard compact /> : null}
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileCheck2 className="h-4 w-4 text-primary" />
+                Docs
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-2">
+              {credentials.length > 0 ? (
+                <div className="grid gap-2">
+                  {credentials.map((credential) => (
+                    <div
+                      key={credential.id}
+                      className="flex gap-3 rounded-md border bg-background p-2"
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                Upload your White Card, scissor lift licence, EWP ticket or
-                other site documents.
-              </div>
-            )}
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                        <img
+                          src={credential.imageData}
+                          alt={credential.label}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">
+                          {credential.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {credential.expiryDate
+                            ? `Expires ${new Date(credential.expiryDate).toLocaleDateString("en-AU")}`
+                            : "No expiry date"}
+                        </p>
+                        {credential.notes ? (
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {credential.notes}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          deleteCredentialMutation.mutate(credential.id)
+                        }
+                        disabled={deleteCredentialMutation.isPending}
+                        title="Delete document"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                  Upload your White Card, scissor lift licence, EWP ticket or
+                  other site documents.
+                </div>
+              )}
 
-            <div className="grid gap-3">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem]">
-                <div className="space-y-1">
-                  <Label className="text-xs">Document type</Label>
-                  <Select
-                    value={credentialDraft.documentType}
-                    onValueChange={(value) =>
-                      setCredentialDraft((draft) => ({
-                        ...draft,
-                        documentType: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CREDENTIAL_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="grid gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem]">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Document type</Label>
+                    <Select
+                      value={credentialDraft.documentType}
+                      onValueChange={(value) =>
+                        setCredentialDraft((draft) => ({
+                          ...draft,
+                          documentType: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CREDENTIAL_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Expiry date</Label>
+                    <Input
+                      type="date"
+                      value={credentialDraft.expiryDate}
+                      onChange={(event) =>
+                        setCredentialDraft((draft) => ({
+                          ...draft,
+                          expiryDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Expiry date</Label>
+                  <Label className="text-xs">Notes</Label>
                   <Input
-                    type="date"
-                    value={credentialDraft.expiryDate}
+                    value={credentialDraft.notes}
                     onChange={(event) =>
                       setCredentialDraft((draft) => ({
                         ...draft,
-                        expiryDate: event.target.value,
+                        notes: event.target.value,
                       }))
                     }
+                    placeholder="Card number, licence class, restrictions..."
                   />
                 </div>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted">
+                  {uploadCredentialMutation.isPending ? (
+                    <ImageIcon className="h-4 w-4 animate-pulse" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {uploadCredentialMutation.isPending
+                    ? "Uploading..."
+                    : `Upload ${credentialLabel(credentialDraft.documentType)}`}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleCredentialUpload}
+                    disabled={uploadCredentialMutation.isPending}
+                  />
+                </label>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Notes</Label>
-                <Input
-                  value={credentialDraft.notes}
-                  onChange={(event) =>
-                    setCredentialDraft((draft) => ({
-                      ...draft,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Card number, licence class, restrictions..."
-                />
-              </div>
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted">
-                {uploadCredentialMutation.isPending ? (
-                  <ImageIcon className="h-4 w-4 animate-pulse" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                {uploadCredentialMutation.isPending
-                  ? "Uploading..."
-                  : `Upload ${credentialLabel(credentialDraft.documentType)}`}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleCredentialUpload}
-                  disabled={uploadCredentialMutation.isPending}
-                />
-              </label>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {/* Job schedule */}
