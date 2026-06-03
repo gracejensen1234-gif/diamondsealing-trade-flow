@@ -21,9 +21,22 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Package, AlertTriangle, Plus, ArrowDown, ArrowUp } from "lucide-react";
+import {
+  Package,
+  AlertTriangle,
+  Plus,
+  ArrowDown,
+  ArrowUp,
+  Pencil,
+} from "lucide-react";
 
 const emptyProductForm = { name: "", unit: "tube", colour: "" };
+const emptyAdjustmentForm = {
+  subcontractorId: "",
+  stockItemId: "",
+  currentQuantity: "",
+  notes: "",
+};
 
 const movementLabels: Record<string, string> = {
   issued: "Worker pickup",
@@ -38,6 +51,7 @@ export default function Inventory() {
   const qc = useQueryClient();
   const [txOpen, setTxOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [txForm, setTxForm] = useState({
     subcontractorId: "",
     stockItemId: "",
@@ -46,6 +60,7 @@ export default function Inventory() {
     notes: "",
   });
   const [productForm, setProductForm] = useState({ ...emptyProductForm });
+  const [adjustForm, setAdjustForm] = useState({ ...emptyAdjustmentForm });
   const [filterSub, setFilterSub] = useState("all");
 
   const { data: items = [] } = useQuery({
@@ -146,6 +161,42 @@ export default function Inventory() {
     },
   });
 
+  const adjustStockMutation = useMutation({
+    mutationFn: async (data: typeof adjustForm) => {
+      const response = await fetch(
+        `/api/sub-inventory/${data.subcontractorId}/${data.stockItemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentQuantity: Number(data.currentQuantity),
+            referenceNote: data.notes || undefined,
+          }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not set worker stock quantity",
+        );
+      return response.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sub-inventory"] });
+      qc.invalidateQueries({ queryKey: ["sub-inventory-transactions"] });
+      setAdjustForm({ ...emptyAdjustmentForm });
+      setAdjustOpen(false);
+      toast({ title: "Worker stock quantity set" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not set quantity",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const approveRestockMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       fetch(`/api/restock-requests/${id}`, {
@@ -169,6 +220,14 @@ export default function Inventory() {
       : (items as any[]).filter(
           (i: any) => String(i.subcontractorId) === filterSub,
         );
+  const selectedAdjustmentItem = (items as any[]).find(
+    (item: any) =>
+      String(item.subcontractorId) === adjustForm.subcontractorId &&
+      String(item.stockItemId) === adjustForm.stockItemId,
+  );
+  const selectedAdjustmentProduct = (stockItems as any[]).find(
+    (item: any) => String(item.id) === adjustForm.stockItemId,
+  );
 
   return (
     <div className="space-y-6">
@@ -268,6 +327,123 @@ export default function Inventory() {
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Pencil className="w-4 h-4 mr-2" />
+                Set Quantity
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Set Worker Stock Quantity</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div>
+                  <Label>Employee/Subcontractor</Label>
+                  <Select
+                    value={adjustForm.subcontractorId}
+                    onValueChange={(v) =>
+                      setAdjustForm((p) => ({ ...p, subcontractorId: v }))
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select employee/subcontractor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeSubs.map((s: any) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Product</Label>
+                  <Select
+                    value={adjustForm.stockItemId}
+                    onValueChange={(v) =>
+                      setAdjustForm((p) => ({ ...p, stockItemId: v }))
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select product..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(stockItems as any[]).map((item: any) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {item.name}
+                          {item.colour ? ` - ${item.colour}` : ""} ({item.unit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {adjustForm.subcontractorId && adjustForm.stockItemId ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    Current recorded:{" "}
+                    <span className="font-semibold">
+                      {selectedAdjustmentItem?.currentQuantity ?? 0}{" "}
+                      {selectedAdjustmentItem?.unit ??
+                        selectedAdjustmentProduct?.unit ??
+                        "unit"}
+                    </span>
+                  </div>
+                ) : null}
+                <div>
+                  <Label>Correct quantity now</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="mt-1"
+                    value={adjustForm.currentQuantity}
+                    onChange={(e) =>
+                      setAdjustForm((p) => ({
+                        ...p,
+                        currentQuantity: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Reason / note</Label>
+                  <Input
+                    className="mt-1"
+                    value={adjustForm.notes}
+                    onChange={(e) =>
+                      setAdjustForm((p) => ({ ...p, notes: e.target.value }))
+                    }
+                    placeholder="e.g. stocktake correction"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1"
+                    onClick={() => adjustStockMutation.mutate(adjustForm)}
+                    disabled={
+                      !adjustForm.subcontractorId ||
+                      !adjustForm.stockItemId ||
+                      adjustForm.currentQuantity === "" ||
+                      Number(adjustForm.currentQuantity) < 0 ||
+                      adjustStockMutation.isPending
+                    }
+                  >
+                    {adjustStockMutation.isPending
+                      ? "Saving..."
+                      : "Set Quantity"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setAdjustOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={txOpen} onOpenChange={setTxOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -356,7 +532,6 @@ export default function Inventory() {
                         Returned or transferred back
                       </SelectItem>
                       <SelectItem value="used_on_job">Used on job</SelectItem>
-                      <SelectItem value="adjustment">Adjustment</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -477,6 +652,24 @@ export default function Inventory() {
                         {item.unit ?? "unit"}
                       </p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 flex-shrink-0"
+                      title="Set quantity"
+                      onClick={() => {
+                        setAdjustForm({
+                          subcontractorId: String(item.subcontractorId),
+                          stockItemId: String(item.stockItemId),
+                          currentQuantity: String(item.currentQuantity),
+                          notes: "",
+                        });
+                        setAdjustOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     {Number(item.currentQuantity) <= 0 && (
                       <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
                     )}
@@ -497,12 +690,18 @@ export default function Inventory() {
 
         <TabsContent value="transactions" className="mt-4 space-y-2">
           {(transactions as any[]).slice(0, 50).map((tx: any) => {
+            const quantity = Number(tx.quantity);
             const incoming =
-              tx.transactionType === "issued" ||
-              tx.transactionType === "restock";
-            const signedQuantity = incoming
-              ? Number(tx.quantity)
-              : -Math.abs(Number(tx.quantity));
+              tx.transactionType === "adjustment"
+                ? quantity >= 0
+                : tx.transactionType === "issued" ||
+                  tx.transactionType === "restock";
+            const signedQuantity =
+              tx.transactionType === "adjustment"
+                ? quantity
+                : incoming
+                  ? quantity
+                  : -Math.abs(quantity);
             return (
               <div
                 key={tx.id}

@@ -8,23 +8,46 @@ import {
   stockItemsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { companyId, requireAdmin, requireSubcontractorAccess, workerSubcontractorId } from "../lib/auth.js";
+import {
+  companyId,
+  requireAdmin,
+  requireSubcontractorAccess,
+  workerSubcontractorId,
+} from "../lib/auth.js";
 
 const router = Router();
-type InventoryTransactionType = typeof inventoryTransactionsTable.$inferSelect["transactionType"];
-type RestockRequestStatus = typeof restockRequestsTable.$inferSelect["status"];
-const inventoryTransactionTypes: InventoryTransactionType[] = ["issued", "returned", "used_on_job", "adjustment", "restock"];
+type InventoryTransactionType =
+  (typeof inventoryTransactionsTable.$inferSelect)["transactionType"];
+type RestockRequestStatus =
+  (typeof restockRequestsTable.$inferSelect)["status"];
+const inventoryTransactionTypes: InventoryTransactionType[] = [
+  "issued",
+  "returned",
+  "used_on_job",
+  "adjustment",
+  "restock",
+];
 
 async function buildInventoryItem(row: typeof subInventoryTable.$inferSelect) {
   const tenantId = row.companyId ?? 0;
   const [sub] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, row.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(subcontractorsTable.id, row.subcontractorId),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
   const [item] = await db
     .select()
     .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, row.stockItemId), eq(stockItemsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(stockItemsTable.id, row.stockItemId),
+        eq(stockItemsTable.companyId, tenantId),
+      ),
+    );
   return {
     ...row,
     subcontractorName: sub?.name ?? "",
@@ -35,16 +58,28 @@ async function buildInventoryItem(row: typeof subInventoryTable.$inferSelect) {
   };
 }
 
-async function buildTransaction(row: typeof inventoryTransactionsTable.$inferSelect) {
+async function buildTransaction(
+  row: typeof inventoryTransactionsTable.$inferSelect,
+) {
   const tenantId = row.companyId ?? 0;
   const [sub] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, row.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(subcontractorsTable.id, row.subcontractorId),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
   const [item] = await db
     .select()
     .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, row.stockItemId), eq(stockItemsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(stockItemsTable.id, row.stockItemId),
+        eq(stockItemsTable.companyId, tenantId),
+      ),
+    );
   return {
     ...row,
     subcontractorName: sub?.name ?? "",
@@ -55,16 +90,28 @@ async function buildTransaction(row: typeof inventoryTransactionsTable.$inferSel
   };
 }
 
-async function buildRestockRequest(row: typeof restockRequestsTable.$inferSelect) {
+async function buildRestockRequest(
+  row: typeof restockRequestsTable.$inferSelect,
+) {
   const tenantId = row.companyId ?? 0;
   const [sub] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, row.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(subcontractorsTable.id, row.subcontractorId),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
   const [item] = await db
     .select()
     .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, row.stockItemId), eq(stockItemsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(stockItemsTable.id, row.stockItemId),
+        eq(stockItemsTable.companyId, tenantId),
+      ),
+    );
   return {
     ...row,
     subcontractorName: sub?.name ?? "",
@@ -72,15 +119,20 @@ async function buildRestockRequest(row: typeof restockRequestsTable.$inferSelect
     colour: item?.colour ?? null,
     unit: item?.unit ?? "tube",
     quantityRequested: Number(row.quantityRequested),
-    quantityFulfilled: row.quantityFulfilled ? Number(row.quantityFulfilled) : null,
+    quantityFulfilled: row.quantityFulfilled
+      ? Number(row.quantityFulfilled)
+      : null,
   };
 }
 
 // GET /sub-inventory
 router.get("/sub-inventory", async (req, res) => {
-  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  const subcontractorId =
+    workerSubcontractorId(req) ??
+    (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
   const conditions = [eq(subInventoryTable.companyId, companyId(req))];
-  if (subcontractorId) conditions.push(eq(subInventoryTable.subcontractorId, subcontractorId));
+  if (subcontractorId)
+    conditions.push(eq(subInventoryTable.subcontractorId, subcontractorId));
   const filtered = await db
     .select()
     .from(subInventoryTable)
@@ -96,17 +148,151 @@ router.get("/sub-inventory/:subcontractorId", async (req, res) => {
   const rows = await db
     .select()
     .from(subInventoryTable)
-    .where(and(eq(subInventoryTable.companyId, companyId(req)), eq(subInventoryTable.subcontractorId, subcontractorId)));
+    .where(
+      and(
+        eq(subInventoryTable.companyId, companyId(req)),
+        eq(subInventoryTable.subcontractorId, subcontractorId),
+      ),
+    );
   return res.json(await Promise.all(rows.map(buildInventoryItem)));
 });
+
+// PATCH /sub-inventory/:subcontractorId/:stockItemId
+router.patch(
+  "/sub-inventory/:subcontractorId/:stockItemId",
+  requireAdmin,
+  async (req, res) => {
+    const subcontractorId = Number(req.params.subcontractorId);
+    const stockItemId = Number(req.params.stockItemId);
+    const newQuantity = Number(req.body?.currentQuantity);
+    const referenceNote =
+      typeof req.body?.referenceNote === "string"
+        ? req.body.referenceNote.trim()
+        : "";
+    const tenantId = companyId(req);
+
+    if (!Number.isFinite(subcontractorId) || !Number.isFinite(stockItemId)) {
+      return res
+        .status(400)
+        .json({ error: "Employee/subcontractor and product are required" });
+    }
+    if (!Number.isFinite(newQuantity) || newQuantity < 0) {
+      return res
+        .status(400)
+        .json({ error: "Stock quantity must be zero or higher" });
+    }
+
+    const [sub] = await db
+      .select()
+      .from(subcontractorsTable)
+      .where(
+        and(
+          eq(subcontractorsTable.id, subcontractorId),
+          eq(subcontractorsTable.companyId, tenantId),
+        ),
+      );
+    const [stockItem] = await db
+      .select()
+      .from(stockItemsTable)
+      .where(
+        and(
+          eq(stockItemsTable.id, stockItemId),
+          eq(stockItemsTable.companyId, tenantId),
+        ),
+      );
+    if (!sub || !stockItem)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Employee/subcontractor or stock item not found for this company",
+        });
+
+    const [existing] = await db
+      .select()
+      .from(subInventoryTable)
+      .where(
+        and(
+          eq(subInventoryTable.companyId, tenantId),
+          eq(subInventoryTable.subcontractorId, subcontractorId),
+          eq(subInventoryTable.stockItemId, stockItemId),
+        ),
+      )
+      .limit(1);
+
+    const previousQuantity = Number(existing?.currentQuantity ?? 0);
+    const adjustment = newQuantity - previousQuantity;
+
+    const updated = await db.transaction(async (tx) => {
+      let inventoryRow: typeof subInventoryTable.$inferSelect;
+      if (existing) {
+        [inventoryRow] = await tx
+          .update(subInventoryTable)
+          .set({
+            currentQuantity: newQuantity.toString(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(subInventoryTable.id, existing.id),
+              eq(subInventoryTable.companyId, tenantId),
+            ),
+          )
+          .returning();
+      } else {
+        [inventoryRow] = await tx
+          .insert(subInventoryTable)
+          .values({
+            companyId: tenantId,
+            subcontractorId,
+            stockItemId,
+            currentQuantity: newQuantity.toString(),
+          })
+          .returning();
+      }
+
+      if (adjustment !== 0) {
+        await tx.insert(inventoryTransactionsTable).values({
+          companyId: tenantId,
+          subcontractorId,
+          stockItemId,
+          transactionType: "adjustment",
+          quantity: adjustment.toString(),
+          referenceNote:
+            referenceNote ||
+            `Manual stock set from ${previousQuantity} to ${newQuantity}`,
+          recordedBy: "admin",
+        });
+      }
+
+      return inventoryRow;
+    });
+
+    return res.json(await buildInventoryItem(updated));
+  },
+);
 
 // GET /inventory-transactions
 router.get("/inventory-transactions", async (req, res) => {
   const conditions = [eq(inventoryTransactionsTable.companyId, companyId(req))];
-  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
-  if (subcontractorId) conditions.push(eq(inventoryTransactionsTable.subcontractorId, subcontractorId));
-  if (req.query.stockItemId) conditions.push(eq(inventoryTransactionsTable.stockItemId, Number(req.query.stockItemId)));
-  if (req.query.transactionType) conditions.push(eq(inventoryTransactionsTable.transactionType, req.query.transactionType as InventoryTransactionType));
+  const subcontractorId =
+    workerSubcontractorId(req) ??
+    (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  if (subcontractorId)
+    conditions.push(
+      eq(inventoryTransactionsTable.subcontractorId, subcontractorId),
+    );
+  if (req.query.stockItemId)
+    conditions.push(
+      eq(inventoryTransactionsTable.stockItemId, Number(req.query.stockItemId)),
+    );
+  if (req.query.transactionType)
+    conditions.push(
+      eq(
+        inventoryTransactionsTable.transactionType,
+        req.query.transactionType as InventoryTransactionType,
+      ),
+    );
   const filtered = await db
     .select()
     .from(inventoryTransactionsTable)
@@ -117,78 +303,150 @@ router.get("/inventory-transactions", async (req, res) => {
 
 // POST /inventory-transactions
 router.post("/inventory-transactions", requireAdmin, async (req, res) => {
-  const { subcontractorId, stockItemId, transactionType, quantity, jobAssignmentId, referenceNote, recordedBy } = req.body;
-  if (!subcontractorId || !stockItemId || !transactionType || quantity === undefined) {
-    return res.status(400).json({ error: "subcontractorId, stockItemId, transactionType, quantity required" });
+  const {
+    subcontractorId,
+    stockItemId,
+    transactionType,
+    quantity,
+    jobAssignmentId,
+    referenceNote,
+    recordedBy,
+  } = req.body;
+  if (
+    !subcontractorId ||
+    !stockItemId ||
+    !transactionType ||
+    quantity === undefined
+  ) {
+    return res
+      .status(400)
+      .json({
+        error:
+          "subcontractorId, stockItemId, transactionType, quantity required",
+      });
   }
-  const transactionTypeValue = String(transactionType) as InventoryTransactionType;
+  const transactionTypeValue = String(
+    transactionType,
+  ) as InventoryTransactionType;
   if (!inventoryTransactionTypes.includes(transactionTypeValue)) {
-    return res.status(400).json({ error: "Invalid inventory transaction type" });
+    return res
+      .status(400)
+      .json({ error: "Invalid inventory transaction type" });
   }
   const numericQuantity = Number(quantity);
   if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
-    return res.status(400).json({ error: "Quantity must be greater than zero" });
+    return res
+      .status(400)
+      .json({ error: "Quantity must be greater than zero" });
   }
   const tenantId = companyId(req);
   const [sub] = await db
     .select()
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(subcontractorsTable.id, Number(subcontractorId)),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
   const [stockItem] = await db
     .select()
     .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, Number(stockItemId)), eq(stockItemsTable.companyId, tenantId)));
-  if (!sub || !stockItem) return res.status(400).json({ error: "Employee/subcontractor or stock item not found for this company" });
+    .where(
+      and(
+        eq(stockItemsTable.id, Number(stockItemId)),
+        eq(stockItemsTable.companyId, tenantId),
+      ),
+    );
+  if (!sub || !stockItem)
+    return res
+      .status(400)
+      .json({
+        error:
+          "Employee/subcontractor or stock item not found for this company",
+      });
   if (jobAssignmentId) {
     const { jobAssignmentsTable } = await import("@workspace/db");
     const [assignment] = await db
       .select()
       .from(jobAssignmentsTable)
-      .where(and(eq(jobAssignmentsTable.id, Number(jobAssignmentId)), eq(jobAssignmentsTable.companyId, tenantId)));
-    if (!assignment) return res.status(400).json({ error: "Job assignment not found for this company" });
+      .where(
+        and(
+          eq(jobAssignmentsTable.id, Number(jobAssignmentId)),
+          eq(jobAssignmentsTable.companyId, tenantId),
+        ),
+      );
+    if (!assignment)
+      return res
+        .status(400)
+        .json({ error: "Job assignment not found for this company" });
   }
 
   const existing = await db
     .select()
     .from(subInventoryTable)
-    .where(and(
-      eq(subInventoryTable.companyId, tenantId),
-      eq(subInventoryTable.subcontractorId, Number(subcontractorId)),
-      eq(subInventoryTable.stockItemId, Number(stockItemId)),
-    ))
+    .where(
+      and(
+        eq(subInventoryTable.companyId, tenantId),
+        eq(subInventoryTable.subcontractorId, Number(subcontractorId)),
+        eq(subInventoryTable.stockItemId, Number(stockItemId)),
+      ),
+    )
     .limit(1);
 
-  const direction = ["issued", "restock"].includes(transactionTypeValue) ? 1 : -1;
+  const direction = ["issued", "restock"].includes(transactionTypeValue)
+    ? 1
+    : -1;
   const quantityChange = numericQuantity * direction;
   if (!existing.length && quantityChange < 0) {
-    return res.status(400).json({ error: `${stockItem.name} has not been issued to this employee/subcontractor yet` });
+    return res
+      .status(400)
+      .json({
+        error: `${stockItem.name} has not been issued to this employee/subcontractor yet`,
+      });
   }
-  const nextQuantity = Number(existing[0]?.currentQuantity ?? 0) + quantityChange;
+  const nextQuantity =
+    Number(existing[0]?.currentQuantity ?? 0) + quantityChange;
   if (nextQuantity < 0) {
-    return res.status(400).json({ error: `${stockItem.name}: transaction would reduce held stock below zero` });
+    return res
+      .status(400)
+      .json({
+        error: `${stockItem.name}: transaction would reduce held stock below zero`,
+      });
   }
 
   const txn = await db.transaction(async (tx) => {
-    const [recorded] = await tx.insert(inventoryTransactionsTable).values({
-      companyId: tenantId,
-      subcontractorId: Number(subcontractorId),
-      stockItemId: Number(stockItemId),
-      transactionType: transactionTypeValue,
-      quantity: numericQuantity.toString(),
-      jobAssignmentId: jobAssignmentId ? Number(jobAssignmentId) : null,
-      referenceNote,
-      recordedBy,
-    }).returning();
+    const [recorded] = await tx
+      .insert(inventoryTransactionsTable)
+      .values({
+        companyId: tenantId,
+        subcontractorId: Number(subcontractorId),
+        stockItemId: Number(stockItemId),
+        transactionType: transactionTypeValue,
+        quantity: numericQuantity.toString(),
+        jobAssignmentId: jobAssignmentId ? Number(jobAssignmentId) : null,
+        referenceNote,
+        recordedBy,
+      })
+      .returning();
 
     if (existing.length) {
       await tx
         .update(subInventoryTable)
         .set({
           currentQuantity: nextQuantity.toString(),
-          lastIssuedAt: transactionTypeValue === "issued" ? new Date() : existing[0].lastIssuedAt,
+          lastIssuedAt:
+            transactionTypeValue === "issued"
+              ? new Date()
+              : existing[0].lastIssuedAt,
           updatedAt: new Date(),
         })
-        .where(and(eq(subInventoryTable.id, existing[0].id), eq(subInventoryTable.companyId, tenantId)));
+        .where(
+          and(
+            eq(subInventoryTable.id, existing[0].id),
+            eq(subInventoryTable.companyId, tenantId),
+          ),
+        );
     } else {
       await tx.insert(subInventoryTable).values({
         companyId: tenantId,
@@ -208,9 +466,15 @@ router.post("/inventory-transactions", requireAdmin, async (req, res) => {
 // GET /restock-requests
 router.get("/restock-requests", async (req, res) => {
   const conditions = [eq(restockRequestsTable.companyId, companyId(req))];
-  const subcontractorId = workerSubcontractorId(req) ?? (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
-  if (subcontractorId) conditions.push(eq(restockRequestsTable.subcontractorId, subcontractorId));
-  if (req.query.status) conditions.push(eq(restockRequestsTable.status, req.query.status as RestockRequestStatus));
+  const subcontractorId =
+    workerSubcontractorId(req) ??
+    (req.query.subcontractorId ? Number(req.query.subcontractorId) : undefined);
+  if (subcontractorId)
+    conditions.push(eq(restockRequestsTable.subcontractorId, subcontractorId));
+  if (req.query.status)
+    conditions.push(
+      eq(restockRequestsTable.status, req.query.status as RestockRequestStatus),
+    );
   const filtered = await db
     .select()
     .from(restockRequestsTable)
@@ -221,30 +485,54 @@ router.get("/restock-requests", async (req, res) => {
 
 // POST /restock-requests
 router.post("/restock-requests", async (req, res) => {
-  const { subcontractorId, stockItemId, quantityRequested, subNotes, urgency } = req.body;
+  const { subcontractorId, stockItemId, quantityRequested, subNotes, urgency } =
+    req.body;
   if (!subcontractorId || !stockItemId || !quantityRequested) {
-    return res.status(400).json({ error: "subcontractorId, stockItemId, quantityRequested required" });
+    return res
+      .status(400)
+      .json({
+        error: "subcontractorId, stockItemId, quantityRequested required",
+      });
   }
   if (!requireSubcontractorAccess(req, res, Number(subcontractorId))) return;
   const tenantId = companyId(req);
   const [sub] = await db
     .select()
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)));
+    .where(
+      and(
+        eq(subcontractorsTable.id, Number(subcontractorId)),
+        eq(subcontractorsTable.companyId, tenantId),
+      ),
+    );
   const [stockItem] = await db
     .select()
     .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, Number(stockItemId)), eq(stockItemsTable.companyId, tenantId)));
-  if (!sub || !stockItem) return res.status(400).json({ error: "Employee/subcontractor or stock item not found for this company" });
-  const [req_] = await db.insert(restockRequestsTable).values({
-    companyId: tenantId,
-    subcontractorId: Number(subcontractorId),
-    stockItemId: Number(stockItemId),
-    quantityRequested: quantityRequested.toString(),
-    subNotes,
-    urgency: urgency ?? "normal",
-    status: "pending",
-  }).returning();
+    .where(
+      and(
+        eq(stockItemsTable.id, Number(stockItemId)),
+        eq(stockItemsTable.companyId, tenantId),
+      ),
+    );
+  if (!sub || !stockItem)
+    return res
+      .status(400)
+      .json({
+        error:
+          "Employee/subcontractor or stock item not found for this company",
+      });
+  const [req_] = await db
+    .insert(restockRequestsTable)
+    .values({
+      companyId: tenantId,
+      subcontractorId: Number(subcontractorId),
+      stockItemId: Number(stockItemId),
+      quantityRequested: quantityRequested.toString(),
+      subNotes,
+      urgency: urgency ?? "normal",
+      status: "pending",
+    })
+    .returning();
   return res.status(201).json(await buildRestockRequest(req_));
 });
 
@@ -253,13 +541,19 @@ router.patch("/restock-requests/:id", requireAdmin, async (req, res) => {
   const { status, quantityFulfilled, adminNotes } = req.body;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (status) updates.status = status;
-  if (quantityFulfilled !== undefined) updates.quantityFulfilled = quantityFulfilled.toString();
+  if (quantityFulfilled !== undefined)
+    updates.quantityFulfilled = quantityFulfilled.toString();
   if (adminNotes !== undefined) updates.adminNotes = adminNotes;
 
   const [row] = await db
     .update(restockRequestsTable)
     .set(updates)
-    .where(and(eq(restockRequestsTable.id, Number(req.params.id)), eq(restockRequestsTable.companyId, companyId(req))))
+    .where(
+      and(
+        eq(restockRequestsTable.id, Number(req.params.id)),
+        eq(restockRequestsTable.companyId, companyId(req)),
+      ),
+    )
     .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
 
