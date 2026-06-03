@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -973,24 +974,23 @@ export default function FieldView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        {visibleSections.map((section) => {
-          const Icon = section.icon;
-          const selected = activeSection === section.id;
-          return (
-            <Button
-              key={section.id}
-              type="button"
-              variant={selected ? "default" : "outline"}
-              className="h-16 flex-col gap-1 px-1 text-xs"
-              onClick={() => setActiveSection(section.id)}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="leading-tight">{section.label}</span>
-            </Button>
-          );
-        })}
-      </div>
+      <Tabs value={activeSection} onValueChange={(value) => setActiveSection(value as FieldSection)}>
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-md bg-muted/60 p-1 sm:grid-cols-6">
+          {visibleSections.map((section) => {
+            const Icon = section.icon;
+            return (
+              <TabsTrigger
+                key={section.id}
+                value={section.id}
+                className="h-14 flex-col gap-1 whitespace-normal px-1 text-[11px] leading-tight"
+              >
+                <Icon className="h-4 w-4" />
+                <span>{section.label}</span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
       {activeSection === "home" && !pushEnabled && (
         <PhoneSetupCard compact />
