@@ -245,6 +245,8 @@ type SubmitCurrentInvoiceResponse = {
   } | null;
   summary?: FieldEarningsSummary | null;
   csvDownloadUrl?: string;
+  xeroSubmissionFailed?: boolean;
+  message?: string;
 };
 
 type FieldWorkSession = {
@@ -651,11 +653,16 @@ export default function FieldView() {
         queryClient.invalidateQueries({
           queryKey: ["field-earnings-summary", subId],
         });
+        queryClient.invalidateQueries();
         toast({
-          title: "Invoice sent to Xero",
-          description: data.invoice?.xeroInvoiceId
-            ? "A draft bill has been created in Xero."
-            : "Your weekly invoice has been submitted.",
+          title: data.xeroSubmissionFailed
+            ? "Invoice prepared"
+            : "Invoice sent to Xero",
+          description: data.xeroSubmissionFailed
+            ? "Xero is not connected yet, but your current invoice is ready to review."
+            : data.invoice?.xeroInvoiceId
+              ? "A draft bill has been created in Xero."
+              : "Your weekly invoice has been submitted.",
         });
       },
       onError: (error) => {
@@ -1908,8 +1915,8 @@ export default function FieldView() {
                 >
                   <Send className="mr-2 h-4 w-4" />
                   {submitCurrentInvoiceMutation.isPending
-                    ? "Sending to Xero..."
-                    : "Send current invoice to Xero"}
+                    ? "Submitting invoice..."
+                    : "Submit current invoice"}
                 </Button>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
