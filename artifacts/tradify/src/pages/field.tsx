@@ -627,7 +627,7 @@ export default function FieldView() {
           );
         return response.json();
       },
-      enabled: Boolean(subId && isWorker),
+      enabled: Boolean(subId),
       refetchInterval: 30000,
     });
 
