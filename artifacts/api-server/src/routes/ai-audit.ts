@@ -19,6 +19,10 @@ import {
 } from "../lib/openai-client.js";
 import { workSessionMinutes } from "../lib/date-utils.js";
 import { companyId } from "../lib/auth.js";
+import {
+  getActiveJobPhotoData,
+  getJobPhotoEntries,
+} from "../lib/photoRetention.js";
 import type OpenAI from "openai";
 
 const router = Router();
@@ -64,7 +68,7 @@ const AUDIT_RULES: AuditRule[] = [
     title: "Job completed without photos",
     check({ reports }) {
       const missing = reports.filter((r) => {
-        const photos = (r.photos as string[]) ?? [];
+        const photos = getJobPhotoEntries(r.photos);
         return photos.length === 0;
       });
       return {
@@ -232,7 +236,8 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
   const photoItems: OpenAI.ChatCompletionContentPartImage[] = [];
 
   for (const report of reports) {
-    const photos = (report.photos as string[]) ?? [];
+    const photos = getJobPhotoEntries(report.photos);
+    const activePhotos = getActiveJobPhotoData(report.photos);
     const stock =
       (report.stockUsed as { itemName?: string; quantity?: number }[]) ?? [];
     const metres = Number(report.metersCompleted || 0);
@@ -246,17 +251,16 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
         ? `  Issue description: ${report.issueDescription}`
         : "",
       report.generalNotes ? `  Notes: ${report.generalNotes}` : "",
-      `  Completion photos: ${photos.length}`,
+      `  Completion photos recorded: ${photos.length}`,
+      `  Completion photos available for AI review: ${activePhotos.length}`,
     );
 
-    const photosToSend = photos.slice(0, 4);
+    const photosToSend = activePhotos.slice(0, 4);
     for (const photo of photosToSend) {
-      if (typeof photo === "string" && photo.startsWith("data:image")) {
-        photoItems.push({
-          type: "image_url",
-          image_url: { url: photo, detail: "low" },
-        });
-      }
+      photoItems.push({
+        type: "image_url",
+        image_url: { url: photo, detail: "low" },
+      });
     }
   }
 

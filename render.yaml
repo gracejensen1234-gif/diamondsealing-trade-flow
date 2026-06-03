@@ -31,6 +31,8 @@ services:
         value: info@diamondsealing.com.au
       - key: APP_BASE_URL
         value: https://diamond-sealing-operations.onrender.com
+      - key: JOB_PHOTO_RETENTION_DAYS
+        value: "90"
       - key: SMTP_PASS
         sync: false
 

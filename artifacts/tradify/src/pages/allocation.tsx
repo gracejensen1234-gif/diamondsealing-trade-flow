@@ -269,6 +269,7 @@ export default function Allocation() {
   const [result, setResult] = useState<any>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [intakeSourceText, setIntakeSourceText] = useState("");
+  const [intakeExtraContext, setIntakeExtraContext] = useState("");
   const [intakeImages, setIntakeImages] = useState<IntakeImage[]>([]);
   const [intakeFileLoading, setIntakeFileLoading] = useState(false);
   const [intakeDrafts, setIntakeDrafts] = useState<IntakeDraft[]>([]);
@@ -289,6 +290,7 @@ export default function Allocation() {
     mutationFn: () =>
       postJson("/api/allocation/job-intake/analyse", {
         sourceText: intakeSourceText,
+        extraContext: intakeExtraContext,
         imageDataList: intakeImages.map((image) => image.dataUrl),
       }),
     onSuccess: (data) => {
@@ -486,7 +488,9 @@ export default function Allocation() {
     recommendMutation.mutate(payload);
   }
 
-  const canAnalyse = Boolean(intakeSourceText.trim() || intakeImages.length);
+  const canAnalyse = Boolean(
+    intakeSourceText.trim() || intakeExtraContext.trim() || intakeImages.length,
+  );
   const canCreateDrafts =
     intakeDrafts.length > 0 &&
     intakeDrafts.every(
@@ -520,8 +524,24 @@ export default function Allocation() {
                 className="mt-1 min-h-40"
                 value={intakeSourceText}
                 onChange={(event) => setIntakeSourceText(event.target.value)}
-                placeholder="Paste job details here. Include address, builder/client, date, product, colours, areas/units, metres and any site notes."
+                placeholder="Paste the builder email, text message, screenshot text or copied notes here."
               />
+              <div className="mt-3">
+                <Label>Extra details for AI</Label>
+                <Textarea
+                  className="mt-1 min-h-24"
+                  value={intakeExtraContext}
+                  onChange={(event) =>
+                    setIntakeExtraContext(event.target.value)
+                  }
+                  placeholder="Add missing details here, e.g. address is 12 Smith St, Milton; needed Friday morning; use Sikasil white; units 1-4 bathrooms only."
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use this when the message is missing the address, day/date,
+                  work area, product, colour, access notes or anything the AI
+                  needs to create the job correctly.
+                </p>
+              </div>
             </div>
             <div className="space-y-3">
               <div>
@@ -594,6 +614,7 @@ export default function Allocation() {
               variant="outline"
               onClick={() => {
                 setIntakeSourceText("");
+                setIntakeExtraContext("");
                 setIntakeImages([]);
                 setIntakeDrafts([]);
                 setCreatedIntakeJobs([]);

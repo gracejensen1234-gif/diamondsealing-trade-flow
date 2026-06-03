@@ -22,6 +22,7 @@ import { dateOnlyOrToday } from "../lib/date-utils.js";
 import {
   canAccessSubcontractor,
   companyId,
+  requireAdmin,
   requireSubcontractorAccess,
   workerSubcontractorId,
 } from "../lib/auth.js";
@@ -31,6 +32,12 @@ import {
   hasOpenAIConfig,
 } from "../lib/openai-client.js";
 import { logger } from "../lib/logger.js";
+import {
+  cleanupExpiredJobReportPhotos,
+  getActiveJobPhotoData,
+  getPhotoRetentionCompanyStatus,
+  getPhotoRetentionSummary,
+} from "../lib/photoRetention.js";
 import type OpenAI from "openai";
 
 const router = Router();
@@ -103,12 +110,7 @@ async function runAutomaticPhotoAudit(
 ) {
   if (!hasOpenAIConfig()) return { status: "not_configured", flagsCreated: 0 };
 
-  const photos = Array.isArray(report.photos)
-    ? (report.photos as string[])
-    : [];
-  const imagePhotos = photos.filter(
-    (photo) => typeof photo === "string" && photo.startsWith("data:image"),
-  );
+  const imagePhotos = getActiveJobPhotoData(report.photos);
   if (imagePhotos.length === 0) return { status: "no_images", flagsCreated: 0 };
 
   const tenantId = report.companyId ?? 0;
@@ -251,7 +253,7 @@ async function runAutomaticPhotoAudit(
       ? `Worker issue notes: ${report.issueDescription}`
       : null,
     report.generalNotes ? `General notes: ${report.generalNotes}` : null,
-    `Completion photos supplied: ${photos.length}`,
+    `Completion photos supplied: ${imagePhotos.length}`,
     locationVerifications.length
       ? `Location checks: ${locationVerifications
           .map(
@@ -320,7 +322,7 @@ Be conservative: if the photo is simply unclear, use photo_quality_concern inste
           suggestedAction: aiFlag.suggestedAction,
           source: "automatic_job_report_photo_audit",
           model: getAuditModel(),
-          photoCount: photos.length,
+          photoCount: imagePhotos.length,
         },
         status: "pending",
         aiGenerated: true,
@@ -384,6 +386,10 @@ async function enrichReport(r: typeof jobReportsTable.$inferSelect) {
     metersCompleted: Number(r.metersCompleted),
     hoursWorked: r.hoursWorked == null ? null : Number(r.hoursWorked),
     photos: Array.isArray(r.photos) ? r.photos : [],
+    photoRetention: getPhotoRetentionSummary({
+      photos: r.photos,
+      createdAt: r.createdAt,
+    }),
     silikoneColoursUsed: Array.isArray(r.silikoneColoursUsed)
       ? r.silikoneColoursUsed
       : [],
@@ -432,6 +438,28 @@ router.get("/job-reports", async (req, res) => {
   const enriched = await Promise.all(reports.map(enrichReport));
   return res.json(enriched);
 });
+
+router.get(
+  "/job-reports/photo-retention/status",
+  requireAdmin,
+  async (req, res) => {
+    return res.json(await getPhotoRetentionCompanyStatus(companyId(req)));
+  },
+);
+
+router.post(
+  "/job-reports/photo-retention/cleanup",
+  requireAdmin,
+  async (req, res) => {
+    const dryRun = req.body?.dryRun !== false;
+    return res.json(
+      await cleanupExpiredJobReportPhotos({
+        companyId: companyId(req),
+        dryRun,
+      }),
+    );
+  },
+);
 
 router.post("/job-reports", async (req, res) => {
   const parsed = CreateJobReportBody.safeParse(req.body);

@@ -451,6 +451,10 @@ router.post(
       typeof req.body?.sourceText === "string"
         ? req.body.sourceText.trim()
         : "";
+    const extraContext =
+      typeof req.body?.extraContext === "string"
+        ? req.body.extraContext.trim()
+        : "";
     const imageDataList = [
       ...(Array.isArray(req.body?.imageDataList) ? req.body.imageDataList : []),
       ...(Array.isArray(req.body?.images) ? req.body.images : []),
@@ -461,10 +465,11 @@ router.post(
       .filter(Boolean)
       .slice(0, 8);
 
-    if (!sourceText && imageDataList.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "Paste job details or upload at least one screenshot" });
+    if (!sourceText && !extraContext && imageDataList.length === 0) {
+      return res.status(400).json({
+        error:
+          "Paste job details, add extra AI context or upload at least one screenshot",
+      });
     }
     if (
       imageDataList.some((imageData) => !imageData.startsWith("data:image/"))
@@ -515,6 +520,8 @@ Return JSON only with key "jobs" containing an array of job/work-block drafts.
 Rules:
 - Create one draft per distinct job, day, or work block if the message separates units/apartments/areas.
 - If multiple screenshots/images are provided, read them together as one job intake packet.
+- Treat "Extra admin details for AI" as authoritative context for missing address, due day/date, work area, product, colour, access, or builder notes.
+- If extra admin details conflict with the source message/screenshots, use the extra admin details but mark needsReview true and explain the conflict in sourceSummary.
 - Use ISO dates YYYY-MM-DD. Infer obvious dates from the message, otherwise leave date fields null and mark needsReview true.
 - Keep wording short and practical for dispatch.
 - Match existing customerId or builderProfileId when clearly identifiable from the lists.
@@ -537,6 +544,7 @@ title, clientName, builderName, customerId, builderProfileId, address, suburb, d
           "Existing builder profiles:",
           knownBuilders || "None",
           sourceText ? `Source text:\n${sourceText}` : "",
+          extraContext ? `Extra admin details for AI:\n${extraContext}` : "",
         ]
           .filter(Boolean)
           .join("\n\n"),
