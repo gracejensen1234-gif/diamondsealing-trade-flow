@@ -12,7 +12,11 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { createAndSendNotification } from "../lib/notificationService.js";
-import { getAuditModel, getOpenAIClient, hasOpenAIConfig } from "../lib/openai-client.js";
+import {
+  getAuditModel,
+  getOpenAIClient,
+  hasOpenAIConfig,
+} from "../lib/openai-client.js";
 import { workSessionMinutes } from "../lib/date-utils.js";
 import { companyId } from "../lib/auth.js";
 import type OpenAI from "openai";
@@ -25,18 +29,22 @@ interface AuditRule {
   type: string;
   severity: "info" | "warning" | "critical";
   title: string;
-  check: (data: AuditContext) => { triggered: boolean; description: string; evidence: Record<string, unknown> };
+  check: (data: AuditContext) => {
+    triggered: boolean;
+    description: string;
+    evidence: Record<string, unknown>;
+  };
 }
 
 interface AuditContext {
   subcontractorId: number;
   date: string;
-  reports: typeof jobReportsTable.$inferSelect[];
-  sessions: typeof workSessionsTable.$inferSelect[];
-  dockets: typeof docketsTable.$inferSelect[];
+  reports: (typeof jobReportsTable.$inferSelect)[];
+  sessions: (typeof workSessionsTable.$inferSelect)[];
+  dockets: (typeof docketsTable.$inferSelect)[];
 }
 
-type FlagType = typeof auditFlagsTable.$inferSelect["flagType"];
+type FlagType = (typeof auditFlagsTable.$inferSelect)["flagType"];
 
 interface AIAuditFlag {
   flagType: FlagType;
@@ -71,9 +79,16 @@ const AUDIT_RULES: AuditRule[] = [
     severity: "info",
     title: "Below average daily metres",
     check({ reports, sessions }) {
-      const totalMetres = reports.reduce((a, r) => a + Number(r.metersCompleted || 0), 0);
-      const workMinutes = sessions.reduce((a, s) => a + workSessionMinutes(s), 0);
-      const mPerHour = workMinutes > 0 ? totalMetres / (workMinutes / 60) : null;
+      const totalMetres = reports.reduce(
+        (a, r) => a + Number(r.metersCompleted || 0),
+        0,
+      );
+      const workMinutes = sessions.reduce(
+        (a, s) => a + workSessionMinutes(s),
+        0,
+      );
+      const mPerHour =
+        workMinutes > 0 ? totalMetres / (workMinutes / 60) : null;
       const triggered = mPerHour !== null && mPerHour < 4 && workMinutes > 60;
       return {
         triggered,
@@ -92,7 +107,10 @@ const AUDIT_RULES: AuditRule[] = [
       const long = sessions.filter((s) => workSessionMinutes(s) > 600);
       return {
         triggered: long.length > 0,
-        description: long.length > 0 ? `Shift of ${Math.round((workSessionMinutes(long[0]) / 60) * 10) / 10} hours detected (>10hr).` : "",
+        description:
+          long.length > 0
+            ? `Shift of ${Math.round((workSessionMinutes(long[0]) / 60) * 10) / 10} hours detected (>10hr).`
+            : "",
         evidence: { sessionIds: long.map((s) => s.id) },
       };
     },
@@ -105,7 +123,8 @@ const AUDIT_RULES: AuditRule[] = [
       const hasSession = sessions.some((s) => s.clockedOnAt);
       return {
         triggered: hasSession && reports.length === 0,
-        description: "Subcontractor clocked in but submitted no job completion reports.",
+        description:
+          "Subcontractor clocked in but submitted no job completion reports.",
         evidence: { sessionCount: sessions.length },
       };
     },
@@ -131,7 +150,9 @@ const AUDIT_RULES: AuditRule[] = [
     severity: "warning",
     title: "Docket not fully signed",
     check({ dockets }) {
-      const unsigned = dockets.filter((d) => !d.builderSigned || !d.subcontractorSigned);
+      const unsigned = dockets.filter(
+        (d) => !d.builderSigned || !d.subcontractorSigned,
+      );
       return {
         triggered: unsigned.length > 0,
         description: `${unsigned.length} docket(s) missing signatures.`,
@@ -141,7 +162,9 @@ const AUDIT_RULES: AuditRule[] = [
   },
 ];
 
-function calcScoreFromFlags(flags: typeof auditFlagsTable.$inferSelect[]): number {
+function calcScoreFromFlags(
+  flags: (typeof auditFlagsTable.$inferSelect)[],
+): number {
   let score = 100;
   for (const flag of flags) {
     if (flag.severity === "critical") score -= 20;
@@ -154,23 +177,37 @@ function calcScoreFromFlags(flags: typeof auditFlagsTable.$inferSelect[]): numbe
 // ─── AI analysis helper ───────────────────────────────────────────────────────
 
 const VALID_FLAG_TYPES: FlagType[] = [
-  "missing_photos", "low_photo_count", "wrong_colour", "unusual_stock_ratio",
-  "excessive_break", "early_departure", "late_arrival", "missing_stock_usage",
-  "low_metres_vs_time", "repeat_callback", "incomplete_documentation",
-  "safety_concern", "missing_builder_contact", "photo_quality_concern",
-  "inconsistent_data", "possible_false_reporting", "other",
+  "missing_photos",
+  "low_photo_count",
+  "wrong_colour",
+  "unusual_stock_ratio",
+  "excessive_break",
+  "early_departure",
+  "late_arrival",
+  "missing_stock_usage",
+  "low_metres_vs_time",
+  "repeat_callback",
+  "incomplete_documentation",
+  "safety_concern",
+  "missing_builder_contact",
+  "photo_quality_concern",
+  "inconsistent_data",
+  "possible_false_reporting",
+  "other",
 ];
 
 async function runAIAnalysis(
   sub: { id: number; name: string },
   date: string,
-  reports: typeof jobReportsTable.$inferSelect[],
-  locationVerifications: typeof locationVerificationsTable.$inferSelect[],
+  reports: (typeof jobReportsTable.$inferSelect)[],
+  locationVerifications: (typeof locationVerificationsTable.$inferSelect)[],
 ): Promise<AIAuditFlag[]> {
   if (reports.length === 0) return [];
   const openai = getOpenAIClient();
   if (!openai) {
-    throw new Error("OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.");
+    throw new Error(
+      "OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.",
+    );
   }
 
   const systemPrompt = `You are a quality audit assistant for a joint sealing subcontractor company.
@@ -196,7 +233,8 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
 
   for (const report of reports) {
     const photos = (report.photos as string[]) ?? [];
-    const stock = (report.stockUsed as { itemName?: string; quantity?: number }[]) ?? [];
+    const stock =
+      (report.stockUsed as { itemName?: string; quantity?: number }[]) ?? [];
     const metres = Number(report.metersCompleted || 0);
 
     summaryParts.push(
@@ -204,7 +242,9 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
       `  Metres completed: ${metres}`,
       `  Stock used: ${stock.length > 0 ? stock.map((s) => `${s.quantity ?? "?"} x ${s.itemName ?? "unknown"}`).join(", ") : "none recorded"}`,
       `  Issue type: ${report.issueType || "none"}`,
-      report.issueDescription ? `  Issue description: ${report.issueDescription}` : "",
+      report.issueDescription
+        ? `  Issue description: ${report.issueDescription}`
+        : "",
       report.generalNotes ? `  Notes: ${report.generalNotes}` : "",
       `  Completion photos: ${photos.length}`,
     );
@@ -223,8 +263,12 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
   if (locationVerifications.length > 0) {
     summaryParts.push("\nLocation verification events:");
     for (const lv of locationVerifications) {
-      const dist = lv.distanceMetres ? `${Number(lv.distanceMetres).toFixed(0)}m from job` : "";
-      summaryParts.push(`  ${lv.eventType}: ${lv.status}${dist ? " (" + dist + ")" : ""}`);
+      const dist = lv.distanceMetres
+        ? `${Number(lv.distanceMetres).toFixed(0)}m from job`
+        : "";
+      summaryParts.push(
+        `  ${lv.eventType}: ${lv.status}${dist ? " (" + dist + ")" : ""}`,
+      );
     }
   }
 
@@ -247,19 +291,18 @@ Return a JSON object with a single key "flags" containing an array. Each flag mu
   const parsed = JSON.parse(raw) as { flags?: unknown[] };
   const flags = Array.isArray(parsed.flags) ? parsed.flags : [];
 
-  return flags
-    .filter((f): f is AIAuditFlag => {
-      if (typeof f !== "object" || f === null) return false;
-      const flag = f as Record<string, unknown>;
-      return (
-        typeof flag.flagType === "string" &&
-        VALID_FLAG_TYPES.includes(flag.flagType as FlagType) &&
-        typeof flag.severity === "string" &&
-        ["info", "warning", "critical"].includes(flag.severity) &&
-        typeof flag.title === "string" &&
-        typeof flag.description === "string"
-      );
-    });
+  return flags.filter((f): f is AIAuditFlag => {
+    if (typeof f !== "object" || f === null) return false;
+    const flag = f as Record<string, unknown>;
+    return (
+      typeof flag.flagType === "string" &&
+      VALID_FLAG_TYPES.includes(flag.flagType as FlagType) &&
+      typeof flag.severity === "string" &&
+      ["info", "warning", "critical"].includes(flag.severity) &&
+      typeof flag.title === "string" &&
+      typeof flag.description === "string"
+    );
+  });
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -283,47 +326,91 @@ router.post("/audit/run", async (req, res) => {
   const targetSubId = subcontractorId ? Number(subcontractorId) : null;
 
   const subs = targetSubId
-    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, targetSubId), eq(subcontractorsTable.companyId, tenantId)))
-    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
+    ? await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.id, targetSubId),
+            eq(subcontractorsTable.companyId, tenantId),
+          ),
+        )
+    : await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.companyId, tenantId),
+            eq(subcontractorsTable.active, true),
+          ),
+        );
 
-  const allFlags: (typeof auditFlagsTable.$inferSelect & { subcontractorName: string })[] = [];
+  const allFlags: (typeof auditFlagsTable.$inferSelect & {
+    subcontractorName: string;
+  })[] = [];
 
   for (const sub of subs) {
     const reports = await db
       .select()
       .from(jobReportsTable)
-      .where(and(eq(jobReportsTable.companyId, tenantId), eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate)));
+      .where(
+        and(
+          eq(jobReportsTable.companyId, tenantId),
+          eq(jobReportsTable.subcontractorId, sub.id),
+          eq(jobReportsTable.dispatchDate, targetDate),
+        ),
+      );
 
     const sessions = await db
       .select()
       .from(workSessionsTable)
-      .where(and(eq(workSessionsTable.companyId, tenantId), eq(workSessionsTable.subcontractorId, sub.id), eq(workSessionsTable.date, targetDate)));
+      .where(
+        and(
+          eq(workSessionsTable.companyId, tenantId),
+          eq(workSessionsTable.subcontractorId, sub.id),
+          eq(workSessionsTable.date, targetDate),
+        ),
+      );
 
     const dockets = await db
       .select()
       .from(docketsTable)
-      .where(and(eq(docketsTable.companyId, tenantId), eq(docketsTable.subcontractorId, sub.id)));
+      .where(
+        and(
+          eq(docketsTable.companyId, tenantId),
+          eq(docketsTable.subcontractorId, sub.id),
+        ),
+      );
 
     if (sessions.length === 0 && reports.length === 0) continue;
 
-    const ctx: AuditContext = { subcontractorId: sub.id, date: targetDate, reports, sessions, dockets };
+    const ctx: AuditContext = {
+      subcontractorId: sub.id,
+      date: targetDate,
+      reports,
+      sessions,
+      dockets,
+    };
 
     for (const rule of AUDIT_RULES) {
       const result = rule.check(ctx);
       if (!result.triggered) continue;
 
-      const [flag] = await db.insert(auditFlagsTable).values({
-        companyId: tenantId,
-        subcontractorId: sub.id,
-        flagType: rule.type as FlagType,
-        severity: rule.severity,
-        title: rule.title,
-        description: result.description,
-        evidence: result.evidence,
-        status: "pending",
-        aiGenerated: false,
-        showToWorker: rule.severity !== "info",
-      }).returning();
+      const [flag] = await db
+        .insert(auditFlagsTable)
+        .values({
+          companyId: tenantId,
+          subcontractorId: sub.id,
+          flagType: rule.type as FlagType,
+          severity: rule.severity,
+          title: rule.title,
+          description: result.description,
+          evidence: result.evidence,
+          status: "pending",
+          aiGenerated: false,
+          showToWorker: rule.severity !== "info",
+        })
+        .returning();
 
       allFlags.push({ ...flag, subcontractorName: sub.name });
     }
@@ -337,44 +424,83 @@ router.post("/audit/ai-run", async (req, res) => {
   if (!hasOpenAIConfig()) {
     return res.status(400).json({
       error: "OpenAI is not configured",
-      message: "OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.",
+      message:
+        "OPENAI_API_KEY is not configured. Add it to the server environment before running AI photo audits.",
     });
   }
 
   const { subcontractorId, date } = req.body;
   const tenantId = companyId(req);
-  const targetDate = (date as string | undefined) || new Date().toISOString().split("T")[0];
+  const targetDate =
+    (date as string | undefined) || new Date().toISOString().split("T")[0];
   const targetSubId = subcontractorId ? Number(subcontractorId) : null;
 
   const subs = targetSubId
-    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, targetSubId), eq(subcontractorsTable.companyId, tenantId)))
-    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
+    ? await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.id, targetSubId),
+            eq(subcontractorsTable.companyId, tenantId),
+          ),
+        )
+    : await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.companyId, tenantId),
+            eq(subcontractorsTable.active, true),
+          ),
+        );
 
   const results: {
     subcontractorId: number;
     subcontractorName: string;
     flagsCreated: number;
-    flags: typeof auditFlagsTable.$inferSelect[];
+    flags: (typeof auditFlagsTable.$inferSelect)[];
     error?: string;
   }[] = [];
 
   for (const sub of subs) {
     const [reports, locationVerifications] = await Promise.all([
-      db.select().from(jobReportsTable).where(
-        and(eq(jobReportsTable.companyId, tenantId), eq(jobReportsTable.subcontractorId, sub.id), eq(jobReportsTable.dispatchDate, targetDate))
-      ),
-      db.select().from(locationVerificationsTable).where(
-        and(
-          eq(locationVerificationsTable.companyId, tenantId),
-          eq(locationVerificationsTable.subcontractorId, sub.id),
-          gte(locationVerificationsTable.createdAt, new Date(`${targetDate}T00:00:00`)),
-          lte(locationVerificationsTable.createdAt, new Date(`${targetDate}T23:59:59`)),
-        )
-      ),
+      db
+        .select()
+        .from(jobReportsTable)
+        .where(
+          and(
+            eq(jobReportsTable.companyId, tenantId),
+            eq(jobReportsTable.subcontractorId, sub.id),
+            eq(jobReportsTable.dispatchDate, targetDate),
+          ),
+        ),
+      db
+        .select()
+        .from(locationVerificationsTable)
+        .where(
+          and(
+            eq(locationVerificationsTable.companyId, tenantId),
+            eq(locationVerificationsTable.subcontractorId, sub.id),
+            gte(
+              locationVerificationsTable.createdAt,
+              new Date(`${targetDate}T00:00:00`),
+            ),
+            lte(
+              locationVerificationsTable.createdAt,
+              new Date(`${targetDate}T23:59:59`),
+            ),
+          ),
+        ),
     ]);
 
     if (reports.length === 0) {
-      results.push({ subcontractorId: sub.id, subcontractorName: sub.name, flagsCreated: 0, flags: [] });
+      results.push({
+        subcontractorId: sub.id,
+        subcontractorName: sub.name,
+        flagsCreated: 0,
+        flags: [],
+      });
       continue;
     }
 
@@ -382,32 +508,60 @@ router.post("/audit/ai-run", async (req, res) => {
     let analysisError: string | undefined;
 
     try {
-      aiFlags = await runAIAnalysis(sub, targetDate, reports, locationVerifications);
+      aiFlags = await runAIAnalysis(
+        sub,
+        targetDate,
+        reports,
+        locationVerifications,
+      );
     } catch (err) {
-      req.log.error({ err, subcontractorId: sub.id }, "AI audit analysis failed");
+      req.log.error(
+        { err, subcontractorId: sub.id },
+        "AI audit analysis failed",
+      );
       analysisError = err instanceof Error ? err.message : "Unknown error";
     }
 
-    const insertedFlags: typeof auditFlagsTable.$inferSelect[] = [];
+    const insertedFlags: (typeof auditFlagsTable.$inferSelect)[] = [];
 
     for (const aiFlag of aiFlags) {
-      const reportId = typeof aiFlag.jobReportId === "number"
-        ? reports.find((r) => r.id === aiFlag.jobReportId)?.id
-        : undefined;
+      const reportId =
+        typeof aiFlag.jobReportId === "number"
+          ? reports.find((r) => r.id === aiFlag.jobReportId)?.id
+          : undefined;
 
-      const [flag] = await db.insert(auditFlagsTable).values({
-        companyId: tenantId,
-        subcontractorId: sub.id,
-        jobReportId: reportId ?? null,
-        flagType: aiFlag.flagType,
-        severity: aiFlag.severity,
-        title: aiFlag.title,
-        description: aiFlag.description,
-        evidence: { suggestedAction: aiFlag.suggestedAction },
-        status: "pending",
-        aiGenerated: true,
-        showToWorker: false,
-      }).returning();
+      if (reportId) {
+        const [existingFlag] = await db
+          .select({ id: auditFlagsTable.id })
+          .from(auditFlagsTable)
+          .where(
+            and(
+              eq(auditFlagsTable.companyId, tenantId),
+              eq(auditFlagsTable.jobReportId, reportId),
+              eq(auditFlagsTable.flagType, aiFlag.flagType),
+              eq(auditFlagsTable.aiGenerated, true),
+            ),
+          )
+          .limit(1);
+        if (existingFlag) continue;
+      }
+
+      const [flag] = await db
+        .insert(auditFlagsTable)
+        .values({
+          companyId: tenantId,
+          subcontractorId: sub.id,
+          jobReportId: reportId ?? null,
+          flagType: aiFlag.flagType,
+          severity: aiFlag.severity,
+          title: aiFlag.title,
+          description: aiFlag.description,
+          evidence: { suggestedAction: aiFlag.suggestedAction },
+          status: "pending",
+          aiGenerated: true,
+          showToWorker: false,
+        })
+        .returning();
 
       insertedFlags.push(flag);
     }
@@ -432,17 +586,36 @@ router.get("/audit/flags", async (req, res) => {
     .from(auditFlagsTable)
     .where(eq(auditFlagsTable.companyId, tenantId))
     .orderBy(desc(auditFlagsTable.createdAt));
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = flags;
-  if (req.query.subcontractorId) filtered = filtered.filter((f) => f.subcontractorId === Number(req.query.subcontractorId));
-  if (req.query.status) filtered = filtered.filter((f) => f.status === req.query.status);
-  if (req.query.severity) filtered = filtered.filter((f) => f.severity === req.query.severity);
-  if (req.query.startDate) filtered = filtered.filter((f) => f.createdAt >= new Date(req.query.startDate as string));
-  if (req.query.aiGenerated !== undefined) filtered = filtered.filter((f) => f.aiGenerated === (req.query.aiGenerated === "true"));
+  if (req.query.subcontractorId)
+    filtered = filtered.filter(
+      (f) => f.subcontractorId === Number(req.query.subcontractorId),
+    );
+  if (req.query.status)
+    filtered = filtered.filter((f) => f.status === req.query.status);
+  if (req.query.severity)
+    filtered = filtered.filter((f) => f.severity === req.query.severity);
+  if (req.query.startDate)
+    filtered = filtered.filter(
+      (f) => f.createdAt >= new Date(req.query.startDate as string),
+    );
+  if (req.query.aiGenerated !== undefined)
+    filtered = filtered.filter(
+      (f) => f.aiGenerated === (req.query.aiGenerated === "true"),
+    );
 
-  return res.json(filtered.map((f) => ({ ...f, subcontractorName: subMap.get(f.subcontractorId) ?? "" })));
+  return res.json(
+    filtered.map((f) => ({
+      ...f,
+      subcontractorName: subMap.get(f.subcontractorId) ?? "",
+    })),
+  );
 });
 
 // PATCH /audit/flags/:id
@@ -457,14 +630,24 @@ router.patch("/audit/flags/:id", async (req, res) => {
   const [flag] = await db
     .update(auditFlagsTable)
     .set(updates)
-    .where(and(eq(auditFlagsTable.id, Number(req.params.id)), eq(auditFlagsTable.companyId, companyId(req))))
+    .where(
+      and(
+        eq(auditFlagsTable.id, Number(req.params.id)),
+        eq(auditFlagsTable.companyId, companyId(req)),
+      ),
+    )
     .returning();
   if (!flag) return res.status(404).json({ error: "Not found" });
 
   const [sub] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(and(eq(subcontractorsTable.id, flag.subcontractorId), eq(subcontractorsTable.companyId, companyId(req))));
+    .where(
+      and(
+        eq(subcontractorsTable.id, flag.subcontractorId),
+        eq(subcontractorsTable.companyId, companyId(req)),
+      ),
+    );
 
   if (status === "fix_requested" || showToWorker === true) {
     try {
@@ -479,7 +662,10 @@ router.patch("/audit/flags/:id", async (req, res) => {
         linkedEntityId: flag.id,
       });
     } catch (err) {
-      req.log.warn({ err, auditFlagId: flag.id }, "Failed to send audit fix notification");
+      req.log.warn(
+        { err, auditFlagId: flag.id },
+        "Failed to send audit fix notification",
+      );
     }
   }
 
@@ -494,34 +680,57 @@ router.get("/audit/scores", async (req, res) => {
     .from(auditScoresTable)
     .where(eq(auditScoresTable.companyId, tenantId))
     .orderBy(desc(auditScoresTable.calculatedAt));
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, tenantId));
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(eq(subcontractorsTable.companyId, tenantId));
   const subMap = new Map(subs.map((s) => [s.id, s.name]));
 
   let filtered = scores;
-  if (req.query.subcontractorId) filtered = filtered.filter((s) => s.subcontractorId === Number(req.query.subcontractorId));
-  if (req.query.periodType) filtered = filtered.filter((s) => s.periodType === req.query.periodType);
-  if (req.query.periodStart) filtered = filtered.filter((s) => s.periodStart === req.query.periodStart);
+  if (req.query.subcontractorId)
+    filtered = filtered.filter(
+      (s) => s.subcontractorId === Number(req.query.subcontractorId),
+    );
+  if (req.query.periodType)
+    filtered = filtered.filter((s) => s.periodType === req.query.periodType);
+  if (req.query.periodStart)
+    filtered = filtered.filter((s) => s.periodStart === req.query.periodStart);
 
-  return res.json(filtered.map((s) => ({
-    ...s,
-    subcontractorName: subMap.get(s.subcontractorId) ?? "",
-    overallScore: Number(s.overallScore),
-    photoComplianceScore: s.photoComplianceScore ? Number(s.photoComplianceScore) : null,
-    punctualityScore: s.punctualityScore ? Number(s.punctualityScore) : null,
-    productivityScore: s.productivityScore ? Number(s.productivityScore) : null,
-    documentationScore: s.documentationScore ? Number(s.documentationScore) : null,
-    stockAccuracyScore: s.stockAccuracyScore ? Number(s.stockAccuracyScore) : null,
-    safetyScore: s.safetyScore ? Number(s.safetyScore) : null,
-    callbackRate: s.callbackRate ? Number(s.callbackRate) : null,
-    adminOverrideScore: s.adminOverrideScore ? Number(s.adminOverrideScore) : null,
-  })));
+  return res.json(
+    filtered.map((s) => ({
+      ...s,
+      subcontractorName: subMap.get(s.subcontractorId) ?? "",
+      overallScore: Number(s.overallScore),
+      photoComplianceScore: s.photoComplianceScore
+        ? Number(s.photoComplianceScore)
+        : null,
+      punctualityScore: s.punctualityScore ? Number(s.punctualityScore) : null,
+      productivityScore: s.productivityScore
+        ? Number(s.productivityScore)
+        : null,
+      documentationScore: s.documentationScore
+        ? Number(s.documentationScore)
+        : null,
+      stockAccuracyScore: s.stockAccuracyScore
+        ? Number(s.stockAccuracyScore)
+        : null,
+      safetyScore: s.safetyScore ? Number(s.safetyScore) : null,
+      callbackRate: s.callbackRate ? Number(s.callbackRate) : null,
+      adminOverrideScore: s.adminOverrideScore
+        ? Number(s.adminOverrideScore)
+        : null,
+    })),
+  );
 });
 
 // POST /audit/scores/calculate
 router.post("/audit/scores/calculate", async (req, res) => {
   const { periodType, periodStart, subcontractorId } = req.body;
   const tenantId = companyId(req);
-  if (!periodType || !periodStart) return res.status(400).json({ error: "periodType and periodStart required" });
+  if (!periodType || !periodStart)
+    return res
+      .status(400)
+      .json({ error: "periodType and periodStart required" });
 
   let periodEnd = periodStart;
   if (periodType === "weekly") {
@@ -536,8 +745,24 @@ router.post("/audit/scores/calculate", async (req, res) => {
   }
 
   const subs = subcontractorId
-    ? await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.id, Number(subcontractorId)), eq(subcontractorsTable.companyId, tenantId)))
-    : await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.companyId, tenantId), eq(subcontractorsTable.active, true)));
+    ? await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.id, Number(subcontractorId)),
+            eq(subcontractorsTable.companyId, tenantId),
+          ),
+        )
+    : await db
+        .select()
+        .from(subcontractorsTable)
+        .where(
+          and(
+            eq(subcontractorsTable.companyId, tenantId),
+            eq(subcontractorsTable.active, true),
+          ),
+        );
 
   const results = await Promise.all(
     subs.map(async (sub) => {
@@ -553,18 +778,38 @@ router.post("/audit/scores/calculate", async (req, res) => {
           ),
         );
 
-      const criticalCount = flags.filter((f) => f.severity === "critical").length;
+      const criticalCount = flags.filter(
+        (f) => f.severity === "critical",
+      ).length;
 
-      const photoFlags = flags.filter((f) => f.flagType === "missing_photos" || f.flagType === "low_photo_count" || f.flagType === "photo_quality_concern");
+      const photoFlags = flags.filter(
+        (f) =>
+          f.flagType === "missing_photos" ||
+          f.flagType === "low_photo_count" ||
+          f.flagType === "photo_quality_concern",
+      );
       const photoScore = Math.max(0, 100 - photoFlags.length * 20);
 
-      const punctualityFlags = flags.filter((f) => f.flagType === "late_arrival");
+      const punctualityFlags = flags.filter(
+        (f) => f.flagType === "late_arrival",
+      );
       const punctualityScore = Math.max(0, 100 - punctualityFlags.length * 15);
 
-      const productivityFlags = flags.filter((f) => f.flagType === "low_metres_vs_time");
-      const productivityScore = Math.max(0, 100 - productivityFlags.length * 15);
+      const productivityFlags = flags.filter(
+        (f) => f.flagType === "low_metres_vs_time",
+      );
+      const productivityScore = Math.max(
+        0,
+        100 - productivityFlags.length * 15,
+      );
 
-      const docFlags = flags.filter((f) => ["no_report_submitted", "missing_stock_usage", "incomplete_documentation"].includes(f.flagType));
+      const docFlags = flags.filter((f) =>
+        [
+          "no_report_submitted",
+          "missing_stock_usage",
+          "incomplete_documentation",
+        ].includes(f.flagType),
+      );
       const documentationScore = Math.max(0, 100 - docFlags.length * 15);
 
       const overallScore = calcScoreFromFlags(flags);
@@ -599,10 +844,23 @@ router.post("/audit/scores/calculate", async (req, res) => {
         .limit(1);
 
       const [score] = existing.length
-        ? await db.update(auditScoresTable).set(values).where(and(eq(auditScoresTable.id, existing[0].id), eq(auditScoresTable.companyId, tenantId))).returning()
+        ? await db
+            .update(auditScoresTable)
+            .set(values)
+            .where(
+              and(
+                eq(auditScoresTable.id, existing[0].id),
+                eq(auditScoresTable.companyId, tenantId),
+              ),
+            )
+            .returning()
         : await db.insert(auditScoresTable).values(values).returning();
 
-      return { ...score, subcontractorName: sub.name, overallScore: Number(score.overallScore) };
+      return {
+        ...score,
+        subcontractorName: sub.name,
+        overallScore: Number(score.overallScore),
+      };
     }),
   );
 
