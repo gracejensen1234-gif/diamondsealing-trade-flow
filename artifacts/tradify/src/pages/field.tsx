@@ -1383,6 +1383,33 @@ export default function FieldView() {
         </TabsList>
       </Tabs>
 
+      {!isWorker && activeSection !== "home" ? (
+        <Card>
+          <CardContent className="space-y-2 p-4">
+            <Label>Employee/subcontractor</Label>
+            {loadingSubs ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select
+                value={subId?.toString() || ""}
+                onValueChange={(v) => setSubId(parseInt(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select subcontractor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {subs?.map((s) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Location consent prompt */}
       {locationPrompt && (
         <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-700 shadow-md">
@@ -1814,7 +1841,7 @@ export default function FieldView() {
         </Card>
       ) : null}
 
-      {activeSection === "earnings" && isWorker && subId ? (
+      {activeSection === "earnings" && subId ? (
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -1900,8 +1927,9 @@ export default function FieldView() {
                 {earningsSummary.ratePerMetre <= 0 &&
                 earningsSummary.hourlyRate <= 0 ? (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                    Your pay rate has not been set yet. Admin must set a metre
-                    rate or hourly rate before invoices can be sent.
+                    {isWorker
+                      ? "Your pay rate has not been set yet. Admin must set a metre rate or hourly rate before invoices can be sent."
+                      : "Set a metre rate or hourly rate in the employee/subcontractor profile before invoices can be sent."}
                   </div>
                 ) : null}
 
@@ -1923,7 +1951,7 @@ export default function FieldView() {
                   <Button asChild variant="outline">
                     <Link href="/weekly-invoices">
                       <Receipt className="mr-2 h-4 w-4" />
-                      My invoices
+                      {isWorker ? "My invoices" : "Weekly invoices"}
                     </Link>
                   </Button>
                   {currentInvoiceId ? (
@@ -1960,6 +1988,14 @@ export default function FieldView() {
                 is linked.
               </div>
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeSection === "earnings" && !subId ? (
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            Select an employee/subcontractor to review pay and invoices.
           </CardContent>
         </Card>
       ) : null}
