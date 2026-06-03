@@ -63,11 +63,11 @@ type FieldSection = "home" | "schedule" | "time_off" | "inventory" | "earnings" 
 
 const fieldSections: Array<{ id: FieldSection; label: string; icon: typeof HomeIcon; workerOnly?: boolean }> = [
   { id: "home", label: "Home", icon: HomeIcon },
-  { id: "schedule", label: "Schedule", icon: CalendarDays },
+  { id: "schedule", label: "Jobs", icon: CalendarDays },
   { id: "time_off", label: "Time Off", icon: Send, workerOnly: true },
-  { id: "inventory", label: "Inventory", icon: Package },
-  { id: "earnings", label: "Earnings", icon: Receipt, workerOnly: true },
-  { id: "documents", label: "Documents", icon: FileCheck2, workerOnly: true },
+  { id: "inventory", label: "Stock", icon: Package },
+  { id: "earnings", label: "Pay", icon: Receipt, workerOnly: true },
+  { id: "documents", label: "Docs", icon: FileCheck2, workerOnly: true },
 ];
 
 // ─── Location verification ────────────────────────────────────────────────────
@@ -982,7 +982,7 @@ export default function FieldView() {
               <TabsTrigger
                 key={section.id}
                 value={section.id}
-                className="h-14 flex-col gap-1 whitespace-normal px-1 text-[11px] leading-tight"
+                className="h-16 flex-col gap-1 whitespace-normal px-1 text-xs font-semibold leading-tight"
               >
                 <Icon className="h-4 w-4" />
                 <span>{section.label}</span>
@@ -1149,7 +1149,7 @@ export default function FieldView() {
                         </div>
                       ) : null}
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Clocking on here also checks you in to this first job after the location check.
+                        Location check also checks you in to this first job.
                       </p>
                     </div>
                   ) : null}
@@ -1159,7 +1159,7 @@ export default function FieldView() {
                     onClick={handleClockOn}
                     disabled={clockOn.isPending || markArrived.isPending || loadingTodayDispatch || !!locationPrompt}
                   >
-                    <Play className="mr-2 h-6 w-6" /> {firstTodayJob ? "CLOCK ON AT FIRST JOB" : "CLOCK ON FOR DAY"}
+                    <Play className="mr-2 h-6 w-6" /> {firstTodayJob ? "START DAY" : "CLOCK ON"}
                   </Button>
                 </div>
               ) : (
@@ -1197,7 +1197,7 @@ export default function FieldView() {
                   </div>
                   {!canClockOffForDay && unfinishedTodayJobs.length > 0 ? (
                     <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                      Final clock-off appears after the last job report has been submitted.
+                      Clock off appears after the last job is finished.
                     </div>
                   ) : null}
                 </div>
@@ -1245,7 +1245,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ListChecks className="h-4 w-4 text-primary" />
-              Today's Job Flow
+              Work Today
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4 pt-2">
@@ -1279,7 +1279,7 @@ export default function FieldView() {
 
                 {!isClockedOn ? (
                   <div className="rounded-md border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                    Start your day at the first job. The clock-on location check will also check you in there.
+                    Start at the first job. Location check will check you in there.
                   </div>
                 ) : activeTodayJob ? (
                   <div className="space-y-3 rounded-md border bg-background px-3 py-3">
@@ -1313,7 +1313,7 @@ export default function FieldView() {
                       ) : null}
                       <Button asChild className={activeTodayJob.status === "arrived" ? "" : "sm:col-span-2"}>
                         <Link href={`/field/jobs/${activeTodayJob.id}`}>
-                          {isCurrentJobLast ? "Submit final report" : "Submit report & leave job"}
+                          {isCurrentJobLast ? "Finish Last Job" : "Finish Job"}
                         </Link>
                       </Button>
                     </div>
@@ -1360,7 +1360,7 @@ export default function FieldView() {
                         onClick={() => handleMarkArrived(nextPendingTodayJob.id, nextPendingTodayJob.jobAddress ?? undefined)}
                         disabled={markArrived.isPending || !!locationPrompt}
                       >
-                        Check in to job
+                        Check In
                       </Button>
                     </div>
                   </div>
@@ -1380,7 +1380,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Receipt className="h-4 w-4 text-primary" />
-              Hours & Earnings
+              Pay
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4 pt-2">
@@ -1491,7 +1491,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="h-4 w-4 text-primary" />
-              Day Off Requests
+              Time Off
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-2">
@@ -1567,7 +1567,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileCheck2 className="h-4 w-4 text-primary" />
-              My Licences & Documents
+              Docs
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-2">
@@ -1660,7 +1660,7 @@ export default function FieldView() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">Job Schedule</h2>
+                <h2 className="text-lg font-semibold tracking-tight">Jobs</h2>
                 <p className="text-sm text-muted-foreground">{selectedDispatchDateLabel}</p>
               </div>
               <Button
@@ -1853,7 +1853,7 @@ export default function FieldView() {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Package className="h-4 w-4 text-primary" />
-              Inventory Calendar
+              Stock
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4 pt-2">
