@@ -451,15 +451,25 @@ router.post(
       typeof req.body?.sourceText === "string"
         ? req.body.sourceText.trim()
         : "";
-    const imageData =
-      typeof req.body?.imageData === "string" ? req.body.imageData.trim() : "";
-    if (!sourceText && !imageData) {
+    const imageDataList = [
+      ...(Array.isArray(req.body?.imageDataList) ? req.body.imageDataList : []),
+      ...(Array.isArray(req.body?.images) ? req.body.images : []),
+      req.body?.imageData,
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
+    if (!sourceText && imageDataList.length === 0) {
       return res
         .status(400)
-        .json({ error: "Paste job details or upload a screenshot" });
+        .json({ error: "Paste job details or upload at least one screenshot" });
     }
-    if (imageData && !imageData.startsWith("data:image/")) {
-      return res.status(400).json({ error: "Screenshot must be an image" });
+    if (
+      imageDataList.some((imageData) => !imageData.startsWith("data:image/"))
+    ) {
+      return res.status(400).json({ error: "Screenshots must be images" });
     }
 
     const openai = getOpenAIClient();
@@ -504,6 +514,7 @@ Return JSON only with key "jobs" containing an array of job/work-block drafts.
 
 Rules:
 - Create one draft per distinct job, day, or work block if the message separates units/apartments/areas.
+- If multiple screenshots/images are provided, read them together as one job intake packet.
 - Use ISO dates YYYY-MM-DD. Infer obvious dates from the message, otherwise leave date fields null and mark needsReview true.
 - Keep wording short and practical for dispatch.
 - Match existing customerId or builderProfileId when clearly identifiable from the lists.
@@ -531,7 +542,7 @@ title, clientName, builderName, customerId, builderProfileId, address, suburb, d
           .join("\n\n"),
       },
     ];
-    if (imageData) {
+    for (const imageData of imageDataList) {
       userContent.push({
         type: "image_url",
         image_url: { url: imageData, detail: "high" },

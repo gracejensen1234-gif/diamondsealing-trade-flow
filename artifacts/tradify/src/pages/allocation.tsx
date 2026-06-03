@@ -67,6 +67,14 @@ const emptyAllocationForm = {
   notes: "",
 };
 
+const MAX_INTAKE_IMAGES = 8;
+
+type IntakeImage = {
+  id: string;
+  name: string;
+  dataUrl: string;
+};
+
 type IntakeDraft = {
   title: string;
   clientName?: string | null;
@@ -261,8 +269,7 @@ export default function Allocation() {
   const [result, setResult] = useState<any>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [intakeSourceText, setIntakeSourceText] = useState("");
-  const [intakeImageData, setIntakeImageData] = useState("");
-  const [intakeFileName, setIntakeFileName] = useState("");
+  const [intakeImages, setIntakeImages] = useState<IntakeImage[]>([]);
   const [intakeFileLoading, setIntakeFileLoading] = useState(false);
   const [intakeDrafts, setIntakeDrafts] = useState<IntakeDraft[]>([]);
   const [createdIntakeJobs, setCreatedIntakeJobs] = useState<
@@ -282,7 +289,7 @@ export default function Allocation() {
     mutationFn: () =>
       postJson("/api/allocation/job-intake/analyse", {
         sourceText: intakeSourceText,
-        imageData: intakeImageData,
+        imageDataList: intakeImages.map((image) => image.dataUrl),
       }),
     onSuccess: (data) => {
       const drafts = Array.isArray(data.drafts)
@@ -410,16 +417,39 @@ export default function Allocation() {
   });
 
   async function handleIntakeImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    const remainingSlots = Math.max(0, MAX_INTAKE_IMAGES - intakeImages.length);
+    if (remainingSlots === 0) {
+      toast({
+        title: "Image limit reached",
+        description: `You can upload up to ${MAX_INTAKE_IMAGES} screenshots/photos at once.`,
+      });
+      event.target.value = "";
+      return;
+    }
+
+    const filesToRead = files.slice(0, remainingSlots);
     setIntakeFileLoading(true);
     try {
-      const imageData = await readAllocationImage(file);
-      setIntakeImageData(imageData);
-      setIntakeFileName(file.name);
+      const images = await Promise.all(
+        filesToRead.map(async (file, index) => ({
+          id: `${Date.now()}-${index}-${file.name}`,
+          name: file.name,
+          dataUrl: await readAllocationImage(file),
+        })),
+      );
+      setIntakeImages((current) => [...current, ...images]);
+      if (files.length > filesToRead.length) {
+        toast({
+          title: "Some images were not added",
+          description: `Only ${MAX_INTAKE_IMAGES} screenshots/photos can be read at once.`,
+        });
+      }
     } catch (error) {
       toast({
-        title: "Could not load screenshot",
+        title: "Could not load screenshot/photo",
         description:
           error instanceof Error ? error.message : "Choose another image.",
         variant: "destructive",
@@ -456,7 +486,7 @@ export default function Allocation() {
     recommendMutation.mutate(payload);
   }
 
-  const canAnalyse = Boolean(intakeSourceText.trim() || intakeImageData);
+  const canAnalyse = Boolean(intakeSourceText.trim() || intakeImages.length);
   const canCreateDrafts =
     intakeDrafts.length > 0 &&
     intakeDrafts.every(
@@ -495,11 +525,12 @@ export default function Allocation() {
             </div>
             <div className="space-y-3">
               <div>
-                <Label>Screenshot</Label>
+                <Label>Screenshots / photos</Label>
                 <div className="mt-1 rounded-md border border-dashed p-3">
                   <Input
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleIntakeImage}
                     disabled={
                       intakeFileLoading || analyseIntakeMutation.isPending
@@ -508,18 +539,40 @@ export default function Allocation() {
                   <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <Camera className="h-3.5 w-3.5" />
                     {intakeFileLoading
-                      ? "Loading image..."
-                      : intakeFileName || "Optional email/message screenshot"}
+                      ? "Loading images..."
+                      : `${intakeImages.length}/${MAX_INTAKE_IMAGES} screenshots/photos added`}
                   </div>
                 </div>
               </div>
-              {intakeImageData ? (
-                <div className="overflow-hidden rounded-md border">
-                  <img
-                    src={intakeImageData}
-                    alt="Job intake screenshot preview"
-                    className="max-h-48 w-full object-cover"
-                  />
+              {intakeImages.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {intakeImages.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className="group relative overflow-hidden rounded-md border"
+                    >
+                      <img
+                        src={image.dataUrl}
+                        alt={`Job intake screenshot ${index + 1}`}
+                        className="aspect-square w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                        onClick={() =>
+                          setIntakeImages((current) =>
+                            current.filter((item) => item.id !== image.id),
+                          )
+                        }
+                        aria-label={`Remove ${image.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      <p className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-1.5 py-1 text-[10px] text-white">
+                        {image.name}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -541,8 +594,7 @@ export default function Allocation() {
               variant="outline"
               onClick={() => {
                 setIntakeSourceText("");
-                setIntakeImageData("");
-                setIntakeFileName("");
+                setIntakeImages([]);
                 setIntakeDrafts([]);
                 setCreatedIntakeJobs([]);
               }}
