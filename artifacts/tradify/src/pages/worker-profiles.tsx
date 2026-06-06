@@ -54,6 +54,20 @@ const SKILL_FIELDS: { key: string; label: string; group: string }[] = [
   { key: "canCarParks", label: "Car Parks", group: "Job Types" },
 ];
 
+const EXPERIENCE_LEVELS = [
+  { value: "junior", label: "Junior" },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "senior", label: "Senior" },
+  { value: "specialist", label: "Specialist" },
+];
+
+function experienceLabel(value?: string | null) {
+  return (
+    EXPERIENCE_LEVELS.find((level) => level.value === value)?.label ??
+    "Intermediate"
+  );
+}
+
 export default function WorkerProfiles() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -101,15 +115,36 @@ export default function WorkerProfiles() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: ({ subId, data }: { subId: number; data: any }) =>
-      fetch(`/api/worker-skills/${subId}`, {
+    mutationFn: async ({ subId, data }: { subId: number; data: any }) => {
+      const response = await fetch(`/api/worker-skills/${subId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
-    onSuccess: () => {
+      });
+      if (!response.ok) {
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not save employee/subcontractor profile",
+        );
+      }
+      return response.json();
+    },
+    onSuccess: (saved) => {
+      if (saved?.subcontractorId) {
+        setEdits((prev) => ({
+          ...prev,
+          [saved.subcontractorId]: saved,
+        }));
+      }
       qc.invalidateQueries({ queryKey: ["worker-skills"] });
       toast({ title: "Saved" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not save profile",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -658,7 +693,7 @@ export default function WorkerProfiles() {
                         <div className="flex items-center gap-2 mt-0.5">
                           {isAdmin ? (
                             <Badge variant="outline" className="text-xs">
-                              {sk?.experienceLevel ?? "intermediate"}
+                              Grade: {experienceLabel(sk?.experienceLevel)}
                             </Badge>
                           ) : null}
                           {isAdmin && sk?.canSilicone && (
@@ -909,46 +944,98 @@ export default function WorkerProfiles() {
                       </div>
                     ) : null}
 
-                    {/* Experience */}
+                    {/* Admin-only grading */}
                     {isAdmin ? (
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <Label className="text-xs">Experience Level</Label>
-                          <Select
-                            value={edit.experienceLevel ?? "intermediate"}
-                            onValueChange={(v) =>
-                              updateEdit(sub.id, "experienceLevel", v)
-                            }
-                          >
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="junior">Junior</SelectItem>
-                              <SelectItem value="intermediate">
-                                Intermediate
-                              </SelectItem>
-                              <SelectItem value="senior">Senior</SelectItem>
-                              <SelectItem value="specialist">
-                                Specialist
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
+                      <div className="rounded-lg border bg-muted/20 p-3">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                              Admin-only grading
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              This controls the internal grade used for matching
+                              jobs. Employees/subcontractors cannot see this.
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="shrink-0 text-xs">
+                            {experienceLabel(
+                              edit.experienceLevel ?? sk?.experienceLevel,
+                            )}
+                          </Badge>
                         </div>
-                        <div className="flex-1">
-                          <Label className="text-xs">Years Experience</Label>
-                          <input
-                            type="number"
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-                            value={edit.yearsExperience ?? 0}
-                            onChange={(e) =>
-                              updateEdit(
-                                sub.id,
-                                "yearsExperience",
-                                Number(e.target.value),
-                              )
-                            }
-                          />
+                        <div className="grid gap-3 sm:grid-cols-[1fr_10rem_10rem_auto]">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Worker grade</Label>
+                            <Select
+                              value={edit.experienceLevel ?? "intermediate"}
+                              onValueChange={(v) =>
+                                updateEdit(sub.id, "experienceLevel", v)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {EXPERIENCE_LEVELS.map((level) => (
+                                  <SelectItem
+                                    key={level.value}
+                                    value={level.value}
+                                  >
+                                    {level.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Years experience</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={edit.yearsExperience ?? 0}
+                              onChange={(event) =>
+                                updateEdit(
+                                  sub.id,
+                                  "yearsExperience",
+                                  Number(event.target.value),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Quality score</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={edit.qualityScore ?? sk?.qualityScore ?? 100}
+                              onChange={(event) =>
+                                updateEdit(
+                                  sub.id,
+                                  "qualityScore",
+                                  Number(event.target.value),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                saveMutation.mutate({
+                                  subId: sub.id,
+                                  data: edit,
+                                })
+                              }
+                              disabled={saveMutation.isPending}
+                            >
+                              {saveMutation.isPending
+                                ? "Saving..."
+                                : "Save grading"}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -1174,8 +1261,9 @@ export default function WorkerProfiles() {
                         onClick={() =>
                           saveMutation.mutate({ subId: sub.id, data: edit })
                         }
+                        disabled={saveMutation.isPending}
                       >
-                        Save Profile
+                        {saveMutation.isPending ? "Saving..." : "Save Profile"}
                       </Button>
                     ) : null}
                   </CardContent>
