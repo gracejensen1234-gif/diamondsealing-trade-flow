@@ -1,4 +1,4 @@
-import { useGetJob, getGetJobQueryKey, getListJobsQueryKey, useUpdateJob, useListDispatch, useListAppointments, useListQuotes, useListInvoices } from "@workspace/api-client-react";
+import { useGetJob, getGetJobQueryKey, getListJobsQueryKey, useUpdateJob, useListDispatch, useListAppointments, useListInvoices } from "@workspace/api-client-react";
 import { useRoute } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

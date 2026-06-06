@@ -80,7 +80,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         { name: "Dashboard", href: "/", icon: Home },
         { name: "Jobs", href: "/jobs", icon: Hammer },
         { name: "Clients", href: "/customers", icon: Users },
-        { name: "Quotes", href: "/quotes", icon: FileText },
         { name: "Invoices", href: "/invoices", icon: Receipt },
         { name: "Schedule", href: "/schedule", icon: Calendar },
       ],

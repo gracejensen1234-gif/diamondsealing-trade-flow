@@ -12,8 +12,6 @@ import Jobs from "@/pages/jobs";
 import JobDetail from "@/pages/job-detail";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
-import Quotes from "@/pages/quotes";
-import QuoteDetail from "@/pages/quote-detail";
 import Invoices from "@/pages/invoices";
 import InvoiceDetail from "@/pages/invoice-detail";
 import Schedule from "@/pages/schedule";
@@ -57,8 +55,6 @@ function AdminRoutes() {
         <Route path="/jobs/:id" component={JobDetail} />
         <Route path="/customers" component={Customers} />
         <Route path="/customers/:id" component={CustomerDetail} />
-        <Route path="/quotes" component={Quotes} />
-        <Route path="/quotes/:id" component={QuoteDetail} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoices/:id" component={InvoiceDetail} />
         <Route path="/schedule" component={Schedule} />

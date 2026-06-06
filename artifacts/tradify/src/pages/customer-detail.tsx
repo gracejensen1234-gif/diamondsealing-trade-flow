@@ -4,7 +4,6 @@ import {
   useGetCustomer,
   useListInvoices,
   useListJobs,
-  useListQuotes,
   useUpdateCustomer,
 } from "@workspace/api-client-react";
 import { useRoute, Link } from "wouter";
@@ -18,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/speech-textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Mail, Phone, MapPin, Building, Briefcase, FileText, Receipt } from "lucide-react";
+import { Mail, Phone, MapPin, Building, Briefcase, Receipt } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 const emptyClientForm = {
@@ -48,7 +47,6 @@ export default function CustomerDetail() {
   const [form, setForm] = useState(emptyClientForm);
 
   const { data: jobs, isLoading: isLoadingJobs } = useListJobs({ customerId: id });
-  const { data: quotes, isLoading: isLoadingQuotes } = useListQuotes({ customerId: id });
   const { data: invoices, isLoading: isLoadingInvoices } = useListInvoices({ customerId: id });
 
   useEffect(() => {
@@ -292,35 +290,6 @@ export default function CustomerDetail() {
                     </Link>
                   ))}
                   {!jobs?.length && <p className="text-sm text-muted-foreground">No jobs found for this client.</p>}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="h-5 w-5" /> Quotes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingQuotes ? <Skeleton className="h-20" /> : (
-                <div className="space-y-3 mt-4">
-                  {quotes?.map(quote => (
-                    <Link key={quote.id} href={`/quotes/${quote.id}`}>
-                      <div className="flex justify-between items-center p-3 border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                        <div>
-                          <p className="font-medium">{quote.quoteNumber}</p>
-                          <p className="text-sm text-muted-foreground">{quote.title || 'Untitled'}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold">${quote.total.toFixed(2)}</span>
-                          <Badge variant="outline">{quote.status}</Badge>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                  {!quotes?.length && <p className="text-sm text-muted-foreground">No quotes found for this client.</p>}
                 </div>
               )}
             </CardContent>

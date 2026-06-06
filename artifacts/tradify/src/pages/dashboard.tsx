@@ -1,7 +1,7 @@
 import { useGetDashboardSummary, useGetDashboardActivity } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Briefcase, FileText, Receipt, DollarSign } from "lucide-react";
+import { Briefcase, Users, Receipt, DollarSign } from "lucide-react";
 
 export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
@@ -32,14 +32,14 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Quotes</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loadingSummary ? (
               <Skeleton className="h-7 w-20" />
             ) : (
-              <div className="text-2xl font-bold">{summary?.pendingQuotes || 0}</div>
+              <div className="text-2xl font-bold">{summary?.totalCustomers || 0}</div>
             )}
           </CardContent>
         </Card>

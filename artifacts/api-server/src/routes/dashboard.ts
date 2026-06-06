@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { jobsTable, quotesTable, invoicesTable, customersTable, activityTable } from "@workspace/db";
+import { jobsTable, invoicesTable, customersTable, activityTable } from "@workspace/db";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { companyId } from "../lib/auth.js";
 
@@ -13,15 +13,13 @@ router.get("/dashboard/summary", async (req, res) => {
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
   const tenantId = companyId(req);
 
-  const [jobs, customers, quotes, invoices] = await Promise.all([
+  const [jobs, customers, invoices] = await Promise.all([
     db.select().from(jobsTable).where(eq(jobsTable.companyId, tenantId)),
     db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, tenantId)),
-    db.select().from(quotesTable).where(eq(quotesTable.companyId, tenantId)),
     db.select().from(invoicesTable).where(eq(invoicesTable.companyId, tenantId)),
   ]);
 
   const activeJobs = jobs.filter((j) => j.status === "in_progress").length;
-  const pendingQuotes = quotes.filter((q) => q.status === "sent").length;
   const unpaidInvoices = invoices.filter((i) => i.status === "sent" || i.status === "overdue");
   const unpaidInvoicesTotal = unpaidInvoices.reduce((sum, i) => sum + Number(i.total), 0);
   const totalCustomers = Number(customers[0]?.count ?? 0);
@@ -50,7 +48,7 @@ router.get("/dashboard/summary", async (req, res) => {
 
   return res.json({
     activeJobs,
-    pendingQuotes,
+    pendingQuotes: 0,
     unpaidInvoicesCount: unpaidInvoices.length,
     unpaidInvoicesTotal,
     revenueThisMonth: paidThisMonth,
