@@ -839,6 +839,10 @@ export interface WeeklyInvoice {
   /** @nullable */
   submittedAt?: string | null;
   /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  paymentNotes?: string | null;
+  /** @nullable */
   workerAcknowledgedAt?: string | null;
   /** @nullable */
   workerAcknowledgementText?: string | null;
@@ -874,6 +878,7 @@ export const WeeklyInvoiceUpdateStatus = {
 
 export interface WeeklyInvoiceUpdate {
   notes?: string;
+  paymentNotes?: string;
   gstRegistered?: boolean;
   status?: WeeklyInvoiceUpdateStatus;
   reviewStatus?: WeeklyInvoiceReviewStatus;

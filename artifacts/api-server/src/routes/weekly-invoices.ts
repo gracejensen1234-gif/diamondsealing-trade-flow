@@ -1071,10 +1071,34 @@ router.patch("/weekly-invoices/:id", async (req, res) => {
       return res.status(403).json({ error: "Only admin can update notes" });
     updates.notes = body.data.notes;
   }
+  if (body.data.paymentNotes !== undefined) {
+    if (!admin)
+      return res
+        .status(403)
+        .json({ error: "Only admin can update payment notes" });
+    updates.paymentNotes = body.data.paymentNotes.trim() || null;
+  }
   if (body.data.status !== undefined) {
     if (!admin)
       return res.status(403).json({ error: "Only admin can update status" });
     updates.status = body.data.status;
+    if (body.data.status === "paid") {
+      if (existing.reviewStatus === "changes_requested") {
+        return res.status(400).json({
+          error:
+            "This invoice has suggested edits waiting for worker acceptance before it can be marked as paid.",
+        });
+      }
+      if (lineItems(existing).length === 0) {
+        return res
+          .status(400)
+          .json({ error: "Invoices with no line items cannot be marked paid" });
+      }
+      updates.paidAt = existing.paidAt ?? new Date();
+      updates.submittedAt = existing.submittedAt ?? new Date();
+    } else if (existing.status === "paid") {
+      updates.paidAt = null;
+    }
   }
   if (body.data.gstRegistered !== undefined) {
     if (!admin)

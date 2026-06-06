@@ -32,6 +32,8 @@ export const weeklyInvoicesTable = pgTable("weekly_invoices", {
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   xeroInvoiceId: text("xero_invoice_id"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paymentNotes: text("payment_notes"),
   workerAcknowledgedAt: timestamp("worker_acknowledged_at", {
     withTimezone: true,
   }),

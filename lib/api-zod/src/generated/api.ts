@@ -1689,6 +1689,8 @@ export const ListWeeklyInvoicesResponseItem = zod.object({
   total: zod.number(),
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
+  paidAt: zod.coerce.date().nullish(),
+  paymentNotes: zod.string().nullish(),
   workerAcknowledgedAt: zod.coerce.date().nullish(),
   workerAcknowledgementText: zod.string().nullish(),
   notes: zod.string().nullish(),
@@ -1751,6 +1753,8 @@ export const GetWeeklyInvoiceResponse = zod.object({
   total: zod.number(),
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
+  paidAt: zod.coerce.date().nullish(),
+  paymentNotes: zod.string().nullish(),
   workerAcknowledgedAt: zod.coerce.date().nullish(),
   workerAcknowledgementText: zod.string().nullish(),
   notes: zod.string().nullish(),
@@ -1769,6 +1773,7 @@ export const UpdateWeeklyInvoiceParams = zod.object({
 
 export const UpdateWeeklyInvoiceBody = zod.object({
   notes: zod.string().optional(),
+  paymentNotes: zod.string().optional(),
   gstRegistered: zod.boolean().optional(),
   status: zod.enum(["draft", "submitted", "paid"]).optional(),
   reviewStatus: zod
@@ -1814,6 +1819,8 @@ export const UpdateWeeklyInvoiceResponse = zod.object({
   total: zod.number(),
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
+  paidAt: zod.coerce.date().nullish(),
+  paymentNotes: zod.string().nullish(),
   workerAcknowledgedAt: zod.coerce.date().nullish(),
   workerAcknowledgementText: zod.string().nullish(),
   notes: zod.string().nullish(),
@@ -1868,6 +1875,8 @@ export const SubmitWeeklyInvoiceResponse = zod.object({
   total: zod.number(),
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
+  paidAt: zod.coerce.date().nullish(),
+  paymentNotes: zod.string().nullish(),
   workerAcknowledgedAt: zod.coerce.date().nullish(),
   workerAcknowledgementText: zod.string().nullish(),
   notes: zod.string().nullish(),

@@ -38,6 +38,7 @@ import {
   Save,
   MessageSquare,
   RotateCcw,
+  Banknote,
 } from "lucide-react";
 
 function formatMoney(value?: number | null) {
@@ -101,13 +102,19 @@ export default function WeeklyInvoiceDetail() {
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [responseNotes, setResponseNotes] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
   const notesInitRef = useRef<number | null>(null);
   const reviewInitRef = useRef<string | null>(null);
+  const paymentInitRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (invoice && notesInitRef.current !== invoice.id) {
       setNotes(invoice.notes || "");
       notesInitRef.current = invoice.id;
+    }
+    if (invoice && paymentInitRef.current !== invoice.id) {
+      setPaymentNotes(invoice.paymentNotes || "");
+      paymentInitRef.current = invoice.id;
     }
     const reviewKey = invoice
       ? `${invoice.id}-${invoice.reviewStatus ?? "none"}-${invoice.reviewRequestedAt ?? ""}`
@@ -182,7 +189,9 @@ export default function WeeklyInvoiceDetail() {
     ) ?? 0;
   const submittedLabel = invoice.xeroInvoiceId
     ? "Submitted to Xero"
-    : "Invoice submitted";
+    : invoice.status === "paid"
+      ? "Payment recorded"
+      : "Invoice submitted";
   const invoiceIncludesGst = Boolean(invoice.gstRegistered) || invoice.tax > 0;
   const reviewStatus = invoice.reviewStatus ?? "none";
   const hasPendingReview = reviewStatus === "changes_requested";
@@ -223,6 +232,16 @@ export default function WeeklyInvoiceDetail() {
     updateInvoice.mutate({
       id: invoice.id,
       data: { reviewStatus: "none" },
+    });
+  };
+
+  const markInvoicePaid = () => {
+    updateInvoice.mutate({
+      id: invoice.id,
+      data: {
+        status: "paid",
+        paymentNotes,
+      },
     });
   };
 
@@ -610,9 +629,61 @@ export default function WeeklyInvoiceDetail() {
                   ) : null}
                 </div>
               ) : null}
+              {invoice.status === "paid" ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Banknote className="h-4 w-4" />
+                    Payment marked as paid
+                  </div>
+                  {invoice.paidAt ? (
+                    <p className="mt-1">
+                      {format(new Date(invoice.paidAt), "MMM d, yyyy h:mm a")}
+                    </p>
+                  ) : null}
+                  {invoice.paymentNotes ? (
+                    <p className="mt-1 text-green-700/80 dark:text-green-300/80">
+                      {invoice.paymentNotes}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </CardContent>
             {!isWorker || invoice.status !== "draft" ? (
               <CardFooter className="flex-col gap-3">
+                {!isWorker && invoice.status !== "paid" ? (
+                  <div className="w-full space-y-3 rounded-md border bg-muted/20 p-3">
+                    <div>
+                      <div className="text-sm font-medium">
+                        Manual payment
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Use this when Xero is not connected and the invoice has
+                        been paid outside SealFlow.
+                      </div>
+                    </div>
+                    <Textarea
+                      value={paymentNotes}
+                      onChange={(event) =>
+                        setPaymentNotes(event.target.value)
+                      }
+                      placeholder="Optional note, e.g. Paid by bank transfer..."
+                      rows={3}
+                    />
+                    <Button
+                      variant="secondary"
+                      className="w-full h-11"
+                      onClick={markInvoicePaid}
+                      disabled={
+                        updateInvoice.isPending ||
+                        !invoice.lineItems?.length ||
+                        hasPendingReview
+                      }
+                    >
+                      <Banknote className="h-4 w-4 mr-2" />
+                      Mark as paid
+                    </Button>
+                  </div>
+                ) : null}
                 {!isWorker && (
                   <Button
                     variant="outline"
