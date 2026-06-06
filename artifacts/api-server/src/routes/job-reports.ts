@@ -11,6 +11,7 @@ import {
   inventoryTransactionsTable,
   subInventoryTable,
   locationVerificationsTable,
+  workSessionsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import {
@@ -470,6 +471,30 @@ router.post("/job-reports", async (req, res) => {
 
   if (!requireSubcontractorAccess(req, res, parsed.data.subcontractorId))
     return;
+
+  if (workerSubcontractorId(req)) {
+    const today = new Date().toISOString().split("T")[0];
+    const [session] = await db
+      .select()
+      .from(workSessionsTable)
+      .where(
+        and(
+          eq(workSessionsTable.companyId, companyId(req)),
+          eq(workSessionsTable.subcontractorId, parsed.data.subcontractorId),
+          eq(workSessionsTable.date, today),
+        ),
+      );
+    if (!session || session.status === "clocked_off") {
+      return res
+        .status(400)
+        .json({ error: "Clock in before completing this job" });
+    }
+    if (session.status === "on_break") {
+      return res
+        .status(400)
+        .json({ error: "End break before completing this job" });
+    }
+  }
 
   if (!parsed.data.photos || parsed.data.photos.length === 0) {
     return res.status(400).json({ error: "At least one photo is required" });

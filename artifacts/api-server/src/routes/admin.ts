@@ -111,7 +111,7 @@ router.get("/admin/timesheets", async (req, res) => {
     let totalWorkMinutes: number | null = null;
     if (session.clockedOnAt && session.clockedOffAt) {
       const totalMs = new Date(session.clockedOffAt).getTime() - new Date(session.clockedOnAt).getTime();
-      totalWorkMinutes = Math.max(0, Math.round(totalMs / 60000) - session.totalBreakMinutes);
+      totalWorkMinutes = Math.max(0, Math.round(totalMs / 60000) - Math.min(60, Math.max(0, session.totalBreakMinutes)));
     }
 
     return {
@@ -123,7 +123,7 @@ router.get("/admin/timesheets", async (req, res) => {
       clockedOnAt: session.clockedOnAt,
       clockedOffAt: session.clockedOffAt,
       totalWorkMinutes,
-      totalBreakMinutes: session.totalBreakMinutes,
+      totalBreakMinutes: Math.min(60, Math.max(0, session.totalBreakMinutes)),
       jobsCompleted: dayReports.length,
       totalMetres,
     };

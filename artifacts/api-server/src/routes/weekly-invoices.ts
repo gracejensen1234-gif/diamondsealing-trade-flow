@@ -112,14 +112,15 @@ function mondayForDate(value?: string) {
 function workSessionMinutes(session: typeof workSessionsTable.$inferSelect) {
   if (!session.clockedOnAt) return 0;
   const end = session.clockedOffAt ?? new Date();
-  let breakMinutes = session.totalBreakMinutes ?? 0;
+  let breakMinutes = Math.min(60, Math.max(0, session.totalBreakMinutes ?? 0));
   if (session.status === "on_break" && session.breakStartAt) {
-    breakMinutes += Math.max(
+    const elapsedBreakMinutes = Math.max(
       0,
       Math.round(
         (Date.now() - new Date(session.breakStartAt).getTime()) / 60000,
       ),
     );
+    breakMinutes = Math.min(60, breakMinutes + elapsedBreakMinutes);
   }
   const minutes =
     Math.round(

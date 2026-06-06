@@ -108,6 +108,7 @@ const timeWindowLabels: Record<string, string> = {
 
 const OPEN_NEXT_DIRECTIONS_KEY =
   "sealflow_open_next_directions_after_assignment";
+const MAX_BREAK_MINUTES = 60;
 
 type FieldSection =
   | "home"
@@ -316,21 +317,34 @@ function workedMinutesSoFar(
     : now.getTime();
   if (!Number.isFinite(clockedOnAt) || !Number.isFinite(clockedOffAt)) return 0;
 
-  let breakMinutes = session.totalBreakMinutes ?? 0;
-  if (session.status === "on_break" && session.breakStartAt) {
-    const breakStartedAt = new Date(session.breakStartAt).getTime();
-    if (Number.isFinite(breakStartedAt)) {
-      breakMinutes += Math.max(
-        0,
-        Math.round((now.getTime() - breakStartedAt) / 60000),
-      );
-    }
-  }
+  const breakMinutes = breakMinutesSoFar(session, now);
 
   return Math.max(
     0,
     Math.round((clockedOffAt - clockedOnAt) / 60000) - breakMinutes,
   );
+}
+
+function breakMinutesSoFar(
+  session: FieldWorkSession | null | undefined,
+  now: Date,
+) {
+  if (!session) return 0;
+  let breakMinutes = Math.min(
+    MAX_BREAK_MINUTES,
+    Math.max(0, session.totalBreakMinutes ?? 0),
+  );
+  if (session.status === "on_break" && session.breakStartAt) {
+    const breakStartedAt = new Date(session.breakStartAt).getTime();
+    if (Number.isFinite(breakStartedAt)) {
+      breakMinutes = Math.min(
+        MAX_BREAK_MINUTES,
+        breakMinutes +
+          Math.max(0, Math.round((now.getTime() - breakStartedAt) / 60000)),
+      );
+    }
+  }
+  return breakMinutes;
 }
 
 function formatWorkedTime(minutes: number) {
@@ -1143,6 +1157,16 @@ export default function FieldView() {
             queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }),
           });
       },
+      onError: (error) => {
+        toast({
+          title: "Could not start break",
+          description:
+            error instanceof Error
+              ? error.message
+              : "The daily break limit may already be used.",
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -1154,6 +1178,13 @@ export default function FieldView() {
           queryClient.invalidateQueries({
             queryKey: getGetTodaySessionQueryKey({ subcontractorId: subId }),
           });
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not end break",
+          description: error instanceof Error ? error.message : "Try again.",
+          variant: "destructive",
+        });
       },
     },
   });
@@ -1400,6 +1431,21 @@ export default function FieldView() {
     [session, currentTime],
   );
   const workedTimeTodayLabel = formatWorkedTime(workedMinutesToday);
+  const breakMinutesToday = useMemo(
+    () => breakMinutesSoFar(session, currentTime),
+    [session, currentTime],
+  );
+  const breakRemainingMinutes = Math.max(
+    0,
+    MAX_BREAK_MINUTES - breakMinutesToday,
+  );
+  const breakRemainingLabel = formatWorkedTime(breakRemainingMinutes);
+  const breakUsedLabel = formatWorkedTime(breakMinutesToday);
+  const canStartBreak =
+    isClockedOn &&
+    !isOnBreak &&
+    breakRemainingMinutes > 0 &&
+    !startBreak.isPending;
   const unreadCount = unreadData?.count ?? 0;
   const pushEnabled = Boolean(pushServerStatus?.enabled);
   const todayJobs = useMemo(
@@ -1858,22 +1904,31 @@ export default function FieldView() {
                       }
                     >
                       <Play className="mr-2 h-6 w-6" />{" "}
-                      {firstTodayJob ? "START DAY" : "CLOCK ON"}
+                      {firstTodayJob ? "CLOCK IN FIRST JOB" : "CLOCK ON"}
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div
-                      className={
-                        canClockOffForDay
-                          ? "grid grid-cols-2 gap-3"
-                          : "grid grid-cols-1 gap-3"
-                      }
-                    >
+                    <div className="rounded-md border bg-muted/30 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">Break</p>
+                          <p className="text-xs text-muted-foreground">
+                            {breakUsedLabel} used · {breakRemainingLabel} left
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            breakRemainingMinutes > 0 ? "outline" : "secondary"
+                          }
+                        >
+                          {breakRemainingMinutes > 0 ? "60m max" : "Used"}
+                        </Badge>
+                      </div>
                       {isOnBreak ? (
                         <Button
                           variant="outline"
-                          className="h-14"
+                          className="mt-3 h-12 w-full"
                           onClick={() =>
                             endBreak.mutate({
                               data: { subcontractorId: subId },
@@ -1886,32 +1941,32 @@ export default function FieldView() {
                       ) : (
                         <Button
                           variant="outline"
-                          className="h-14"
+                          className="mt-3 h-12 w-full"
                           onClick={() =>
                             startBreak.mutate({
                               data: { subcontractorId: subId },
                             })
                           }
-                          disabled={startBreak.isPending}
+                          disabled={!canStartBreak}
                         >
-                          <Pause className="mr-2 h-5 w-5" /> START BREAK
+                          <Pause className="mr-2 h-5 w-5" /> TAKE BREAK
                         </Button>
                       )}
-                      {canClockOffForDay ? (
-                        <Button
-                          variant="destructive"
-                          className="h-14"
-                          onClick={handleClockOff}
-                          disabled={
-                            clockOff.isPending ||
-                            loadingTodayDispatch ||
-                            !!locationPrompt
-                          }
-                        >
-                          <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
-                        </Button>
-                      ) : null}
                     </div>
+                    {canClockOffForDay ? (
+                      <Button
+                        variant="destructive"
+                        className="h-14 w-full"
+                        onClick={handleClockOff}
+                        disabled={
+                          clockOff.isPending ||
+                          loadingTodayDispatch ||
+                          !!locationPrompt
+                        }
+                      >
+                        <Square className="mr-2 h-5 w-5" /> CLOCK OFF FOR DAY
+                      </Button>
+                    ) : null}
                     {!canClockOffForDay && unfinishedTodayJobs.length > 0 ? (
                       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                         Finish jobs before clock off.
@@ -2024,44 +2079,50 @@ export default function FieldView() {
                         onClose={() => setDirectionsJobId(null)}
                       />
                     ) : null}
+                    {isOnBreak ? (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                        End break before continuing this job.
+                      </div>
+                    ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       {activeTodayJob.jobAddress ? (
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => openDirectionsForJob(activeTodayJob)}
+                          disabled={isOnBreak}
                         >
                           <Navigation className="mr-2 h-4 w-4" />
                           Directions
                         </Button>
                       ) : null}
-                      {activeTodayJob.status === "arrived" ? (
+                      {isOnBreak ? (
                         <Button
-                          variant="secondary"
-                          onClick={() =>
-                            startWork.mutate({
-                              id: activeTodayJob.id,
-                              data: { status: "in_progress" },
-                            })
+                          disabled
+                          className={
+                            activeTodayJob.status === "arrived" ||
+                            activeTodayJob.jobAddress
+                              ? ""
+                              : "sm:col-span-2"
                           }
-                          disabled={startWork.isPending}
                         >
-                          Start Work
+                          ENTER METRES, STOCK & PHOTOS
                         </Button>
-                      ) : null}
-                      <Button
-                        asChild
-                        className={
-                          activeTodayJob.status === "arrived" ||
-                          activeTodayJob.jobAddress
-                            ? ""
-                            : "sm:col-span-2"
-                        }
-                      >
-                        <Link href={`/field/jobs/${activeTodayJob.id}`}>
-                          {isCurrentJobLast ? "Finish Last Job" : "Finish Job"}
-                        </Link>
-                      </Button>
+                      ) : (
+                        <Button
+                          asChild
+                          className={
+                            activeTodayJob.status === "arrived" ||
+                            activeTodayJob.jobAddress
+                              ? ""
+                              : "sm:col-span-2"
+                          }
+                        >
+                          <Link href={`/field/jobs/${activeTodayJob.id}`}>
+                            ENTER METRES, STOCK & PHOTOS
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : nextPendingTodayJob ? (
@@ -2098,7 +2159,7 @@ export default function FieldView() {
                         type="button"
                         variant="outline"
                         onClick={() => openDirectionsForJob(nextPendingTodayJob)}
-                        disabled={!nextPendingTodayJob.jobAddress}
+                        disabled={!nextPendingTodayJob.jobAddress || isOnBreak}
                       >
                         <Navigation className="mr-2 h-4 w-4" />
                         Directions
@@ -2110,9 +2171,13 @@ export default function FieldView() {
                             nextPendingTodayJob.jobAddress ?? undefined,
                           )
                         }
-                        disabled={markArrived.isPending || !!locationPrompt}
+                        disabled={
+                          markArrived.isPending ||
+                          !!locationPrompt ||
+                          isOnBreak
+                        }
                       >
-                        Check In
+                        NEXT JOB - CHECK IN
                       </Button>
                     </div>
                   </div>
@@ -2692,16 +2757,17 @@ export default function FieldView() {
                             disabled={
                               markArrived.isPending ||
                               !!locationPrompt ||
+                              isOnBreak ||
                               (isWorker && !assignment.jobAddress)
                             }
                           >
-                            Check In to Job
+                            NEXT JOB - CHECK IN
                           </Button>
                         )}
                         {(assignment.status === "arrived" ||
                           assignment.status === "in_progress") && (
                           <div className="flex w-full gap-2">
-                            {assignment.status === "arrived" && (
+                            {!isWorker && assignment.status === "arrived" && (
                               <Button
                                 variant="secondary"
                                 className="flex-1"
@@ -2722,15 +2788,20 @@ export default function FieldView() {
                                 variant="outline"
                                 className="flex-1"
                                 onClick={() => openDirectionsForJob(assignment)}
+                                disabled={isOnBreak}
                               >
                                 <Navigation className="mr-2 h-4 w-4" />
                                 Directions
                               </Button>
                             ) : null}
-                            {isWorker ? (
+                            {isWorker && isOnBreak ? (
+                              <Button disabled className="flex-1">
+                                ENTER METRES, STOCK & PHOTOS
+                              </Button>
+                            ) : isWorker ? (
                               <Button asChild className="flex-1">
                                 <Link href={`/field/jobs/${assignment.id}`}>
-                                  Submit Report & Leave Job
+                                  ENTER METRES, STOCK & PHOTOS
                                 </Link>
                               </Button>
                             ) : (

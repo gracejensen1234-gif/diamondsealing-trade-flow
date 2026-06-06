@@ -15,5 +15,5 @@ export function workSessionMinutes(session: {
 }): number {
   if (!session.clockedOnAt || !session.clockedOffAt) return 0;
   const totalMs = new Date(session.clockedOffAt).getTime() - new Date(session.clockedOnAt).getTime();
-  return Math.max(0, Math.round(totalMs / 60000) - session.totalBreakMinutes);
+  return Math.max(0, Math.round(totalMs / 60000) - Math.min(60, Math.max(0, session.totalBreakMinutes)));
 }

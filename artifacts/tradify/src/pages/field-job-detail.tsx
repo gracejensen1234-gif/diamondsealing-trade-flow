@@ -133,19 +133,27 @@ export default function FieldJobDetail() {
   const [stockUsageChecked, setStockUsageChecked] = useState(false);
   const [issueType, setIssueType] = useState<string>("none");
   const [issueDescription, setIssueDescription] = useState("");
-  const [hoursWorked, setHoursWorked] = useState("");
   const [workDescription, setWorkDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [verifyingLocation, setVerifyingLocation] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const initializedAssignmentRef = useRef<number | null>(null);
 
-  const checkedJobHours = useMemo(() => {
+  useEffect(() => {
+    const intervalId = window.setInterval(
+      () => setCurrentTime(new Date()),
+      30000,
+    );
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const calculatedJobHours = useMemo(() => {
     if (!assignment?.arrivedAt) return null;
     const start = new Date(assignment.arrivedAt).getTime();
-    const end = assignment.departedAt ? new Date(assignment.departedAt).getTime() : Date.now();
+    const end = assignment.departedAt ? new Date(assignment.departedAt).getTime() : currentTime.getTime();
     const hours = Math.max(0, (end - start) / 3_600_000);
     return Number.isFinite(hours) && hours > 0 ? Number(hours.toFixed(2)) : null;
-  }, [assignment?.arrivedAt, assignment?.departedAt]);
+  }, [assignment?.arrivedAt, assignment?.departedAt, currentTime]);
 
   const inventorySubcontractorId = assignment?.subcontractorId ?? undefined;
   const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery<ReportInventoryItem[]>({
@@ -180,11 +188,8 @@ export default function FieldJobDetail() {
     if (!assignment) return;
     if (initializedAssignmentRef.current === assignment.id) return;
     initializedAssignmentRef.current = assignment.id;
-    if (checkedJobHours) {
-      setHoursWorked(checkedJobHours.toFixed(2));
-    }
     setWorkDescription(assignment.workArea || assignment.jobDescription || assignment.notes || "");
-  }, [assignment, checkedJobHours]);
+  }, [assignment]);
 
   const createReport = useCreateJobReport({
     mutation: {
@@ -311,7 +316,7 @@ export default function FieldJobDetail() {
         stockUsed: stockPayload,
         issueType: issueType as any,
         issueDescription: issueType !== "none" ? issueDescription : undefined,
-        hoursWorked: Number(hoursWorked) > 0 ? Number(hoursWorked) : undefined,
+        hoursWorked: calculatedJobHours ?? undefined,
         workDescription: workDescription.trim() || undefined,
         generalNotes: notes
       }
@@ -378,16 +383,14 @@ export default function FieldJobDetail() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-base">Hours Worked</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.25"
-              placeholder={checkedJobHours ? checkedJobHours.toFixed(2) : "e.g. 3.5"}
-              className="text-lg h-12"
-              value={hoursWorked}
-              onChange={(e) => setHoursWorked(e.target.value)}
-            />
+            <Label className="text-base">Hours Calculated</Label>
+            <div className="rounded-md border bg-muted/30 px-3 py-3">
+              <p className="text-lg font-semibold">
+                {calculatedJobHours != null
+                  ? `${calculatedJobHours.toFixed(2)} hrs`
+                  : "Starts from job check-in"}
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -564,7 +567,7 @@ export default function FieldJobDetail() {
             onClick={handleSubmit}
             disabled={!isValid || createReport.isPending || verifyingLocation}
           >
-            {verifyingLocation ? "Checking Location..." : createReport.isPending ? "Submitting..." : "Submit Report & Leave Job"}
+            {verifyingLocation ? "Checking Location..." : createReport.isPending ? "Completing..." : "Complete Job"}
           </Button>
 
         </CardContent>

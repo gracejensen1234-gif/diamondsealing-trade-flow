@@ -106,6 +106,10 @@ async function requireOpenWorkdayForWorker(req: Request, res: Response, subcontr
     res.status(400).json({ error: "Clock on for the day before checking in to jobs" });
     return false;
   }
+  if (session.status === "on_break") {
+    res.status(400).json({ error: "End break before continuing job steps" });
+    return false;
+  }
 
   return true;
 }

@@ -21,11 +21,31 @@ import {
 } from "../lib/auth.js";
 
 const router = Router();
+const MAX_BREAK_MINUTES = 60;
+
+function clampBreakMinutes(minutes: number) {
+  return Math.min(MAX_BREAK_MINUTES, Math.max(0, Math.round(minutes)));
+}
+
+function elapsedBreakMinutes(startedAt: Date | string | null | undefined) {
+  if (!startedAt) return 0;
+  return Math.max(
+    0,
+    Math.round((Date.now() - new Date(startedAt).getTime()) / 60000),
+  );
+}
+
+function sessionBreakMinutes(session: typeof workSessionsTable.$inferSelect) {
+  const base = clampBreakMinutes(session.totalBreakMinutes ?? 0);
+  if (session.status !== "on_break") return base;
+  const remaining = Math.max(0, MAX_BREAK_MINUTES - base);
+  return clampBreakMinutes(base + Math.min(remaining, elapsedBreakMinutes(session.breakStartAt)));
+}
 
 function calcWorkMinutes(session: typeof workSessionsTable.$inferSelect): number | null {
   if (!session.clockedOnAt || !session.clockedOffAt) return null;
   const totalMs = new Date(session.clockedOffAt).getTime() - new Date(session.clockedOnAt).getTime();
-  const workMs = totalMs - session.totalBreakMinutes * 60000;
+  const workMs = totalMs - sessionBreakMinutes(session) * 60000;
   return Math.max(0, Math.round(workMs / 60000));
 }
 
@@ -141,11 +161,7 @@ router.post("/work-sessions/clock-off", async (req, res) => {
     return res.status(400).json({ error: "Already clocked off today" });
   }
 
-  let totalBreakMinutes = session.totalBreakMinutes;
-  if (session.status === "on_break" && session.breakStartAt) {
-    const extraBreakMs = Date.now() - new Date(session.breakStartAt).getTime();
-    totalBreakMinutes += Math.round(extraBreakMs / 60000);
-  }
+  const totalBreakMinutes = sessionBreakMinutes(session);
 
   const [updated] = await db.update(workSessionsTable).set({
     status: "clocked_off",
@@ -184,6 +200,9 @@ router.post("/work-sessions/break-start", async (req, res) => {
     ),
   );
   if (!session || session.status !== "active") return res.status(400).json({ error: "No active session" });
+  if (clampBreakMinutes(session.totalBreakMinutes ?? 0) >= MAX_BREAK_MINUTES) {
+    return res.status(400).json({ error: "Daily break limit reached" });
+  }
 
   const [updated] = await db.update(workSessionsTable).set({
     status: "on_break",
@@ -212,15 +231,19 @@ router.post("/work-sessions/break-end", async (req, res) => {
   );
   if (!session || session.status !== "on_break") return res.status(400).json({ error: "Not on break" });
 
-  let extraMinutes = 0;
-  if (session.breakStartAt) {
-    extraMinutes = Math.round((Date.now() - new Date(session.breakStartAt).getTime()) / 60000);
-  }
+  const remainingBreakMinutes = Math.max(
+    0,
+    MAX_BREAK_MINUTES - clampBreakMinutes(session.totalBreakMinutes ?? 0),
+  );
+  const extraMinutes = Math.min(
+    remainingBreakMinutes,
+    elapsedBreakMinutes(session.breakStartAt),
+  );
 
   const [updated] = await db.update(workSessionsTable).set({
     status: "active",
     breakEndAt: new Date(),
-    totalBreakMinutes: session.totalBreakMinutes + extraMinutes,
+    totalBreakMinutes: clampBreakMinutes((session.totalBreakMinutes ?? 0) + extraMinutes),
   }).where(eq(workSessionsTable.id, session.id)).returning();
 
   const [sub] = await db
@@ -314,7 +337,7 @@ router.patch("/work-sessions/:id", requireAdmin, async (req, res) => {
   const updates: Record<string, unknown> = {};
   if (body.data.clockedOnAt !== undefined) updates.clockedOnAt = new Date(body.data.clockedOnAt);
   if (body.data.clockedOffAt !== undefined) updates.clockedOffAt = new Date(body.data.clockedOffAt);
-  if (body.data.totalBreakMinutes !== undefined) updates.totalBreakMinutes = body.data.totalBreakMinutes;
+  if (body.data.totalBreakMinutes !== undefined) updates.totalBreakMinutes = clampBreakMinutes(body.data.totalBreakMinutes);
   if (body.data.gpsEnabled !== undefined) updates.gpsEnabled = body.data.gpsEnabled;
   if (body.data.gpsDisabledOnBreak !== undefined) updates.gpsDisabledOnBreak = body.data.gpsDisabledOnBreak;
 
