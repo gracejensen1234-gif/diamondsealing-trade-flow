@@ -55,6 +55,7 @@ type WeeklyInvoiceBuild = {
   lineItems: Array<WeeklyInvoiceLineItem & { stockCost?: number }>;
   totalMetres: number;
   totalHours: number;
+  gstRegistered: boolean;
   subtotal: number;
   tax: number;
   total: number;
@@ -68,6 +69,7 @@ function serializeInvoice(
     ...inv,
     subcontractorName: subName,
     totalMetres: Number(inv.totalMetres),
+    gstRegistered: Boolean(inv.gstRegistered),
     subtotal: Number(inv.subtotal),
     tax: Number(inv.tax),
     total: Number(inv.total),
@@ -77,6 +79,10 @@ function serializeInvoice(
 
 function getInvoiceNumber(inv: typeof weeklyInvoicesTable.$inferSelect) {
   return `WI-${String(inv.id).padStart(5, "0")}`;
+}
+
+function invoiceChargesGst(inv: typeof weeklyInvoicesTable.$inferSelect) {
+  return Boolean(inv.gstRegistered) || Number(inv.tax ?? 0) > 0;
 }
 
 function addDays(date: string, days: number) {
@@ -293,11 +299,13 @@ async function buildWeeklyInvoiceValues(
     (sum, item) => sum + Number(item.amount ?? 0),
     0,
   );
-  const tax = subtotal * 0.1;
+  const gstRegistered = Boolean(sub.gstRegistered);
+  const tax = gstRegistered ? subtotal * 0.1 : 0;
   return {
     lineItems: items,
     totalMetres: money(totalMetres),
     totalHours: money(totalHours),
+    gstRegistered,
     subtotal: money(subtotal),
     tax: money(tax),
     total: money(subtotal + tax),
@@ -405,6 +413,7 @@ async function buildEarningsSummary(
     totalHours: Number((totalWorkMinutes / 60).toFixed(2)),
     ratePerMetre: sub.ratePerMetre ? Number(sub.ratePerMetre) : 0,
     hourlyRate: sub.hourlyRate ? Number(sub.hourlyRate) : 0,
+    gstRegistered: sub.gstRegistered,
     completedInvoiceHours: earnedValues.totalHours,
     uninvoicedInvoiceHours: toInvoiceValues.totalHours,
     completedMetres: earnedValues.totalMetres,
@@ -456,6 +465,7 @@ async function upsertCurrentWeeklyInvoice(
       .set({
         lineItems: values.lineItems,
         totalMetres: String(values.totalMetres.toFixed(2)),
+        gstRegistered: values.gstRegistered,
         subtotal: String(values.subtotal.toFixed(2)),
         tax: String(values.tax.toFixed(2)),
         total: String(values.total.toFixed(2)),
@@ -480,6 +490,7 @@ async function upsertCurrentWeeklyInvoice(
       status: "draft",
       lineItems: values.lineItems,
       totalMetres: String(values.totalMetres.toFixed(2)),
+      gstRegistered: values.gstRegistered,
       subtotal: String(values.subtotal.toFixed(2)),
       tax: String(values.tax.toFixed(2)),
       total: String(values.total.toFixed(2)),
@@ -492,6 +503,10 @@ function getXeroTaxType() {
   return process.env.XERO_TAX_TYPE?.trim() || "INPUT";
 }
 
+function getInvoiceXeroTaxType(inv: typeof weeklyInvoicesTable.$inferSelect) {
+  return invoiceChargesGst(inv) ? getXeroTaxType() : "NONE";
+}
+
 async function buildXeroCsv(
   inv: typeof weeklyInvoicesTable.$inferSelect,
   subName: string | null,
@@ -501,7 +516,7 @@ async function buildXeroCsv(
     settings?.defaultAccountCode ||
     process.env.XERO_DEFAULT_ACCOUNT_CODE ||
     "310";
-  const taxType = getXeroTaxType();
+  const taxType = getInvoiceXeroTaxType(inv);
   const invoiceNumber = getInvoiceNumber(inv);
   const invoiceDate = formatXeroCsvDate(inv.weekEndDate);
   const dueDate = formatXeroCsvDate(addDays(inv.weekEndDate, 7));
@@ -583,7 +598,7 @@ async function createXeroDraftBill(
             Quantity: xeroLineQuantity(item),
             UnitAmount: xeroLineUnitAmount(item),
             AccountCode: accountCode,
-            TaxType: getXeroTaxType(),
+            TaxType: getInvoiceXeroTaxType(inv),
           })),
         },
       ],
@@ -692,12 +707,10 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
     prepared.sub.hourlyRate && Number(prepared.sub.hourlyRate) > 0,
   );
   if (!hasMetreRate && !hasHourlyRate) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "A metre rate or hourly rate must be set before sending an invoice to Xero",
-      });
+    return res.status(400).json({
+      error:
+        "A metre rate or hourly rate must be set before sending an invoice to Xero",
+    });
   }
 
   let xeroInvoiceId: string;
@@ -795,9 +808,30 @@ router.post("/weekly-invoices/generate", async (req, res) => {
           eq(weeklyInvoicesTable.weekStartDate, weekStart),
         ),
       );
-    if (existing[0]) continue;
-
     const values = await buildWeeklyInvoiceValues(tenantId, sub, subReports);
+    if (existing[0]) {
+      if (existing[0].status !== "draft") continue;
+
+      const [updated] = await db
+        .update(weeklyInvoicesTable)
+        .set({
+          lineItems: values.lineItems,
+          totalMetres: String(values.totalMetres.toFixed(2)),
+          gstRegistered: values.gstRegistered,
+          subtotal: String(values.subtotal.toFixed(2)),
+          tax: String(values.tax.toFixed(2)),
+          total: String(values.total.toFixed(2)),
+        })
+        .where(
+          and(
+            eq(weeklyInvoicesTable.id, existing[0].id),
+            eq(weeklyInvoicesTable.companyId, tenantId),
+          ),
+        )
+        .returning();
+      created.push(updated);
+      continue;
+    }
 
     const [inv] = await db
       .insert(weeklyInvoicesTable)
@@ -809,6 +843,7 @@ router.post("/weekly-invoices/generate", async (req, res) => {
         status: "draft",
         lineItems: values.lineItems,
         totalMetres: String(values.totalMetres.toFixed(2)),
+        gstRegistered: values.gstRegistered,
         subtotal: String(values.subtotal.toFixed(2)),
         tax: String(values.tax.toFixed(2)),
         total: String(values.total.toFixed(2)),
@@ -905,6 +940,28 @@ router.patch("/weekly-invoices/:id", async (req, res) => {
   const updates: Record<string, unknown> = {};
   if (body.data.notes !== undefined) updates.notes = body.data.notes;
   if (body.data.status !== undefined) updates.status = body.data.status;
+  if (body.data.gstRegistered !== undefined) {
+    const [existing] = await db
+      .select()
+      .from(weeklyInvoicesTable)
+      .where(
+        and(
+          eq(weeklyInvoicesTable.id, params.data.id),
+          eq(weeklyInvoicesTable.companyId, companyId(req)),
+        ),
+      );
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (existing.status !== "draft") {
+      return res
+        .status(400)
+        .json({ error: "GST can only be changed on draft invoices" });
+    }
+    const subtotal = Number(existing.subtotal ?? 0);
+    const tax = body.data.gstRegistered ? money(subtotal * 0.1) : 0;
+    updates.gstRegistered = body.data.gstRegistered;
+    updates.tax = String(tax.toFixed(2));
+    updates.total = String((subtotal + tax).toFixed(2));
+  }
 
   const [inv] = await db
     .update(weeklyInvoicesTable)

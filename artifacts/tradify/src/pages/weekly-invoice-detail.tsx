@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -127,6 +128,7 @@ export default function WeeklyInvoiceDetail() {
   const submittedLabel = invoice.xeroInvoiceId
     ? "Submitted to Xero"
     : "Invoice submitted";
+  const invoiceIncludesGst = Boolean(invoice.gstRegistered) || invoice.tax > 0;
 
   const downloadXeroCsv = () => {
     window.location.assign(`/api/weekly-invoices/${invoice.id}/xero-csv`);
@@ -275,6 +277,27 @@ export default function WeeklyInvoiceDetail() {
               <CardTitle>Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!isWorker && invoice.status === "draft" ? (
+                <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Charge GST</div>
+                    <div className="text-xs text-muted-foreground">
+                      Turn on only if this employee/subcontractor is GST
+                      registered.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={invoiceIncludesGst}
+                    onCheckedChange={(checked) =>
+                      updateInvoice.mutate({
+                        id: invoice.id,
+                        data: { gstRegistered: checked },
+                      })
+                    }
+                    disabled={updateInvoice.isPending}
+                  />
+                </div>
+              ) : null}
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Total Metres</span>
                 <span className="font-medium">{invoice.totalMetres}m</span>
@@ -290,7 +313,15 @@ export default function WeeklyInvoiceDetail() {
                 <span>${invoice.subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">GST (10%)</span>
+                <span className="text-muted-foreground">GST status</span>
+                <span>
+                  {invoiceIncludesGst ? "GST registered" : "No GST charged"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">
+                  {invoiceIncludesGst ? "GST (10%)" : "GST"}
+                </span>
                 <span>${invoice.tax.toFixed(2)}</span>
               </div>
               <div className="border-t pt-4 flex justify-between items-center">

@@ -28,20 +28,20 @@ export interface DashboardSummary {
   jobsByStatus: DashboardSummaryJobsByStatus;
 }
 
-export type ActivityItemType = typeof ActivityItemType[keyof typeof ActivityItemType];
-
+export type ActivityItemType =
+  (typeof ActivityItemType)[keyof typeof ActivityItemType];
 
 export const ActivityItemType = {
-  job_created: 'job_created',
-  job_updated: 'job_updated',
-  quote_sent: 'quote_sent',
-  quote_accepted: 'quote_accepted',
-  invoice_sent: 'invoice_sent',
-  invoice_paid: 'invoice_paid',
-  customer_created: 'customer_created',
-  clocked_on: 'clocked_on',
-  clocked_off: 'clocked_off',
-  job_report_submitted: 'job_report_submitted',
+  job_created: "job_created",
+  job_updated: "job_updated",
+  quote_sent: "quote_sent",
+  quote_accepted: "quote_accepted",
+  invoice_sent: "invoice_sent",
+  invoice_paid: "invoice_paid",
+  customer_created: "customer_created",
+  clocked_on: "clocked_on",
+  clocked_off: "clocked_off",
+  job_report_submitted: "job_report_submitted",
 } as const;
 
 export interface ActivityItem {
@@ -117,24 +117,22 @@ export interface LineItemInput {
   unitPrice: number;
 }
 
-export type JobStatus = typeof JobStatus[keyof typeof JobStatus];
-
+export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 
 export const JobStatus = {
-  pending: 'pending',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  invoiced: 'invoiced',
-  cancelled: 'cancelled',
+  pending: "pending",
+  in_progress: "in_progress",
+  completed: "completed",
+  invoiced: "invoiced",
+  cancelled: "cancelled",
 } as const;
 
-export type JobPriority = typeof JobPriority[keyof typeof JobPriority];
-
+export type JobPriority = (typeof JobPriority)[keyof typeof JobPriority];
 
 export const JobPriority = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  low: "low",
+  medium: "medium",
+  high: "high",
 } as const;
 
 export interface Job {
@@ -167,24 +165,24 @@ export interface Job {
   updatedAt: string;
 }
 
-export type JobInputStatus = typeof JobInputStatus[keyof typeof JobInputStatus];
-
+export type JobInputStatus =
+  (typeof JobInputStatus)[keyof typeof JobInputStatus];
 
 export const JobInputStatus = {
-  pending: 'pending',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  invoiced: 'invoiced',
-  cancelled: 'cancelled',
+  pending: "pending",
+  in_progress: "in_progress",
+  completed: "completed",
+  invoiced: "invoiced",
+  cancelled: "cancelled",
 } as const;
 
-export type JobInputPriority = typeof JobInputPriority[keyof typeof JobInputPriority];
-
+export type JobInputPriority =
+  (typeof JobInputPriority)[keyof typeof JobInputPriority];
 
 export const JobInputPriority = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  low: "low",
+  medium: "medium",
+  high: "high",
 } as const;
 
 export interface JobInput {
@@ -203,24 +201,24 @@ export interface JobInput {
   priority?: JobInputPriority;
 }
 
-export type JobUpdateStatus = typeof JobUpdateStatus[keyof typeof JobUpdateStatus];
-
+export type JobUpdateStatus =
+  (typeof JobUpdateStatus)[keyof typeof JobUpdateStatus];
 
 export const JobUpdateStatus = {
-  pending: 'pending',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  invoiced: 'invoiced',
-  cancelled: 'cancelled',
+  pending: "pending",
+  in_progress: "in_progress",
+  completed: "completed",
+  invoiced: "invoiced",
+  cancelled: "cancelled",
 } as const;
 
-export type JobUpdatePriority = typeof JobUpdatePriority[keyof typeof JobUpdatePriority];
-
+export type JobUpdatePriority =
+  (typeof JobUpdatePriority)[keyof typeof JobUpdatePriority];
 
 export const JobUpdatePriority = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  low: "low",
+  medium: "medium",
+  high: "high",
 } as const;
 
 export interface JobUpdate {
@@ -239,15 +237,14 @@ export interface JobUpdate {
   priority?: JobUpdatePriority;
 }
 
-export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
-
+export type QuoteStatus = (typeof QuoteStatus)[keyof typeof QuoteStatus];
 
 export const QuoteStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  accepted: 'accepted',
-  declined: 'declined',
-  expired: 'expired',
+  draft: "draft",
+  sent: "sent",
+  accepted: "accepted",
+  declined: "declined",
+  expired: "expired",
 } as const;
 
 export interface Quote {
@@ -299,15 +296,14 @@ export interface QuoteUpdate {
   validUntil?: string;
 }
 
-export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
-
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
 export const InvoiceStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  paid: 'paid',
-  overdue: 'overdue',
-  cancelled: 'cancelled',
+  draft: "draft",
+  sent: "sent",
+  paid: "paid",
+  overdue: "overdue",
+  cancelled: "cancelled",
 } as const;
 
 export interface Invoice {
@@ -362,13 +358,13 @@ export interface InvoiceUpdate {
   dueDate?: string;
 }
 
-export type AppointmentStatus = typeof AppointmentStatus[keyof typeof AppointmentStatus];
-
+export type AppointmentStatus =
+  (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
 
 export const AppointmentStatus = {
-  scheduled: 'scheduled',
-  completed: 'completed',
-  cancelled: 'cancelled',
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface Appointment {
@@ -393,13 +389,13 @@ export interface Appointment {
   updatedAt: string;
 }
 
-export type AppointmentInputStatus = typeof AppointmentInputStatus[keyof typeof AppointmentInputStatus];
-
+export type AppointmentInputStatus =
+  (typeof AppointmentInputStatus)[keyof typeof AppointmentInputStatus];
 
 export const AppointmentInputStatus = {
-  scheduled: 'scheduled',
-  completed: 'completed',
-  cancelled: 'cancelled',
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface AppointmentInput {
@@ -414,13 +410,13 @@ export interface AppointmentInput {
   status?: AppointmentInputStatus;
 }
 
-export type AppointmentUpdateStatus = typeof AppointmentUpdateStatus[keyof typeof AppointmentUpdateStatus];
-
+export type AppointmentUpdateStatus =
+  (typeof AppointmentUpdateStatus)[keyof typeof AppointmentUpdateStatus];
 
 export const AppointmentUpdateStatus = {
-  scheduled: 'scheduled',
-  completed: 'completed',
-  cancelled: 'cancelled',
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface AppointmentUpdate {
@@ -447,6 +443,7 @@ export interface Subcontractor {
   ratePerMetre?: number | null;
   /** @nullable */
   hourlyRate?: number | null;
+  gstRegistered: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -459,6 +456,7 @@ export interface SubcontractorInput {
   abn?: string;
   ratePerMetre?: number;
   hourlyRate?: number;
+  gstRegistered?: boolean;
   active?: boolean;
 }
 
@@ -469,16 +467,17 @@ export interface SubcontractorUpdate {
   abn?: string;
   ratePerMetre?: number;
   hourlyRate?: number;
+  gstRegistered?: boolean;
   active?: boolean;
 }
 
-export type WorkSessionStatus = typeof WorkSessionStatus[keyof typeof WorkSessionStatus];
-
+export type WorkSessionStatus =
+  (typeof WorkSessionStatus)[keyof typeof WorkSessionStatus];
 
 export const WorkSessionStatus = {
-  active: 'active',
-  on_break: 'on_break',
-  clocked_off: 'clocked_off',
+  active: "active",
+  on_break: "on_break",
+  clocked_off: "clocked_off",
 } as const;
 
 export interface WorkSession {
@@ -550,14 +549,14 @@ export interface GpsLocationInput {
   accuracy?: number;
 }
 
-export type JobAssignmentStatus = typeof JobAssignmentStatus[keyof typeof JobAssignmentStatus];
-
+export type JobAssignmentStatus =
+  (typeof JobAssignmentStatus)[keyof typeof JobAssignmentStatus];
 
 export const JobAssignmentStatus = {
-  pending: 'pending',
-  arrived: 'arrived',
-  in_progress: 'in_progress',
-  completed: 'completed',
+  pending: "pending",
+  arrived: "arrived",
+  in_progress: "in_progress",
+  completed: "completed",
 } as const;
 
 export interface JobAssignment {
@@ -622,14 +621,14 @@ export interface DispatchInput {
   assignments: DispatchInputAssignmentsItem[];
 }
 
-export type JobAssignmentUpdateStatus = typeof JobAssignmentUpdateStatus[keyof typeof JobAssignmentUpdateStatus];
-
+export type JobAssignmentUpdateStatus =
+  (typeof JobAssignmentUpdateStatus)[keyof typeof JobAssignmentUpdateStatus];
 
 export const JobAssignmentUpdateStatus = {
-  pending: 'pending',
-  arrived: 'arrived',
-  in_progress: 'in_progress',
-  completed: 'completed',
+  pending: "pending",
+  arrived: "arrived",
+  in_progress: "in_progress",
+  completed: "completed",
 } as const;
 
 export interface JobAssignmentUpdate {
@@ -659,16 +658,16 @@ export interface StockUsageInput {
   quantityUsed: number;
 }
 
-export type JobReportIssueType = typeof JobReportIssueType[keyof typeof JobReportIssueType];
-
+export type JobReportIssueType =
+  (typeof JobReportIssueType)[keyof typeof JobReportIssueType];
 
 export const JobReportIssueType = {
-  none: 'none',
-  excessive_cleaning: 'excessive_cleaning',
-  site_not_ready: 'site_not_ready',
-  unsafe_environment: 'unsafe_environment',
-  builder_complaint: 'builder_complaint',
-  other: 'other',
+  none: "none",
+  excessive_cleaning: "excessive_cleaning",
+  site_not_ready: "site_not_ready",
+  unsafe_environment: "unsafe_environment",
+  builder_complaint: "builder_complaint",
+  other: "other",
 } as const;
 
 export interface JobReport {
@@ -699,16 +698,16 @@ export interface JobReport {
   createdAt: string;
 }
 
-export type JobReportInputIssueType = typeof JobReportInputIssueType[keyof typeof JobReportInputIssueType];
-
+export type JobReportInputIssueType =
+  (typeof JobReportInputIssueType)[keyof typeof JobReportInputIssueType];
 
 export const JobReportInputIssueType = {
-  none: 'none',
-  excessive_cleaning: 'excessive_cleaning',
-  site_not_ready: 'site_not_ready',
-  unsafe_environment: 'unsafe_environment',
-  builder_complaint: 'builder_complaint',
-  other: 'other',
+  none: "none",
+  excessive_cleaning: "excessive_cleaning",
+  site_not_ready: "site_not_ready",
+  unsafe_environment: "unsafe_environment",
+  builder_complaint: "builder_complaint",
+  other: "other",
 } as const;
 
 export interface JobReportInput {
@@ -789,7 +788,7 @@ export interface WeeklyInvoiceLineItem {
   hourlyRate?: number | null;
   /** @nullable */
   hourlyAmount?: number | null;
-  payBasis?: 'metres' | 'hours' | 'unset';
+  payBasis?: "metres" | "hours" | "unset";
   amount: number;
   stockCost?: number;
   reportId?: number;
@@ -799,13 +798,13 @@ export interface WeeklyInvoiceLineItem {
   jobDescription?: string | null;
 }
 
-export type WeeklyInvoiceStatus = typeof WeeklyInvoiceStatus[keyof typeof WeeklyInvoiceStatus];
-
+export type WeeklyInvoiceStatus =
+  (typeof WeeklyInvoiceStatus)[keyof typeof WeeklyInvoiceStatus];
 
 export const WeeklyInvoiceStatus = {
-  draft: 'draft',
-  submitted: 'submitted',
-  paid: 'paid',
+  draft: "draft",
+  submitted: "submitted",
+  paid: "paid",
 } as const;
 
 export interface WeeklyInvoice {
@@ -818,6 +817,7 @@ export interface WeeklyInvoice {
   status: WeeklyInvoiceStatus;
   lineItems?: WeeklyInvoiceLineItem[];
   totalMetres: number;
+  gstRegistered: boolean;
   subtotal: number;
   tax: number;
   total: number;
@@ -835,28 +835,29 @@ export interface GenerateWeeklyInvoicesInput {
   subcontractorId?: number;
 }
 
-export type WeeklyInvoiceUpdateStatus = typeof WeeklyInvoiceUpdateStatus[keyof typeof WeeklyInvoiceUpdateStatus];
-
+export type WeeklyInvoiceUpdateStatus =
+  (typeof WeeklyInvoiceUpdateStatus)[keyof typeof WeeklyInvoiceUpdateStatus];
 
 export const WeeklyInvoiceUpdateStatus = {
-  draft: 'draft',
-  submitted: 'submitted',
-  paid: 'paid',
+  draft: "draft",
+  submitted: "submitted",
+  paid: "paid",
 } as const;
 
 export interface WeeklyInvoiceUpdate {
   notes?: string;
+  gstRegistered?: boolean;
   status?: WeeklyInvoiceUpdateStatus;
 }
 
-export type SubcontractorLiveStatusSessionStatus = typeof SubcontractorLiveStatusSessionStatus[keyof typeof SubcontractorLiveStatusSessionStatus];
-
+export type SubcontractorLiveStatusSessionStatus =
+  (typeof SubcontractorLiveStatusSessionStatus)[keyof typeof SubcontractorLiveStatusSessionStatus];
 
 export const SubcontractorLiveStatusSessionStatus = {
-  not_started: 'not_started',
-  active: 'active',
-  on_break: 'on_break',
-  clocked_off: 'clocked_off',
+  not_started: "not_started",
+  active: "active",
+  on_break: "on_break",
+  clocked_off: "clocked_off",
 } as const;
 
 export type SubcontractorLiveStatusLastLocation = {
@@ -880,13 +881,13 @@ export interface SubcontractorLiveStatus {
   lastLocation?: SubcontractorLiveStatusLastLocation;
 }
 
-export type TimesheetEntryStatus = typeof TimesheetEntryStatus[keyof typeof TimesheetEntryStatus];
-
+export type TimesheetEntryStatus =
+  (typeof TimesheetEntryStatus)[keyof typeof TimesheetEntryStatus];
 
 export const TimesheetEntryStatus = {
-  active: 'active',
-  on_break: 'on_break',
-  clocked_off: 'clocked_off',
+  active: "active",
+  on_break: "on_break",
+  clocked_off: "clocked_off",
 } as const;
 
 export interface TimesheetEntry {
@@ -976,13 +977,13 @@ export interface LeaderboardEntry {
   badge?: string | null;
 }
 
-export type BonusRuleBonusType = typeof BonusRuleBonusType[keyof typeof BonusRuleBonusType];
-
+export type BonusRuleBonusType =
+  (typeof BonusRuleBonusType)[keyof typeof BonusRuleBonusType];
 
 export const BonusRuleBonusType = {
-  flat: 'flat',
-  per_metre_over: 'per_metre_over',
-  percentage: 'percentage',
+  flat: "flat",
+  per_metre_over: "per_metre_over",
+  percentage: "percentage",
 } as const;
 
 export interface BonusRule {
@@ -1004,13 +1005,13 @@ export interface BonusRule {
   createdAt?: string;
 }
 
-export type CreateBonusRuleBodyBonusType = typeof CreateBonusRuleBodyBonusType[keyof typeof CreateBonusRuleBodyBonusType];
-
+export type CreateBonusRuleBodyBonusType =
+  (typeof CreateBonusRuleBodyBonusType)[keyof typeof CreateBonusRuleBodyBonusType];
 
 export const CreateBonusRuleBodyBonusType = {
-  flat: 'flat',
-  per_metre_over: 'per_metre_over',
-  percentage: 'percentage',
+  flat: "flat",
+  per_metre_over: "per_metre_over",
+  percentage: "percentage",
 } as const;
 
 export interface CreateBonusRuleBody {
@@ -1025,13 +1026,13 @@ export interface CreateBonusRuleBody {
   active?: boolean;
 }
 
-export type UpdateBonusRuleBodyBonusType = typeof UpdateBonusRuleBodyBonusType[keyof typeof UpdateBonusRuleBodyBonusType];
-
+export type UpdateBonusRuleBodyBonusType =
+  (typeof UpdateBonusRuleBodyBonusType)[keyof typeof UpdateBonusRuleBodyBonusType];
 
 export const UpdateBonusRuleBodyBonusType = {
-  flat: 'flat',
-  per_metre_over: 'per_metre_over',
-  percentage: 'percentage',
+  flat: "flat",
+  per_metre_over: "per_metre_over",
+  percentage: "percentage",
 } as const;
 
 export interface UpdateBonusRuleBody {
@@ -1046,14 +1047,14 @@ export interface UpdateBonusRuleBody {
   active?: boolean;
 }
 
-export type BonusCalculationStatus = typeof BonusCalculationStatus[keyof typeof BonusCalculationStatus];
-
+export type BonusCalculationStatus =
+  (typeof BonusCalculationStatus)[keyof typeof BonusCalculationStatus];
 
 export const BonusCalculationStatus = {
-  pending: 'pending',
-  approved: 'approved',
-  paid: 'paid',
-  rejected: 'rejected',
+  pending: "pending",
+  approved: "approved",
+  paid: "paid",
+  rejected: "rejected",
 } as const;
 
 export interface BonusCalculation {
@@ -1081,14 +1082,13 @@ export interface BonusCalculation {
   calculatedAt?: string;
 }
 
-export type DocketStatus = typeof DocketStatus[keyof typeof DocketStatus];
-
+export type DocketStatus = (typeof DocketStatus)[keyof typeof DocketStatus];
 
 export const DocketStatus = {
-  draft: 'draft',
-  sub_signed: 'sub_signed',
-  builder_signed: 'builder_signed',
-  complete: 'complete',
+  draft: "draft",
+  sub_signed: "sub_signed",
+  builder_signed: "builder_signed",
+  complete: "complete",
 } as const;
 
 export interface Docket {
@@ -1138,14 +1138,14 @@ export interface CreateDocketBody {
   notes?: string;
 }
 
-export type UpdateDocketBodyStatus = typeof UpdateDocketBodyStatus[keyof typeof UpdateDocketBodyStatus];
-
+export type UpdateDocketBodyStatus =
+  (typeof UpdateDocketBodyStatus)[keyof typeof UpdateDocketBodyStatus];
 
 export const UpdateDocketBodyStatus = {
-  draft: 'draft',
-  sub_signed: 'sub_signed',
-  builder_signed: 'builder_signed',
-  complete: 'complete',
+  draft: "draft",
+  sub_signed: "sub_signed",
+  builder_signed: "builder_signed",
+  complete: "complete",
 } as const;
 
 export interface UpdateDocketBody {
@@ -1176,15 +1176,15 @@ export interface SubInventoryItem {
   updatedAt?: string;
 }
 
-export type InventoryTransactionTransactionType = typeof InventoryTransactionTransactionType[keyof typeof InventoryTransactionTransactionType];
-
+export type InventoryTransactionTransactionType =
+  (typeof InventoryTransactionTransactionType)[keyof typeof InventoryTransactionTransactionType];
 
 export const InventoryTransactionTransactionType = {
-  issued: 'issued',
-  used_on_job: 'used_on_job',
-  returned: 'returned',
-  adjustment: 'adjustment',
-  restock: 'restock',
+  issued: "issued",
+  used_on_job: "used_on_job",
+  returned: "returned",
+  adjustment: "adjustment",
+  restock: "restock",
 } as const;
 
 export interface InventoryTransaction {
@@ -1207,15 +1207,15 @@ export interface InventoryTransaction {
   createdAt?: string;
 }
 
-export type CreateInventoryTransactionBodyTransactionType = typeof CreateInventoryTransactionBodyTransactionType[keyof typeof CreateInventoryTransactionBodyTransactionType];
-
+export type CreateInventoryTransactionBodyTransactionType =
+  (typeof CreateInventoryTransactionBodyTransactionType)[keyof typeof CreateInventoryTransactionBodyTransactionType];
 
 export const CreateInventoryTransactionBodyTransactionType = {
-  issued: 'issued',
-  used_on_job: 'used_on_job',
-  returned: 'returned',
-  adjustment: 'adjustment',
-  restock: 'restock',
+  issued: "issued",
+  used_on_job: "used_on_job",
+  returned: "returned",
+  adjustment: "adjustment",
+  restock: "restock",
 } as const;
 
 export interface CreateInventoryTransactionBody {
@@ -1228,23 +1228,23 @@ export interface CreateInventoryTransactionBody {
   recordedBy?: string;
 }
 
-export type RestockRequestStatus = typeof RestockRequestStatus[keyof typeof RestockRequestStatus];
-
+export type RestockRequestStatus =
+  (typeof RestockRequestStatus)[keyof typeof RestockRequestStatus];
 
 export const RestockRequestStatus = {
-  pending: 'pending',
-  approved: 'approved',
-  fulfilled: 'fulfilled',
-  rejected: 'rejected',
+  pending: "pending",
+  approved: "approved",
+  fulfilled: "fulfilled",
+  rejected: "rejected",
 } as const;
 
-export type RestockRequestUrgency = typeof RestockRequestUrgency[keyof typeof RestockRequestUrgency];
-
+export type RestockRequestUrgency =
+  (typeof RestockRequestUrgency)[keyof typeof RestockRequestUrgency];
 
 export const RestockRequestUrgency = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
+  low: "low",
+  normal: "normal",
+  high: "high",
 } as const;
 
 export interface RestockRequest {
@@ -1269,13 +1269,13 @@ export interface RestockRequest {
   updatedAt?: string;
 }
 
-export type CreateRestockRequestBodyUrgency = typeof CreateRestockRequestBodyUrgency[keyof typeof CreateRestockRequestBodyUrgency];
-
+export type CreateRestockRequestBodyUrgency =
+  (typeof CreateRestockRequestBodyUrgency)[keyof typeof CreateRestockRequestBodyUrgency];
 
 export const CreateRestockRequestBodyUrgency = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
+  low: "low",
+  normal: "normal",
+  high: "high",
 } as const;
 
 export interface CreateRestockRequestBody {
@@ -1286,13 +1286,13 @@ export interface CreateRestockRequestBody {
   urgency?: CreateRestockRequestBodyUrgency;
 }
 
-export type UpdateRestockRequestBodyStatus = typeof UpdateRestockRequestBodyStatus[keyof typeof UpdateRestockRequestBodyStatus];
-
+export type UpdateRestockRequestBodyStatus =
+  (typeof UpdateRestockRequestBodyStatus)[keyof typeof UpdateRestockRequestBodyStatus];
 
 export const UpdateRestockRequestBodyStatus = {
-  approved: 'approved',
-  fulfilled: 'fulfilled',
-  rejected: 'rejected',
+  approved: "approved",
+  fulfilled: "fulfilled",
+  rejected: "rejected",
 } as const;
 
 export interface UpdateRestockRequestBody {
@@ -1307,27 +1307,27 @@ export interface RunAuditBody {
   date?: string;
 }
 
-export type AuditFlagSeverity = typeof AuditFlagSeverity[keyof typeof AuditFlagSeverity];
-
+export type AuditFlagSeverity =
+  (typeof AuditFlagSeverity)[keyof typeof AuditFlagSeverity];
 
 export const AuditFlagSeverity = {
-  info: 'info',
-  warning: 'warning',
-  critical: 'critical',
+  info: "info",
+  warning: "warning",
+  critical: "critical",
 } as const;
 
 export type AuditFlagEvidence = { [key: string]: unknown };
 
-export type AuditFlagStatus = typeof AuditFlagStatus[keyof typeof AuditFlagStatus];
-
+export type AuditFlagStatus =
+  (typeof AuditFlagStatus)[keyof typeof AuditFlagStatus];
 
 export const AuditFlagStatus = {
-  pending: 'pending',
-  reviewed: 'reviewed',
-  approved: 'approved',
-  dismissed: 'dismissed',
-  fix_requested: 'fix_requested',
-  callback_created: 'callback_created',
+  pending: "pending",
+  reviewed: "reviewed",
+  approved: "approved",
+  dismissed: "dismissed",
+  fix_requested: "fix_requested",
+  callback_created: "callback_created",
 } as const;
 
 export interface AuditFlag {
@@ -1356,15 +1356,15 @@ export interface AuditFlag {
   updatedAt?: string;
 }
 
-export type UpdateAuditFlagBodyStatus = typeof UpdateAuditFlagBodyStatus[keyof typeof UpdateAuditFlagBodyStatus];
-
+export type UpdateAuditFlagBodyStatus =
+  (typeof UpdateAuditFlagBodyStatus)[keyof typeof UpdateAuditFlagBodyStatus];
 
 export const UpdateAuditFlagBodyStatus = {
-  reviewed: 'reviewed',
-  approved: 'approved',
-  dismissed: 'dismissed',
-  fix_requested: 'fix_requested',
-  callback_created: 'callback_created',
+  reviewed: "reviewed",
+  approved: "approved",
+  dismissed: "dismissed",
+  fix_requested: "fix_requested",
+  callback_created: "callback_created",
 } as const;
 
 export interface UpdateAuditFlagBody {
@@ -1374,13 +1374,13 @@ export interface UpdateAuditFlagBody {
   showToWorker?: boolean;
 }
 
-export type AuditScorePeriodType = typeof AuditScorePeriodType[keyof typeof AuditScorePeriodType];
-
+export type AuditScorePeriodType =
+  (typeof AuditScorePeriodType)[keyof typeof AuditScorePeriodType];
 
 export const AuditScorePeriodType = {
-  daily: 'daily',
-  weekly: 'weekly',
-  monthly: 'monthly',
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
 } as const;
 
 export interface AuditScore {
@@ -1460,16 +1460,16 @@ export interface UpdateScoringWeightsBody {
   attendanceWeight?: number;
 }
 
-export type MonthlyAwardAwardType = typeof MonthlyAwardAwardType[keyof typeof MonthlyAwardAwardType];
-
+export type MonthlyAwardAwardType =
+  (typeof MonthlyAwardAwardType)[keyof typeof MonthlyAwardAwardType];
 
 export const MonthlyAwardAwardType = {
-  weekend_away: 'weekend_away',
-  tv: 'tv',
-  experience: 'experience',
-  voucher: 'voucher',
-  cash: 'cash',
-  custom: 'custom',
+  weekend_away: "weekend_away",
+  tv: "tv",
+  experience: "experience",
+  voucher: "voucher",
+  cash: "cash",
+  custom: "custom",
 } as const;
 
 export interface MonthlyAward {
@@ -1495,16 +1495,16 @@ export interface MonthlyAward {
   createdAt?: string;
 }
 
-export type CreateMonthlyAwardBodyAwardType = typeof CreateMonthlyAwardBodyAwardType[keyof typeof CreateMonthlyAwardBodyAwardType];
-
+export type CreateMonthlyAwardBodyAwardType =
+  (typeof CreateMonthlyAwardBodyAwardType)[keyof typeof CreateMonthlyAwardBodyAwardType];
 
 export const CreateMonthlyAwardBodyAwardType = {
-  weekend_away: 'weekend_away',
-  tv: 'tv',
-  experience: 'experience',
-  voucher: 'voucher',
-  cash: 'cash',
-  custom: 'custom',
+  weekend_away: "weekend_away",
+  tv: "tv",
+  experience: "experience",
+  voucher: "voucher",
+  cash: "cash",
+  custom: "custom",
 } as const;
 
 export interface CreateMonthlyAwardBody {
@@ -1519,16 +1519,16 @@ export interface CreateMonthlyAwardBody {
   totalScore?: number;
 }
 
-export type UpdateMonthlyAwardBodyAwardType = typeof UpdateMonthlyAwardBodyAwardType[keyof typeof UpdateMonthlyAwardBodyAwardType];
-
+export type UpdateMonthlyAwardBodyAwardType =
+  (typeof UpdateMonthlyAwardBodyAwardType)[keyof typeof UpdateMonthlyAwardBodyAwardType];
 
 export const UpdateMonthlyAwardBodyAwardType = {
-  weekend_away: 'weekend_away',
-  tv: 'tv',
-  experience: 'experience',
-  voucher: 'voucher',
-  cash: 'cash',
-  custom: 'custom',
+  weekend_away: "weekend_away",
+  tv: "tv",
+  experience: "experience",
+  voucher: "voucher",
+  cash: "cash",
+  custom: "custom",
 } as const;
 
 export interface UpdateMonthlyAwardBody {
@@ -1542,14 +1542,14 @@ export interface UpdateMonthlyAwardBody {
   publishedToStaff?: boolean;
 }
 
-export type WorkerSkillsExperienceLevel = typeof WorkerSkillsExperienceLevel[keyof typeof WorkerSkillsExperienceLevel];
-
+export type WorkerSkillsExperienceLevel =
+  (typeof WorkerSkillsExperienceLevel)[keyof typeof WorkerSkillsExperienceLevel];
 
 export const WorkerSkillsExperienceLevel = {
-  junior: 'junior',
-  intermediate: 'intermediate',
-  senior: 'senior',
-  specialist: 'specialist',
+  junior: "junior",
+  intermediate: "intermediate",
+  senior: "senior",
+  specialist: "specialist",
 } as const;
 
 export interface WorkerSkills {
@@ -1584,14 +1584,14 @@ export interface WorkerSkills {
   updatedAt?: string;
 }
 
-export type UpdateWorkerSkillsBodyExperienceLevel = typeof UpdateWorkerSkillsBodyExperienceLevel[keyof typeof UpdateWorkerSkillsBodyExperienceLevel];
-
+export type UpdateWorkerSkillsBodyExperienceLevel =
+  (typeof UpdateWorkerSkillsBodyExperienceLevel)[keyof typeof UpdateWorkerSkillsBodyExperienceLevel];
 
 export const UpdateWorkerSkillsBodyExperienceLevel = {
-  junior: 'junior',
-  intermediate: 'intermediate',
-  senior: 'senior',
-  specialist: 'specialist',
+  junior: "junior",
+  intermediate: "intermediate",
+  senior: "senior",
+  specialist: "specialist",
 } as const;
 
 export interface UpdateWorkerSkillsBody {
@@ -1615,16 +1615,16 @@ export interface UpdateWorkerSkillsBody {
   notes?: string;
 }
 
-export type BuilderProfileQualityTier = typeof BuilderProfileQualityTier[keyof typeof BuilderProfileQualityTier];
-
+export type BuilderProfileQualityTier =
+  (typeof BuilderProfileQualityTier)[keyof typeof BuilderProfileQualityTier];
 
 export const BuilderProfileQualityTier = {
-  premium: 'premium',
-  high_end: 'high_end',
-  standard: 'standard',
-  production: 'production',
-  budget: 'budget',
-  custom: 'custom',
+  premium: "premium",
+  high_end: "high_end",
+  standard: "standard",
+  production: "production",
+  budget: "budget",
+  custom: "custom",
 } as const;
 
 export interface BuilderProfile {
@@ -1659,16 +1659,16 @@ export interface BuilderProfile {
   active?: boolean;
 }
 
-export type CreateBuilderProfileBodyQualityTier = typeof CreateBuilderProfileBodyQualityTier[keyof typeof CreateBuilderProfileBodyQualityTier];
-
+export type CreateBuilderProfileBodyQualityTier =
+  (typeof CreateBuilderProfileBodyQualityTier)[keyof typeof CreateBuilderProfileBodyQualityTier];
 
 export const CreateBuilderProfileBodyQualityTier = {
-  premium: 'premium',
-  high_end: 'high_end',
-  standard: 'standard',
-  production: 'production',
-  budget: 'budget',
-  custom: 'custom',
+  premium: "premium",
+  high_end: "high_end",
+  standard: "standard",
+  production: "production",
+  budget: "budget",
+  custom: "custom",
 } as const;
 
 export interface CreateBuilderProfileBody {
@@ -1735,14 +1735,14 @@ export interface AllocationRequest {
   requiredSkills?: string[];
 }
 
-export type WorkerRecommendationRecommendation = typeof WorkerRecommendationRecommendation[keyof typeof WorkerRecommendationRecommendation];
-
+export type WorkerRecommendationRecommendation =
+  (typeof WorkerRecommendationRecommendation)[keyof typeof WorkerRecommendationRecommendation];
 
 export const WorkerRecommendationRecommendation = {
-  recommended: 'recommended',
-  suitable: 'suitable',
-  possible: 'possible',
-  not_recommended: 'not_recommended',
+  recommended: "recommended",
+  suitable: "suitable",
+  possible: "possible",
+  not_recommended: "not_recommended",
 } as const;
 
 export interface WorkerRecommendation {
@@ -1776,14 +1776,14 @@ export interface AllocationResult {
   warnings?: string[];
 }
 
-export type WeeklyPlannerProposalStatus = typeof WeeklyPlannerProposalStatus[keyof typeof WeeklyPlannerProposalStatus];
-
+export type WeeklyPlannerProposalStatus =
+  (typeof WeeklyPlannerProposalStatus)[keyof typeof WeeklyPlannerProposalStatus];
 
 export const WeeklyPlannerProposalStatus = {
-  draft: 'draft',
-  pending_approval: 'pending_approval',
-  approved: 'approved',
-  rejected: 'rejected',
+  draft: "draft",
+  pending_approval: "pending_approval",
+  approved: "approved",
+  rejected: "rejected",
 } as const;
 
 export type WeeklyPlannerProposalProposedScheduleItemAssignmentsItem = {
@@ -1802,7 +1802,9 @@ export type WeeklyPlannerProposalProposedScheduleItem = {
   assignments?: WeeklyPlannerProposalProposedScheduleItemAssignmentsItem[];
 };
 
-export type WeeklyPlannerProposalSupplierOrdersItem = { [key: string]: unknown };
+export type WeeklyPlannerProposalSupplierOrdersItem = {
+  [key: string]: unknown;
+};
 
 export type WeeklyPlannerProposalOptimisationSummary = {
   totalJobs?: number;
@@ -1857,27 +1859,27 @@ export interface CreateSupplierProfileBody {
   notes?: string;
 }
 
-export type SupplierOrderStatus = typeof SupplierOrderStatus[keyof typeof SupplierOrderStatus];
-
+export type SupplierOrderStatus =
+  (typeof SupplierOrderStatus)[keyof typeof SupplierOrderStatus];
 
 export const SupplierOrderStatus = {
-  draft: 'draft',
-  pending_approval: 'pending_approval',
-  approved: 'approved',
-  sent_to_supplier: 'sent_to_supplier',
-  ready_for_pickup: 'ready_for_pickup',
-  picked_up: 'picked_up',
-  cancelled: 'cancelled',
+  draft: "draft",
+  pending_approval: "pending_approval",
+  approved: "approved",
+  sent_to_supplier: "sent_to_supplier",
+  ready_for_pickup: "ready_for_pickup",
+  picked_up: "picked_up",
+  cancelled: "cancelled",
 } as const;
 
-export type SupplierOrderUrgency = typeof SupplierOrderUrgency[keyof typeof SupplierOrderUrgency];
-
+export type SupplierOrderUrgency =
+  (typeof SupplierOrderUrgency)[keyof typeof SupplierOrderUrgency];
 
 export const SupplierOrderUrgency = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
-  urgent: 'urgent',
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
 } as const;
 
 export interface SupplierOrderItem {
@@ -1921,14 +1923,14 @@ export interface SupplierOrder {
   updatedAt?: string;
 }
 
-export type CreateSupplierOrderBodyUrgency = typeof CreateSupplierOrderBodyUrgency[keyof typeof CreateSupplierOrderBodyUrgency];
-
+export type CreateSupplierOrderBodyUrgency =
+  (typeof CreateSupplierOrderBodyUrgency)[keyof typeof CreateSupplierOrderBodyUrgency];
 
 export const CreateSupplierOrderBodyUrgency = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
-  urgent: 'urgent',
+  low: "low",
+  normal: "normal",
+  high: "high",
+  urgent: "urgent",
 } as const;
 
 export type CreateSupplierOrderBodyItemsItem = {
@@ -1951,12 +1953,12 @@ export interface CreateSupplierOrderBody {
   items: CreateSupplierOrderBodyItemsItem[];
 }
 
-export type ProfitabilityScorePeriodType = typeof ProfitabilityScorePeriodType[keyof typeof ProfitabilityScorePeriodType];
-
+export type ProfitabilityScorePeriodType =
+  (typeof ProfitabilityScorePeriodType)[keyof typeof ProfitabilityScorePeriodType];
 
 export const ProfitabilityScorePeriodType = {
-  weekly: 'weekly',
-  monthly: 'monthly',
+  weekly: "weekly",
+  monthly: "monthly",
 } as const;
 
 export interface ProfitabilityScore {
@@ -1981,27 +1983,27 @@ export interface ProfitabilityScore {
   calculatedAt?: string;
 }
 
-export type LocationVerificationEventType = typeof LocationVerificationEventType[keyof typeof LocationVerificationEventType];
-
+export type LocationVerificationEventType =
+  (typeof LocationVerificationEventType)[keyof typeof LocationVerificationEventType];
 
 export const LocationVerificationEventType = {
-  clock_on: 'clock_on',
-  clock_off: 'clock_off',
-  job_arrived: 'job_arrived',
-  job_departed: 'job_departed',
+  clock_on: "clock_on",
+  clock_off: "clock_off",
+  job_arrived: "job_arrived",
+  job_departed: "job_departed",
 } as const;
 
-export type LocationVerificationStatus = typeof LocationVerificationStatus[keyof typeof LocationVerificationStatus];
-
+export type LocationVerificationStatus =
+  (typeof LocationVerificationStatus)[keyof typeof LocationVerificationStatus];
 
 export const LocationVerificationStatus = {
-  verified: 'verified',
-  outside_range: 'outside_range',
-  skipped: 'skipped',
-  location_error: 'location_error',
-  no_job_address: 'no_job_address',
-  geocode_failed: 'geocode_failed',
-  captured: 'captured',
+  verified: "verified",
+  outside_range: "outside_range",
+  skipped: "skipped",
+  location_error: "location_error",
+  no_job_address: "no_job_address",
+  geocode_failed: "geocode_failed",
+  captured: "captured",
 } as const;
 
 export interface LocationVerification {
@@ -2039,25 +2041,25 @@ export interface LocationVerification {
   createdAt: string;
 }
 
-export type CreateLocationVerificationBodyEventType = typeof CreateLocationVerificationBodyEventType[keyof typeof CreateLocationVerificationBodyEventType];
-
+export type CreateLocationVerificationBodyEventType =
+  (typeof CreateLocationVerificationBodyEventType)[keyof typeof CreateLocationVerificationBodyEventType];
 
 export const CreateLocationVerificationBodyEventType = {
-  clock_on: 'clock_on',
-  clock_off: 'clock_off',
-  job_arrived: 'job_arrived',
-  job_departed: 'job_departed',
+  clock_on: "clock_on",
+  clock_off: "clock_off",
+  job_arrived: "job_arrived",
+  job_departed: "job_departed",
 } as const;
 
 /**
  * Only set this when the worker skipped or the browser errored. Otherwise omit and let the server calculate.
  */
-export type CreateLocationVerificationBodyStatus = typeof CreateLocationVerificationBodyStatus[keyof typeof CreateLocationVerificationBodyStatus];
-
+export type CreateLocationVerificationBodyStatus =
+  (typeof CreateLocationVerificationBodyStatus)[keyof typeof CreateLocationVerificationBodyStatus];
 
 export const CreateLocationVerificationBodyStatus = {
-  skipped: 'skipped',
-  location_error: 'location_error',
+  skipped: "skipped",
+  location_error: "location_error",
 } as const;
 
 export interface CreateLocationVerificationBody {
@@ -2073,35 +2075,35 @@ export interface CreateLocationVerificationBody {
   status?: CreateLocationVerificationBodyStatus;
 }
 
-export type SubNotificationType = typeof SubNotificationType[keyof typeof SubNotificationType];
-
+export type SubNotificationType =
+  (typeof SubNotificationType)[keyof typeof SubNotificationType];
 
 export const SubNotificationType = {
-  new_job: 'new_job',
-  job_changed: 'job_changed',
-  forgotten_action: 'forgotten_action',
-  missing_photos: 'missing_photos',
-  missing_metres: 'missing_metres',
-  missing_stock: 'missing_stock',
-  stock_pickup_ready: 'stock_pickup_ready',
-  upcoming_job: 'upcoming_job',
-  clock_on_reminder: 'clock_on_reminder',
-  break_reminder: 'break_reminder',
-  weekly_performance: 'weekly_performance',
-  bonus_update: 'bonus_update',
-  safety_reminder: 'safety_reminder',
-  audit_fix_request: 'audit_fix_request',
-  general: 'general',
+  new_job: "new_job",
+  job_changed: "job_changed",
+  forgotten_action: "forgotten_action",
+  missing_photos: "missing_photos",
+  missing_metres: "missing_metres",
+  missing_stock: "missing_stock",
+  stock_pickup_ready: "stock_pickup_ready",
+  upcoming_job: "upcoming_job",
+  clock_on_reminder: "clock_on_reminder",
+  break_reminder: "break_reminder",
+  weekly_performance: "weekly_performance",
+  bonus_update: "bonus_update",
+  safety_reminder: "safety_reminder",
+  audit_fix_request: "audit_fix_request",
+  general: "general",
 } as const;
 
-export type SubNotificationPriority = typeof SubNotificationPriority[keyof typeof SubNotificationPriority];
-
+export type SubNotificationPriority =
+  (typeof SubNotificationPriority)[keyof typeof SubNotificationPriority];
 
 export const SubNotificationPriority = {
-  urgent: 'urgent',
-  high: 'high',
-  normal: 'normal',
-  low: 'low',
+  urgent: "urgent",
+  high: "high",
+  normal: "normal",
+  low: "low",
 } as const;
 
 export interface SubNotification {
@@ -2123,35 +2125,35 @@ export interface SubNotification {
   readAt?: string | null;
 }
 
-export type CreateNotificationBodyType = typeof CreateNotificationBodyType[keyof typeof CreateNotificationBodyType];
-
+export type CreateNotificationBodyType =
+  (typeof CreateNotificationBodyType)[keyof typeof CreateNotificationBodyType];
 
 export const CreateNotificationBodyType = {
-  new_job: 'new_job',
-  job_changed: 'job_changed',
-  forgotten_action: 'forgotten_action',
-  missing_photos: 'missing_photos',
-  missing_metres: 'missing_metres',
-  missing_stock: 'missing_stock',
-  stock_pickup_ready: 'stock_pickup_ready',
-  upcoming_job: 'upcoming_job',
-  clock_on_reminder: 'clock_on_reminder',
-  break_reminder: 'break_reminder',
-  weekly_performance: 'weekly_performance',
-  bonus_update: 'bonus_update',
-  safety_reminder: 'safety_reminder',
-  audit_fix_request: 'audit_fix_request',
-  general: 'general',
+  new_job: "new_job",
+  job_changed: "job_changed",
+  forgotten_action: "forgotten_action",
+  missing_photos: "missing_photos",
+  missing_metres: "missing_metres",
+  missing_stock: "missing_stock",
+  stock_pickup_ready: "stock_pickup_ready",
+  upcoming_job: "upcoming_job",
+  clock_on_reminder: "clock_on_reminder",
+  break_reminder: "break_reminder",
+  weekly_performance: "weekly_performance",
+  bonus_update: "bonus_update",
+  safety_reminder: "safety_reminder",
+  audit_fix_request: "audit_fix_request",
+  general: "general",
 } as const;
 
-export type CreateNotificationBodyPriority = typeof CreateNotificationBodyPriority[keyof typeof CreateNotificationBodyPriority];
-
+export type CreateNotificationBodyPriority =
+  (typeof CreateNotificationBodyPriority)[keyof typeof CreateNotificationBodyPriority];
 
 export const CreateNotificationBodyPriority = {
-  urgent: 'urgent',
-  high: 'high',
-  normal: 'normal',
-  low: 'low',
+  urgent: "urgent",
+  high: "high",
+  normal: "normal",
+  low: "low",
 } as const;
 
 export interface CreateNotificationBody {
@@ -2174,81 +2176,81 @@ export interface RegisterPushSubscriptionBody {
 }
 
 export type ListCustomersParams = {
-search?: string;
+  search?: string;
 };
 
 export type ListJobsParams = {
-status?: ListJobsStatus;
-customerId?: number;
-search?: string;
+  status?: ListJobsStatus;
+  customerId?: number;
+  search?: string;
 };
 
-export type ListJobsStatus = typeof ListJobsStatus[keyof typeof ListJobsStatus];
-
+export type ListJobsStatus =
+  (typeof ListJobsStatus)[keyof typeof ListJobsStatus];
 
 export const ListJobsStatus = {
-  pending: 'pending',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  invoiced: 'invoiced',
-  cancelled: 'cancelled',
+  pending: "pending",
+  in_progress: "in_progress",
+  completed: "completed",
+  invoiced: "invoiced",
+  cancelled: "cancelled",
 } as const;
 
 export type ListQuotesParams = {
-status?: ListQuotesStatus;
-customerId?: number;
+  status?: ListQuotesStatus;
+  customerId?: number;
 };
 
-export type ListQuotesStatus = typeof ListQuotesStatus[keyof typeof ListQuotesStatus];
-
+export type ListQuotesStatus =
+  (typeof ListQuotesStatus)[keyof typeof ListQuotesStatus];
 
 export const ListQuotesStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  accepted: 'accepted',
-  declined: 'declined',
-  expired: 'expired',
+  draft: "draft",
+  sent: "sent",
+  accepted: "accepted",
+  declined: "declined",
+  expired: "expired",
 } as const;
 
 export type ListInvoicesParams = {
-status?: ListInvoicesStatus;
-customerId?: number;
+  status?: ListInvoicesStatus;
+  customerId?: number;
 };
 
-export type ListInvoicesStatus = typeof ListInvoicesStatus[keyof typeof ListInvoicesStatus];
-
+export type ListInvoicesStatus =
+  (typeof ListInvoicesStatus)[keyof typeof ListInvoicesStatus];
 
 export const ListInvoicesStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  paid: 'paid',
-  overdue: 'overdue',
-  cancelled: 'cancelled',
+  draft: "draft",
+  sent: "sent",
+  paid: "paid",
+  overdue: "overdue",
+  cancelled: "cancelled",
 } as const;
 
 export type ListAppointmentsParams = {
-startDate?: string;
-endDate?: string;
-jobId?: number;
+  startDate?: string;
+  endDate?: string;
+  jobId?: number;
 };
 
 export type GetTodaySessionParams = {
-subcontractorId: number;
+  subcontractorId: number;
 };
 
 export type ListWorkSessionsParams = {
-subcontractorId?: number;
-date?: string;
-weekStart?: string;
+  subcontractorId?: number;
+  date?: string;
+  weekStart?: string;
 };
 
 export type ListLocationVerificationsParams = {
-subcontractorId?: number;
-date?: string;
-/**
- * Only return outside_range, skipped, or error records
- */
-flagsOnly?: boolean;
+  subcontractorId?: number;
+  date?: string;
+  /**
+   * Only return outside_range, skipped, or error records
+   */
+  flagsOnly?: boolean;
 };
 
 export type ReviewLocationVerificationBody = {
@@ -2256,15 +2258,15 @@ export type ReviewLocationVerificationBody = {
 };
 
 export type ListDispatchParams = {
-date?: string;
-subcontractorId?: number;
+  date?: string;
+  subcontractorId?: number;
 };
 
 export type ListJobReportsParams = {
-jobId?: number;
-subcontractorId?: number;
-date?: string;
-hasIssues?: boolean;
+  jobId?: number;
+  subcontractorId?: number;
+  date?: string;
+  hasIssues?: boolean;
 };
 
 export type ConnectXero200 = {
@@ -2272,61 +2274,61 @@ export type ConnectXero200 = {
 };
 
 export type ListWeeklyInvoicesParams = {
-subcontractorId?: number;
-status?: ListWeeklyInvoicesStatus;
+  subcontractorId?: number;
+  status?: ListWeeklyInvoicesStatus;
 };
 
-export type ListWeeklyInvoicesStatus = typeof ListWeeklyInvoicesStatus[keyof typeof ListWeeklyInvoicesStatus];
-
+export type ListWeeklyInvoicesStatus =
+  (typeof ListWeeklyInvoicesStatus)[keyof typeof ListWeeklyInvoicesStatus];
 
 export const ListWeeklyInvoicesStatus = {
-  draft: 'draft',
-  submitted: 'submitted',
-  paid: 'paid',
+  draft: "draft",
+  submitted: "submitted",
+  paid: "paid",
 } as const;
 
 export type GetAdminTimesheetsParams = {
-weekStart?: string;
-subcontractorId?: number;
+  weekStart?: string;
+  subcontractorId?: number;
 };
 
 export type GetProductivityAnalyticsParams = {
-startDate?: string;
-endDate?: string;
-subcontractorId?: number;
+  startDate?: string;
+  endDate?: string;
+  subcontractorId?: number;
 };
 
 export type GetFridaySummaryParams = {
-subcontractorId: number;
+  subcontractorId: number;
 };
 
 export type ListBonusCalculationsParams = {
-weekStart?: string;
-subcontractorId?: number;
-status?: ListBonusCalculationsStatus;
+  weekStart?: string;
+  subcontractorId?: number;
+  status?: ListBonusCalculationsStatus;
 };
 
-export type ListBonusCalculationsStatus = typeof ListBonusCalculationsStatus[keyof typeof ListBonusCalculationsStatus];
-
+export type ListBonusCalculationsStatus =
+  (typeof ListBonusCalculationsStatus)[keyof typeof ListBonusCalculationsStatus];
 
 export const ListBonusCalculationsStatus = {
-  pending: 'pending',
-  approved: 'approved',
-  paid: 'paid',
-  rejected: 'rejected',
+  pending: "pending",
+  approved: "approved",
+  paid: "paid",
+  rejected: "rejected",
 } as const;
 
 export type CalculateBonusesBody = {
   weekStart: string;
 };
 
-export type UpdateBonusCalculationBodyStatus = typeof UpdateBonusCalculationBodyStatus[keyof typeof UpdateBonusCalculationBodyStatus];
-
+export type UpdateBonusCalculationBodyStatus =
+  (typeof UpdateBonusCalculationBodyStatus)[keyof typeof UpdateBonusCalculationBodyStatus];
 
 export const UpdateBonusCalculationBodyStatus = {
-  approved: 'approved',
-  paid: 'paid',
-  rejected: 'rejected',
+  approved: "approved",
+  paid: "paid",
+  rejected: "rejected",
 } as const;
 
 export type UpdateBonusCalculationBody = {
@@ -2335,23 +2337,23 @@ export type UpdateBonusCalculationBody = {
 };
 
 export type ListDocketsParams = {
-subcontractorId?: number;
-jobAssignmentId?: number;
+  subcontractorId?: number;
+  jobAssignmentId?: number;
 };
 
 export type ListSubInventoryParams = {
-subcontractorId?: number;
+  subcontractorId?: number;
 };
 
 export type ListInventoryTransactionsParams = {
-subcontractorId?: number;
-stockItemId?: number;
-transactionType?: string;
+  subcontractorId?: number;
+  stockItemId?: number;
+  transactionType?: string;
 };
 
 export type ListRestockRequestsParams = {
-subcontractorId?: number;
-status?: string;
+  subcontractorId?: number;
+  status?: string;
 };
 
 export type RunAIAudit200Item = {
@@ -2362,34 +2364,34 @@ export type RunAIAudit200Item = {
 };
 
 export type ListAuditFlagsParams = {
-subcontractorId?: number;
-status?: string;
-severity?: string;
-startDate?: string;
+  subcontractorId?: number;
+  status?: string;
+  severity?: string;
+  startDate?: string;
 };
 
 export type ListAuditScoresParams = {
-subcontractorId?: number;
-periodType?: ListAuditScoresPeriodType;
-periodStart?: string;
+  subcontractorId?: number;
+  periodType?: ListAuditScoresPeriodType;
+  periodStart?: string;
 };
 
-export type ListAuditScoresPeriodType = typeof ListAuditScoresPeriodType[keyof typeof ListAuditScoresPeriodType];
-
+export type ListAuditScoresPeriodType =
+  (typeof ListAuditScoresPeriodType)[keyof typeof ListAuditScoresPeriodType];
 
 export const ListAuditScoresPeriodType = {
-  daily: 'daily',
-  weekly: 'weekly',
-  monthly: 'monthly',
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
 } as const;
 
-export type CalculateAuditScoresBodyPeriodType = typeof CalculateAuditScoresBodyPeriodType[keyof typeof CalculateAuditScoresBodyPeriodType];
-
+export type CalculateAuditScoresBodyPeriodType =
+  (typeof CalculateAuditScoresBodyPeriodType)[keyof typeof CalculateAuditScoresBodyPeriodType];
 
 export const CalculateAuditScoresBodyPeriodType = {
-  daily: 'daily',
-  weekly: 'weekly',
-  monthly: 'monthly',
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
 } as const;
 
 export type CalculateAuditScoresBody = {
@@ -2399,7 +2401,7 @@ export type CalculateAuditScoresBody = {
 };
 
 export type ListMonthlyRankingsParams = {
-month?: string;
+  month?: string;
 };
 
 export type CalculateMonthlyRankingsBody = {
@@ -2407,13 +2409,13 @@ export type CalculateMonthlyRankingsBody = {
 };
 
 export type ListNotificationsParams = {
-subcontractorId: number;
-unreadOnly?: boolean;
-limit?: number;
+  subcontractorId: number;
+  unreadOnly?: boolean;
+  limit?: number;
 };
 
 export type GetUnreadCountParams = {
-subcontractorId: number;
+  subcontractorId: number;
 };
 
 export type GetUnreadCount200 = {

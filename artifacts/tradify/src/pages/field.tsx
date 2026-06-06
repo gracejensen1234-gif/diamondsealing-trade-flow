@@ -219,6 +219,7 @@ type FieldEarningsSummary = {
   totalHours: number;
   ratePerMetre: number;
   hourlyRate: number;
+  gstRegistered: boolean;
   completedInvoiceHours: number;
   uninvoicedInvoiceHours: number;
   completedMetres: number;
@@ -1866,7 +1867,9 @@ export default function FieldView() {
                       {formatCurrency(earningsSummary.toInvoiceGross)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Gross ready to invoice
+                      {earningsSummary.gstRegistered
+                        ? "Gross ready to invoice, including GST"
+                        : "Gross ready to invoice, no GST"}
                     </p>
                   </div>
                   <Badge
@@ -1920,6 +1923,14 @@ export default function FieldView() {
                     <p className="text-xs text-muted-foreground">Hourly rate</p>
                     <p className="mt-1 text-lg font-semibold">
                       {formatCurrency(earningsSummary.hourlyRate)}/hr
+                    </p>
+                  </div>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">GST</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {earningsSummary.gstRegistered
+                        ? formatCurrency(earningsSummary.toInvoiceTax)
+                        : "No GST"}
                     </p>
                   </div>
                 </div>

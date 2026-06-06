@@ -62,7 +62,10 @@ export default function WorkerProfiles() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, any>>({});
   const [rateEdits, setRateEdits] = useState<
-    Record<number, { hourlyRate: string; ratePerMetre: string }>
+    Record<
+      number,
+      { hourlyRate: string; ratePerMetre: string; gstRegistered: boolean }
+    >
   >({});
   const [accountDrafts, setAccountDrafts] = useState<
     Record<number, { email: string; temporaryPassword: string }>
@@ -77,6 +80,7 @@ export default function WorkerProfiles() {
     phone: "",
     abn: "",
     hourlyRate: "",
+    gstRegistered: false,
     temporaryPassword: "",
   });
 
@@ -121,6 +125,7 @@ export default function WorkerProfiles() {
           abn: data.abn || undefined,
           hourlyRate:
             Number(data.hourlyRate) > 0 ? Number(data.hourlyRate) : undefined,
+          gstRegistered: data.gstRegistered,
           active: true,
         }),
       });
@@ -164,6 +169,7 @@ export default function WorkerProfiles() {
         phone: "",
         abn: "",
         hourlyRate: "",
+        gstRegistered: false,
         temporaryPassword: "",
       });
       setShowNewWorker(false);
@@ -191,7 +197,11 @@ export default function WorkerProfiles() {
       rates,
     }: {
       subId: number;
-      rates: { hourlyRate: string; ratePerMetre: string };
+      rates: {
+        hourlyRate: string;
+        ratePerMetre: string;
+        gstRegistered: boolean;
+      };
     }) => {
       const response = await fetch(`/api/subcontractors/${subId}`, {
         method: "PATCH",
@@ -201,6 +211,7 @@ export default function WorkerProfiles() {
             Number(rates.hourlyRate) > 0 ? Number(rates.hourlyRate) : 0,
           ratePerMetre:
             Number(rates.ratePerMetre) > 0 ? Number(rates.ratePerMetre) : 0,
+          gstRegistered: rates.gstRegistered,
         }),
       });
       if (!response.ok)
@@ -376,6 +387,7 @@ export default function WorkerProfiles() {
       rateEdits[sub.id] ?? {
         hourlyRate: sub.hourlyRate != null ? String(sub.hourlyRate) : "",
         ratePerMetre: sub.ratePerMetre != null ? String(sub.ratePerMetre) : "",
+        gstRegistered: Boolean(sub.gstRegistered),
       }
     );
   }
@@ -397,6 +409,13 @@ export default function WorkerProfiles() {
     setRateEdits((prev) => ({
       ...prev,
       [sub.id]: { ...getRateEdit(sub), [key]: value },
+    }));
+  }
+
+  function updateRateGstEdit(sub: any, value: boolean) {
+    setRateEdits((prev) => ({
+      ...prev,
+      [sub.id]: { ...getRateEdit(sub), gstRegistered: value },
     }));
   }
 
@@ -546,6 +565,24 @@ export default function WorkerProfiles() {
                   setNewWorker((worker) => ({
                     ...worker,
                     hourlyRate: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
+              <div>
+                <Label htmlFor="newWorkerGstRegistered">GST registered</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Turn on only if this worker charges GST.
+                </p>
+              </div>
+              <Switch
+                id="newWorkerGstRegistered"
+                checked={newWorker.gstRegistered}
+                onCheckedChange={(checked) =>
+                  setNewWorker((worker) => ({
+                    ...worker,
+                    gstRegistered: checked,
                   }))
                 }
               />
@@ -748,6 +785,20 @@ export default function WorkerProfiles() {
                               }
                             />
                           </div>
+                          <div className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 sm:col-span-2">
+                            <div>
+                              <Label className="text-xs">GST registered</Label>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Adds 10% GST to this worker's weekly invoices.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={rates.gstRegistered}
+                              onCheckedChange={(checked) =>
+                                updateRateGstEdit(sub, checked)
+                              }
+                            />
+                          </div>
                           <div className="flex items-end">
                             <Button
                               size="sm"
@@ -773,6 +824,12 @@ export default function WorkerProfiles() {
                               {sub.hourlyRate != null
                                 ? `$${Number(sub.hourlyRate).toFixed(2)}/hr`
                                 : "Not set"}
+                            </p>
+                          </div>
+                          <div className="rounded-md border bg-background px-3 py-2">
+                            <p className="text-xs text-muted-foreground">GST</p>
+                            <p className="mt-1 text-lg font-semibold">
+                              {sub.gstRegistered ? "GST registered" : "No GST"}
                             </p>
                           </div>
                         </div>
