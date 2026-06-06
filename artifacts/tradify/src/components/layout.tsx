@@ -24,7 +24,6 @@ import {
   CalendarRange,
   TrendingUp,
   HardHat,
-  Building2,
   ScrollText,
   Bell,
   Menu,
@@ -79,7 +78,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { name: "Dashboard", href: "/", icon: Home },
         { name: "Jobs", href: "/jobs", icon: Hammer },
-        { name: "Clients", href: "/customers", icon: Users },
         { name: "Invoices", href: "/invoices", icon: Receipt },
         { name: "Schedule", href: "/schedule", icon: Calendar },
       ],
@@ -114,9 +112,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           icon: HardHat,
         },
         {
-          name: "Builder Profiles",
-          href: "/builder-profiles",
-          icon: Building2,
+          name: "Clients & Builders",
+          href: "/clients-builders",
+          icon: Users,
         },
       ],
     },

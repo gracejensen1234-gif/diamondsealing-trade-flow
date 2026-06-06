@@ -352,7 +352,11 @@ function BuilderFormFields({
   );
 }
 
-export default function BuilderProfiles() {
+type BuilderProfilesProps = {
+  embedded?: boolean;
+};
+
+export default function BuilderProfiles({ embedded = false }: BuilderProfilesProps = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -453,7 +457,11 @@ export default function BuilderProfiles() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">Builder Profiles</h1>
+          {embedded ? (
+            <h2 className="text-xl font-semibold tracking-tight">Builders</h2>
+          ) : (
+            <h1 className="text-2xl font-bold">Builder Profiles</h1>
+          )}
           <p className="text-muted-foreground mt-1">Quality tiers, preferences, sign-off requirements and ratings</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>

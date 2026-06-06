@@ -10,7 +10,7 @@ import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Jobs from "@/pages/jobs";
 import JobDetail from "@/pages/job-detail";
-import Customers from "@/pages/customers";
+import ClientsBuilders from "@/pages/clients-builders";
 import CustomerDetail from "@/pages/customer-detail";
 import Invoices from "@/pages/invoices";
 import InvoiceDetail from "@/pages/invoice-detail";
@@ -36,7 +36,6 @@ import Inventory from "@/pages/inventory";
 import AuditFlags from "@/pages/audit-flags";
 import Awards from "@/pages/awards";
 import WorkerProfiles from "@/pages/worker-profiles";
-import BuilderProfiles from "@/pages/builder-profiles";
 import Allocation from "@/pages/allocation";
 import WeeklyPlanner from "@/pages/weekly-planner";
 import Suppliers from "@/pages/suppliers";
@@ -53,8 +52,9 @@ function AdminRoutes() {
         <Route path="/" component={Dashboard} />
         <Route path="/jobs" component={Jobs} />
         <Route path="/jobs/:id" component={JobDetail} />
-        <Route path="/customers" component={Customers} />
+        <Route path="/clients-builders" component={ClientsBuilders} />
         <Route path="/customers/:id" component={CustomerDetail} />
+        <Route path="/customers" component={ClientsBuilders} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoices/:id" component={InvoiceDetail} />
         <Route path="/schedule" component={Schedule} />
@@ -85,7 +85,7 @@ function AdminRoutes() {
 
         {/* Workforce */}
         <Route path="/worker-profiles" component={WorkerProfiles} />
-        <Route path="/builder-profiles" component={BuilderProfiles} />
+        <Route path="/builder-profiles" component={ClientsBuilders} />
         <Route path="/allocation" component={Allocation} />
         <Route path="/weekly-planner" component={WeeklyPlanner} />
 

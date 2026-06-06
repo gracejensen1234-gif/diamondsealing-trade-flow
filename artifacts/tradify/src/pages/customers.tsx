@@ -36,7 +36,11 @@ function optionalText(value: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-export default function Customers() {
+type CustomersProps = {
+  embedded?: boolean;
+};
+
+export default function Customers({ embedded = false }: CustomersProps = {}) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyCustomerForm);
@@ -95,11 +99,15 @@ export default function Customers() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-          <p className="text-muted-foreground mt-2">Manage your client base.</p>
+    <div className={embedded ? "space-y-6" : "space-y-8"}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          {embedded ? (
+            <h2 className="text-xl font-semibold tracking-tight">Clients</h2>
+          ) : (
+            <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
+          )}
+          <p className="text-muted-foreground mt-2">Client contacts, billing details and notes.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
