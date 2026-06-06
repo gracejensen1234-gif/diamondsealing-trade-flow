@@ -126,6 +126,15 @@ export default function WeeklyInvoices() {
                   }>
                     {inv.status.toUpperCase()}
                   </Badge>
+                  {inv.reviewStatus === "changes_requested" ? (
+                    <Badge variant="destructive" className="mt-2 block text-center text-xs">
+                      Awaiting worker acceptance
+                    </Badge>
+                  ) : inv.reviewStatus === "accepted" ? (
+                    <Badge variant="secondary" className="mt-2 block text-center text-xs">
+                      Edit accepted
+                    </Badge>
+                  ) : null}
                 </div>
               </CardHeader>
               <CardContent className="py-6 flex-1 flex flex-col justify-center items-center text-center space-y-2">

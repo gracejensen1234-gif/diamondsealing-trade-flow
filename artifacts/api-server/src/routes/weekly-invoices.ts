@@ -20,6 +20,7 @@ import {
 import { dateOnlyOrToday } from "../lib/date-utils.js";
 import {
   companyId,
+  isAdmin,
   requireSubcontractorAccess,
   workerSubcontractorId,
 } from "../lib/auth.js";
@@ -37,11 +38,13 @@ type WeeklyInvoiceLineItem = {
   ratePerMetre?: number | string | null;
   hourlyRate?: number | string | null;
   hourlyAmount?: number | string | null;
-  payBasis?: "metres" | "hours" | "unset";
+  payBasis?: "metres" | "hours" | "adjustment" | "unset";
   amount?: number | string | null;
+  stockCost?: number | string | null;
   reportId?: number | null;
   hoursWorked?: number | string | null;
   jobDescription?: string | null;
+  adminAdjustment?: boolean;
 };
 
 type XeroInvoiceResponse = {
@@ -73,6 +76,11 @@ function serializeInvoice(
     subtotal: Number(inv.subtotal),
     tax: Number(inv.tax),
     total: Number(inv.total),
+    reviewStatus: inv.reviewStatus ?? "none",
+    reviewAdjustmentAmount:
+      inv.reviewAdjustmentAmount == null
+        ? null
+        : Number(inv.reviewAdjustmentAmount),
     lineItems: Array.isArray(inv.lineItems) ? inv.lineItems : [],
   };
 }
@@ -143,6 +151,55 @@ function lineItems(inv: typeof weeklyInvoicesTable.$inferSelect) {
     : [];
 }
 
+function isAdminAdjustmentLine(item: WeeklyInvoiceLineItem) {
+  return Boolean(item.adminAdjustment) || item.payBasis === "adjustment";
+}
+
+function baseInvoiceLineItems(inv: typeof weeklyInvoicesTable.$inferSelect) {
+  return lineItems(inv).filter((item) => !isAdminAdjustmentLine(item));
+}
+
+function adjustmentLine(reason: string, amount: number): WeeklyInvoiceLineItem {
+  return {
+    jobId: null,
+    jobTitle: "Invoice adjustment",
+    jobAddress: null,
+    dispatchDate: null,
+    metersCompleted: 0,
+    ratePerMetre: 0,
+    hourlyRate: null,
+    hourlyAmount: null,
+    payBasis: "adjustment",
+    amount: money(amount),
+    stockCost: 0,
+    reportId: null,
+    hoursWorked: null,
+    jobDescription: reason,
+    adminAdjustment: true,
+  };
+}
+
+function recalcInvoiceTotals(
+  items: WeeklyInvoiceLineItem[],
+  gstRegistered: boolean,
+) {
+  const totalMetres = items.reduce(
+    (sum, item) => sum + Number(item.metersCompleted ?? 0),
+    0,
+  );
+  const subtotal = items.reduce(
+    (sum, item) => sum + Number(item.amount ?? 0),
+    0,
+  );
+  const tax = gstRegistered ? subtotal * 0.1 : 0;
+  return {
+    totalMetres: money(totalMetres),
+    subtotal: money(subtotal),
+    tax: money(tax),
+    total: money(subtotal + tax),
+  };
+}
+
 function hoursFromAssignment(
   assignment: typeof jobAssignmentsTable.$inferSelect | null | undefined,
 ) {
@@ -188,6 +245,11 @@ function xeroLineDescription(
   inv: typeof weeklyInvoicesTable.$inferSelect,
   item: WeeklyInvoiceLineItem,
 ) {
+  if (isAdminAdjustmentLine(item)) {
+    return item.jobDescription?.trim()
+      ? `Invoice adjustment - ${item.jobDescription.trim()}`
+      : "Invoice adjustment";
+  }
   const base = `${item.dispatchDate ?? inv.weekStartDate} - ${item.jobTitle ?? "Joint sealing labour"}${item.jobAddress ? ` (${item.jobAddress})` : ""}`;
   const details = [
     item.jobDescription?.trim(),
@@ -199,6 +261,7 @@ function xeroLineDescription(
 }
 
 function linePayBasis(item: WeeklyInvoiceLineItem) {
+  if (item.payBasis === "adjustment") return "adjustment";
   if (item.payBasis === "hours" || item.payBasis === "metres")
     return item.payBasis;
   return Number(item.ratePerMetre ?? 0) > 0
@@ -209,12 +272,14 @@ function linePayBasis(item: WeeklyInvoiceLineItem) {
 }
 
 function xeroLineQuantity(item: WeeklyInvoiceLineItem) {
+  if (linePayBasis(item) === "adjustment") return 1;
   return linePayBasis(item) === "hours"
     ? Number(item.hoursWorked ?? 0)
     : Number(item.metersCompleted ?? 0);
 }
 
 function xeroLineUnitAmount(item: WeeklyInvoiceLineItem) {
+  if (linePayBasis(item) === "adjustment") return Number(item.amount ?? 0);
   return linePayBasis(item) === "hours"
     ? Number(item.hourlyRate ?? 0)
     : Number(item.ratePerMetre ?? 0);
@@ -460,6 +525,12 @@ async function upsertCurrentWeeklyInvoice(
 
   const draft = invoices.find((invoice) => invoice.status === "draft") ?? null;
   if (draft) {
+    if (
+      draft.reviewStatus === "changes_requested" ||
+      draft.reviewStatus === "accepted"
+    ) {
+      return { sub, invoice: draft, values };
+    }
     const [updated] = await db
       .update(weeklyInvoicesTable)
       .set({
@@ -700,6 +771,13 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
       .status(400)
       .json({ error: "No uninvoiced completed work for this week" });
   }
+  if (prepared.invoice.reviewStatus === "changes_requested") {
+    return res.status(400).json({
+      error:
+        "Admin has suggested invoice edits. Open the invoice, review the reason, and accept the change before submitting.",
+      invoice: serializeInvoice(prepared.invoice, prepared.sub.name),
+    });
+  }
   const hasMetreRate = Boolean(
     prepared.sub.ratePerMetre && Number(prepared.sub.ratePerMetre) > 0,
   );
@@ -811,6 +889,13 @@ router.post("/weekly-invoices/generate", async (req, res) => {
     const values = await buildWeeklyInvoiceValues(tenantId, sub, subReports);
     if (existing[0]) {
       if (existing[0].status !== "draft") continue;
+      if (
+        existing[0].reviewStatus === "changes_requested" ||
+        existing[0].reviewStatus === "accepted"
+      ) {
+        created.push(existing[0]);
+        continue;
+      }
 
       const [updated] = await db
         .update(weeklyInvoicesTable)
@@ -937,20 +1022,33 @@ router.patch("/weekly-invoices/:id", async (req, res) => {
   if (!params.success || !body.success)
     return res.status(400).json({ error: "Invalid request" });
 
+  const [existing] = await db
+    .select()
+    .from(weeklyInvoicesTable)
+    .where(
+      and(
+        eq(weeklyInvoicesTable.id, params.data.id),
+        eq(weeklyInvoicesTable.companyId, companyId(req)),
+      ),
+    );
+  if (!existing) return res.status(404).json({ error: "Not found" });
+  if (!requireSubcontractorAccess(req, res, existing.subcontractorId)) return;
+
+  const admin = isAdmin(req);
   const updates: Record<string, unknown> = {};
-  if (body.data.notes !== undefined) updates.notes = body.data.notes;
-  if (body.data.status !== undefined) updates.status = body.data.status;
+  if (body.data.notes !== undefined) {
+    if (!admin)
+      return res.status(403).json({ error: "Only admin can update notes" });
+    updates.notes = body.data.notes;
+  }
+  if (body.data.status !== undefined) {
+    if (!admin)
+      return res.status(403).json({ error: "Only admin can update status" });
+    updates.status = body.data.status;
+  }
   if (body.data.gstRegistered !== undefined) {
-    const [existing] = await db
-      .select()
-      .from(weeklyInvoicesTable)
-      .where(
-        and(
-          eq(weeklyInvoicesTable.id, params.data.id),
-          eq(weeklyInvoicesTable.companyId, companyId(req)),
-        ),
-      );
-    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (!admin)
+      return res.status(403).json({ error: "Only admin can update GST" });
     if (existing.status !== "draft") {
       return res
         .status(400)
@@ -961,6 +1059,98 @@ router.patch("/weekly-invoices/:id", async (req, res) => {
     updates.gstRegistered = body.data.gstRegistered;
     updates.tax = String(tax.toFixed(2));
     updates.total = String((subtotal + tax).toFixed(2));
+  }
+  if (body.data.reviewStatus !== undefined) {
+    const reviewStatus = body.data.reviewStatus;
+    if (existing.status !== "draft") {
+      return res
+        .status(400)
+        .json({ error: "Invoice edits can only be reviewed on draft invoices" });
+    }
+
+    if (reviewStatus === "changes_requested") {
+      if (!admin) {
+        return res
+          .status(403)
+          .json({ error: "Only admin can suggest invoice edits" });
+      }
+      const reason = body.data.reviewReason?.trim();
+      const amount = Number(body.data.reviewAdjustmentAmount ?? 0);
+      if (!reason) {
+        return res
+          .status(400)
+          .json({ error: "A reason is required before sending to the worker" });
+      }
+      if (!Number.isFinite(amount) || amount === 0) {
+        return res.status(400).json({
+          error:
+            "Enter a non-zero adjustment amount. Use a negative amount for deductions.",
+        });
+      }
+      const baseItems = baseInvoiceLineItems(existing);
+      const totals = recalcInvoiceTotals(
+        baseItems,
+        Boolean(existing.gstRegistered),
+      );
+      updates.lineItems = baseItems;
+      updates.totalMetres = String(totals.totalMetres.toFixed(2));
+      updates.subtotal = String(totals.subtotal.toFixed(2));
+      updates.tax = String(totals.tax.toFixed(2));
+      updates.total = String(totals.total.toFixed(2));
+      updates.reviewStatus = "changes_requested";
+      updates.reviewReason = reason;
+      updates.reviewAdjustmentAmount = String(money(amount).toFixed(2));
+      updates.reviewRequestedAt = new Date();
+      updates.reviewRespondedAt = null;
+      updates.reviewResponseNotes = null;
+    } else if (reviewStatus === "accepted") {
+      if (existing.reviewStatus !== "changes_requested") {
+        return res
+          .status(400)
+          .json({ error: "There is no suggested invoice edit to accept" });
+      }
+      const amount = Number(existing.reviewAdjustmentAmount ?? 0);
+      const reason = existing.reviewReason ?? "Accepted invoice adjustment";
+      const items = [
+        ...baseInvoiceLineItems(existing),
+        adjustmentLine(reason, amount),
+      ];
+      const totals = recalcInvoiceTotals(
+        items,
+        Boolean(existing.gstRegistered),
+      );
+      updates.lineItems = items;
+      updates.totalMetres = String(totals.totalMetres.toFixed(2));
+      updates.subtotal = String(totals.subtotal.toFixed(2));
+      updates.tax = String(totals.tax.toFixed(2));
+      updates.total = String(totals.total.toFixed(2));
+      updates.reviewStatus = "accepted";
+      updates.reviewRespondedAt = new Date();
+      updates.reviewResponseNotes =
+        body.data.reviewResponseNotes?.trim() || null;
+    } else if (reviewStatus === "none") {
+      if (!admin) {
+        return res
+          .status(403)
+          .json({ error: "Only admin can cancel suggested invoice edits" });
+      }
+      const baseItems = baseInvoiceLineItems(existing);
+      const totals = recalcInvoiceTotals(
+        baseItems,
+        Boolean(existing.gstRegistered),
+      );
+      updates.lineItems = baseItems;
+      updates.totalMetres = String(totals.totalMetres.toFixed(2));
+      updates.subtotal = String(totals.subtotal.toFixed(2));
+      updates.tax = String(totals.tax.toFixed(2));
+      updates.total = String(totals.total.toFixed(2));
+      updates.reviewStatus = "none";
+      updates.reviewReason = null;
+      updates.reviewAdjustmentAmount = null;
+      updates.reviewRequestedAt = null;
+      updates.reviewRespondedAt = null;
+      updates.reviewResponseNotes = null;
+    }
   }
 
   const [inv] = await db
@@ -1004,6 +1194,12 @@ router.post("/weekly-invoices/:id/submit", async (req, res) => {
     );
   if (!existing) return res.status(404).json({ error: "Not found" });
   if (!requireSubcontractorAccess(req, res, existing.subcontractorId)) return;
+  if (existing.reviewStatus === "changes_requested") {
+    return res.status(400).json({
+      error:
+        "This invoice has suggested edits waiting for worker acceptance before it can be sent to Xero.",
+    });
+  }
 
   const [sub] = await db
     .select()

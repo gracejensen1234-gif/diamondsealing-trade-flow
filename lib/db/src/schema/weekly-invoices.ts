@@ -33,6 +33,15 @@ export const weeklyInvoicesTable = pgTable("weekly_invoices", {
   xeroInvoiceId: text("xero_invoice_id"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   notes: text("notes"),
+  reviewStatus: text("review_status").notNull().default("none"),
+  reviewReason: text("review_reason"),
+  reviewAdjustmentAmount: numeric("review_adjustment_amount", {
+    precision: 10,
+    scale: 2,
+  }),
+  reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+  reviewRespondedAt: timestamp("review_responded_at", { withTimezone: true }),
+  reviewResponseNotes: text("review_response_notes"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -1664,20 +1664,21 @@ export const ListWeeklyInvoicesResponseItem = zod.object({
   lineItems: zod
     .array(
       zod.object({
-        jobId: zod.number(),
+        jobId: zod.number().nullish(),
         jobTitle: zod.string(),
         jobAddress: zod.string().nullish(),
-        dispatchDate: zod.coerce.date().optional(),
+        dispatchDate: zod.coerce.date().nullish(),
         metersCompleted: zod.number(),
         ratePerMetre: zod.number(),
         hourlyRate: zod.number().nullish(),
         hourlyAmount: zod.number().nullish(),
-        payBasis: zod.enum(["metres", "hours", "unset"]).optional(),
+        payBasis: zod.enum(["metres", "hours", "adjustment", "unset"]).optional(),
         amount: zod.number(),
         stockCost: zod.number().optional(),
-        reportId: zod.number().optional(),
+        reportId: zod.number().nullish(),
         hoursWorked: zod.number().nullish(),
         jobDescription: zod.string().nullish(),
+        adminAdjustment: zod.boolean().optional(),
       }),
     )
     .optional(),
@@ -1689,6 +1690,12 @@ export const ListWeeklyInvoicesResponseItem = zod.object({
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  reviewStatus: zod.enum(["none", "changes_requested", "accepted"]).optional(),
+  reviewReason: zod.string().nullish(),
+  reviewAdjustmentAmount: zod.number().nullish(),
+  reviewRequestedAt: zod.coerce.date().nullish(),
+  reviewRespondedAt: zod.coerce.date().nullish(),
+  reviewResponseNotes: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListWeeklyInvoicesResponse = zod.array(
@@ -1717,20 +1724,21 @@ export const GetWeeklyInvoiceResponse = zod.object({
   lineItems: zod
     .array(
       zod.object({
-        jobId: zod.number(),
+        jobId: zod.number().nullish(),
         jobTitle: zod.string(),
         jobAddress: zod.string().nullish(),
-        dispatchDate: zod.coerce.date().optional(),
+        dispatchDate: zod.coerce.date().nullish(),
         metersCompleted: zod.number(),
         ratePerMetre: zod.number(),
         hourlyRate: zod.number().nullish(),
         hourlyAmount: zod.number().nullish(),
-        payBasis: zod.enum(["metres", "hours", "unset"]).optional(),
+        payBasis: zod.enum(["metres", "hours", "adjustment", "unset"]).optional(),
         amount: zod.number(),
         stockCost: zod.number().optional(),
-        reportId: zod.number().optional(),
+        reportId: zod.number().nullish(),
         hoursWorked: zod.number().nullish(),
         jobDescription: zod.string().nullish(),
+        adminAdjustment: zod.boolean().optional(),
       }),
     )
     .optional(),
@@ -1742,6 +1750,12 @@ export const GetWeeklyInvoiceResponse = zod.object({
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  reviewStatus: zod.enum(["none", "changes_requested", "accepted"]).optional(),
+  reviewReason: zod.string().nullish(),
+  reviewAdjustmentAmount: zod.number().nullish(),
+  reviewRequestedAt: zod.coerce.date().nullish(),
+  reviewRespondedAt: zod.coerce.date().nullish(),
+  reviewResponseNotes: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -1753,6 +1767,12 @@ export const UpdateWeeklyInvoiceBody = zod.object({
   notes: zod.string().optional(),
   gstRegistered: zod.boolean().optional(),
   status: zod.enum(["draft", "submitted", "paid"]).optional(),
+  reviewStatus: zod
+    .enum(["none", "changes_requested", "accepted"])
+    .optional(),
+  reviewReason: zod.string().optional(),
+  reviewAdjustmentAmount: zod.number().optional(),
+  reviewResponseNotes: zod.string().optional(),
 });
 
 export const UpdateWeeklyInvoiceResponse = zod.object({
@@ -1765,20 +1785,21 @@ export const UpdateWeeklyInvoiceResponse = zod.object({
   lineItems: zod
     .array(
       zod.object({
-        jobId: zod.number(),
+        jobId: zod.number().nullish(),
         jobTitle: zod.string(),
         jobAddress: zod.string().nullish(),
-        dispatchDate: zod.coerce.date().optional(),
+        dispatchDate: zod.coerce.date().nullish(),
         metersCompleted: zod.number(),
         ratePerMetre: zod.number(),
         hourlyRate: zod.number().nullish(),
         hourlyAmount: zod.number().nullish(),
-        payBasis: zod.enum(["metres", "hours", "unset"]).optional(),
+        payBasis: zod.enum(["metres", "hours", "adjustment", "unset"]).optional(),
         amount: zod.number(),
         stockCost: zod.number().optional(),
-        reportId: zod.number().optional(),
+        reportId: zod.number().nullish(),
         hoursWorked: zod.number().nullish(),
         jobDescription: zod.string().nullish(),
+        adminAdjustment: zod.boolean().optional(),
       }),
     )
     .optional(),
@@ -1790,6 +1811,12 @@ export const UpdateWeeklyInvoiceResponse = zod.object({
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  reviewStatus: zod.enum(["none", "changes_requested", "accepted"]).optional(),
+  reviewReason: zod.string().nullish(),
+  reviewAdjustmentAmount: zod.number().nullish(),
+  reviewRequestedAt: zod.coerce.date().nullish(),
+  reviewRespondedAt: zod.coerce.date().nullish(),
+  reviewResponseNotes: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -1810,20 +1837,21 @@ export const SubmitWeeklyInvoiceResponse = zod.object({
   lineItems: zod
     .array(
       zod.object({
-        jobId: zod.number(),
+        jobId: zod.number().nullish(),
         jobTitle: zod.string(),
         jobAddress: zod.string().nullish(),
-        dispatchDate: zod.coerce.date().optional(),
+        dispatchDate: zod.coerce.date().nullish(),
         metersCompleted: zod.number(),
         ratePerMetre: zod.number(),
         hourlyRate: zod.number().nullish(),
         hourlyAmount: zod.number().nullish(),
-        payBasis: zod.enum(["metres", "hours", "unset"]).optional(),
+        payBasis: zod.enum(["metres", "hours", "adjustment", "unset"]).optional(),
         amount: zod.number(),
         stockCost: zod.number().optional(),
-        reportId: zod.number().optional(),
+        reportId: zod.number().nullish(),
         hoursWorked: zod.number().nullish(),
         jobDescription: zod.string().nullish(),
+        adminAdjustment: zod.boolean().optional(),
       }),
     )
     .optional(),
@@ -1835,6 +1863,12 @@ export const SubmitWeeklyInvoiceResponse = zod.object({
   xeroInvoiceId: zod.string().nullish(),
   submittedAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  reviewStatus: zod.enum(["none", "changes_requested", "accepted"]).optional(),
+  reviewReason: zod.string().nullish(),
+  reviewAdjustmentAmount: zod.number().nullish(),
+  reviewRequestedAt: zod.coerce.date().nullish(),
+  reviewRespondedAt: zod.coerce.date().nullish(),
+  reviewResponseNotes: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 

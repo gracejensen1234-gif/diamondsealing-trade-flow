@@ -15,6 +15,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -29,17 +30,40 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
-import { ArrowLeft, Download, Send, CheckCircle2, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Send,
+  CheckCircle2,
+  Save,
+  MessageSquare,
+  RotateCcw,
+} from "lucide-react";
+
+function formatMoney(value?: number | null) {
+  const amount = Number(value ?? 0);
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}$${Math.abs(amount).toFixed(2)}`;
+}
 
 function formatLineHours(hours?: number | null) {
   return hours && hours > 0 ? `${hours.toFixed(2)} hrs` : null;
+}
+
+function isAdjustmentLine(item: {
+  payBasis?: string;
+  adminAdjustment?: boolean;
+}) {
+  return Boolean(item.adminAdjustment) || item.payBasis === "adjustment";
 }
 
 function lineQuantityLabel(item: {
   payBasis?: string;
   hoursWorked?: number | null;
   metersCompleted: number;
+  adminAdjustment?: boolean;
 }) {
+  if (isAdjustmentLine(item)) return "Adjustment";
   if (item.payBasis === "hours")
     return `${(item.hoursWorked ?? 0).toFixed(2)} hrs`;
   return `${item.metersCompleted}m`;
@@ -49,7 +73,10 @@ function lineRateLabel(item: {
   payBasis?: string;
   hourlyRate?: number | null;
   ratePerMetre: number;
+  amount?: number;
+  adminAdjustment?: boolean;
 }) {
+  if (isAdjustmentLine(item)) return formatMoney(item.amount);
   if (item.payBasis === "hours")
     return `$${(item.hourlyRate ?? 0).toFixed(2)}/hr`;
   return `$${item.ratePerMetre.toFixed(2)}/m`;
@@ -71,20 +98,48 @@ export default function WeeklyInvoiceDetail() {
   });
 
   const [notes, setNotes] = useState("");
+  const [adjustmentAmount, setAdjustmentAmount] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [responseNotes, setResponseNotes] = useState("");
   const notesInitRef = useRef<number | null>(null);
+  const reviewInitRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (invoice && notesInitRef.current !== invoice.id) {
       setNotes(invoice.notes || "");
       notesInitRef.current = invoice.id;
     }
+    const reviewKey = invoice
+      ? `${invoice.id}-${invoice.reviewStatus ?? "none"}-${invoice.reviewRequestedAt ?? ""}`
+      : null;
+    if (invoice && reviewInitRef.current !== reviewKey) {
+      setAdjustmentAmount(
+        invoice.reviewAdjustmentAmount != null
+          ? String(invoice.reviewAdjustmentAmount)
+          : "",
+      );
+      setAdjustmentReason(invoice.reviewReason || "");
+      setResponseNotes(invoice.reviewResponseNotes || "");
+      reviewInitRef.current = reviewKey;
+    }
   }, [invoice]);
 
   const updateInvoice = useUpdateWeeklyInvoice({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Notes saved" });
+        toast({ title: "Invoice updated" });
         refetch();
+      },
+      onError: (error) => {
+        const message =
+          error instanceof Error
+            ? error.message.replace(/^HTTP 400 Bad Request:\s*/i, "")
+            : "Could not update invoice.";
+        toast({
+          title: "Could not update invoice",
+          description: message,
+          variant: "destructive",
+        });
       },
     },
   });
@@ -129,9 +184,46 @@ export default function WeeklyInvoiceDetail() {
     ? "Submitted to Xero"
     : "Invoice submitted";
   const invoiceIncludesGst = Boolean(invoice.gstRegistered) || invoice.tax > 0;
+  const reviewStatus = invoice.reviewStatus ?? "none";
+  const hasPendingReview = reviewStatus === "changes_requested";
+  const hasAcceptedReview = reviewStatus === "accepted";
+  const parsedAdjustmentAmount = Number(adjustmentAmount);
+  const canSendReview =
+    invoice.status === "draft" &&
+    adjustmentReason.trim().length > 0 &&
+    Number.isFinite(parsedAdjustmentAmount) &&
+    parsedAdjustmentAmount !== 0;
 
   const downloadXeroCsv = () => {
     window.location.assign(`/api/weekly-invoices/${invoice.id}/xero-csv`);
+  };
+
+  const sendReviewRequest = () => {
+    updateInvoice.mutate({
+      id: invoice.id,
+      data: {
+        reviewStatus: "changes_requested",
+        reviewReason: adjustmentReason,
+        reviewAdjustmentAmount: parsedAdjustmentAmount,
+      },
+    });
+  };
+
+  const acceptReviewRequest = () => {
+    updateInvoice.mutate({
+      id: invoice.id,
+      data: {
+        reviewStatus: "accepted",
+        reviewResponseNotes: responseNotes,
+      },
+    });
+  };
+
+  const cancelReviewRequest = () => {
+    updateInvoice.mutate({
+      id: invoice.id,
+      data: { reviewStatus: "none" },
+    });
   };
 
   return (
@@ -154,18 +246,29 @@ export default function WeeklyInvoiceDetail() {
               {format(new Date(invoice.weekEndDate), "MMM d, yyyy")}
             </p>
           </div>
-          <Badge
-            variant={
-              invoice.status === "paid"
-                ? "default"
-                : invoice.status === "submitted"
-                  ? "secondary"
-                  : "outline"
-            }
-            className="text-sm px-3 py-1"
-          >
-            {invoice.status.toUpperCase()}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge
+              variant={
+                invoice.status === "paid"
+                  ? "default"
+                  : invoice.status === "submitted"
+                    ? "secondary"
+                    : "outline"
+              }
+              className="text-sm px-3 py-1"
+            >
+              {invoice.status.toUpperCase()}
+            </Badge>
+            {hasPendingReview ? (
+              <Badge variant="destructive" className="text-xs">
+                Worker acceptance needed
+              </Badge>
+            ) : hasAcceptedReview ? (
+              <Badge variant="secondary" className="text-xs">
+                Edit accepted
+              </Badge>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -196,9 +299,15 @@ export default function WeeklyInvoiceDetail() {
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{item.jobTitle}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {item.jobAddress}
-                        </div>
+                        {isAdjustmentLine(item) ? (
+                          <Badge variant="outline" className="mt-1 text-xs">
+                            Admin adjustment
+                          </Badge>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            {item.jobAddress}
+                          </div>
+                        )}
                         {item.jobDescription && (
                           <div className="mt-1 text-xs text-muted-foreground">
                             {item.jobDescription}
@@ -222,7 +331,7 @@ export default function WeeklyInvoiceDetail() {
                         {lineRateLabel(item)}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        ${item.amount.toFixed(2)}
+                        {formatMoney(item.amount)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -240,6 +349,68 @@ export default function WeeklyInvoiceDetail() {
               </Table>
             </CardContent>
           </Card>
+
+          {isWorker && hasPendingReview ? (
+            <Card className="border-orange-300 bg-orange-50/80 dark:bg-orange-950/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MessageSquare className="h-5 w-5" />
+                  Invoice edit request
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-md border bg-background p-3 text-sm">
+                  <div className="font-medium">Admin reason</div>
+                  <p className="mt-1 text-muted-foreground">
+                    {invoice.reviewReason}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between rounded-md border bg-background p-3">
+                  <span className="text-sm text-muted-foreground">
+                    Suggested adjustment
+                  </span>
+                  <span className="text-lg font-bold">
+                    {formatMoney(invoice.reviewAdjustmentAmount)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Optional response note
+                  </label>
+                  <Textarea
+                    value={responseNotes}
+                    onChange={(event) => setResponseNotes(event.target.value)}
+                    placeholder="Add a quick note for admin if needed..."
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={acceptReviewRequest}
+                  disabled={updateInvoice.isPending}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Accept suggested edit
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {isWorker && hasAcceptedReview ? (
+            <Card className="border-green-200 bg-green-50/70 dark:bg-green-950/20">
+              <CardContent className="pt-6 text-sm">
+                <div className="flex items-center gap-2 font-semibold text-green-700 dark:text-green-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Suggested invoice edit accepted
+                </div>
+                {invoice.reviewReason ? (
+                  <p className="mt-2 text-muted-foreground">
+                    {invoice.reviewReason}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {!isWorker && (
             <Card>
@@ -269,6 +440,90 @@ export default function WeeklyInvoiceDetail() {
               </CardContent>
             </Card>
           )}
+
+          {!isWorker && invoice.status === "draft" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Suggest Invoice Edit</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {hasPendingReview ? (
+                  <div className="rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950/30 dark:text-orange-300">
+                    Waiting for the employee/subcontractor to accept this
+                    suggested edit.
+                  </div>
+                ) : hasAcceptedReview ? (
+                  <div className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900 dark:bg-green-950/30 dark:text-green-300">
+                    The employee/subcontractor accepted the suggested edit.
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Adjustment amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={adjustmentAmount}
+                    onChange={(event) =>
+                      setAdjustmentAmount(event.target.value)
+                    }
+                    placeholder="-50.00 or 75.00"
+                    disabled={hasPendingReview}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use a negative amount for a deduction, or a positive amount
+                    to add pay.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Reason shown to worker
+                  </label>
+                  <Textarea
+                    value={adjustmentReason}
+                    onChange={(event) =>
+                      setAdjustmentReason(event.target.value)
+                    }
+                    placeholder="Explain what does not add up and what change is being suggested..."
+                    rows={4}
+                    disabled={hasPendingReview}
+                  />
+                </div>
+                {invoice.reviewResponseNotes ? (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <div className="font-medium">Worker response note</div>
+                    <p className="mt-1 text-muted-foreground">
+                      {invoice.reviewResponseNotes}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  {hasPendingReview || hasAcceptedReview ? (
+                    <Button
+                      variant="outline"
+                      onClick={cancelReviewRequest}
+                      disabled={updateInvoice.isPending}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Clear suggestion
+                    </Button>
+                  ) : null}
+                  <Button
+                    onClick={sendReviewRequest}
+                    disabled={
+                      updateInvoice.isPending ||
+                      hasPendingReview ||
+                      !canSendReview
+                    }
+                  >
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Send suggestion to worker
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <div className="col-span-1 space-y-6">
@@ -312,6 +567,12 @@ export default function WeeklyInvoiceDetail() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>${invoice.subtotal.toFixed(2)}</span>
               </div>
+              {hasPendingReview ? (
+                <div className="flex justify-between items-center text-sm rounded-md border border-orange-200 bg-orange-50 px-2 py-1 text-orange-900 dark:bg-orange-950/30 dark:text-orange-300">
+                  <span>Pending adjustment</span>
+                  <span>{formatMoney(invoice.reviewAdjustmentAmount)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">GST status</span>
                 <span>
@@ -348,7 +609,9 @@ export default function WeeklyInvoiceDetail() {
                     className="w-full h-12 text-lg"
                     onClick={() => submitInvoice.mutate({ id: invoice.id })}
                     disabled={
-                      submitInvoice.isPending || !invoice.lineItems?.length
+                      submitInvoice.isPending ||
+                      !invoice.lineItems?.length ||
+                      hasPendingReview
                     }
                   >
                     <Send className="h-5 w-5 mr-2" /> Send to Xero

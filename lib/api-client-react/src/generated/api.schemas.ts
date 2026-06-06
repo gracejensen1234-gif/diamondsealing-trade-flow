@@ -777,25 +777,29 @@ export interface XeroSettingsUpdate {
 }
 
 export interface WeeklyInvoiceLineItem {
-  jobId: number;
+  /** @nullable */
+  jobId?: number | null;
   jobTitle: string;
   /** @nullable */
   jobAddress?: string | null;
-  dispatchDate?: string;
+  /** @nullable */
+  dispatchDate?: string | null;
   metersCompleted: number;
   ratePerMetre: number;
   /** @nullable */
   hourlyRate?: number | null;
   /** @nullable */
   hourlyAmount?: number | null;
-  payBasis?: "metres" | "hours" | "unset";
+  payBasis?: "metres" | "hours" | "adjustment" | "unset";
   amount: number;
   stockCost?: number;
-  reportId?: number;
+  /** @nullable */
+  reportId?: number | null;
   /** @nullable */
   hoursWorked?: number | null;
   /** @nullable */
   jobDescription?: string | null;
+  adminAdjustment?: boolean;
 }
 
 export type WeeklyInvoiceStatus =
@@ -805,6 +809,15 @@ export const WeeklyInvoiceStatus = {
   draft: "draft",
   submitted: "submitted",
   paid: "paid",
+} as const;
+
+export type WeeklyInvoiceReviewStatus =
+  (typeof WeeklyInvoiceReviewStatus)[keyof typeof WeeklyInvoiceReviewStatus];
+
+export const WeeklyInvoiceReviewStatus = {
+  none: "none",
+  changes_requested: "changes_requested",
+  accepted: "accepted",
 } as const;
 
 export interface WeeklyInvoice {
@@ -827,6 +840,17 @@ export interface WeeklyInvoice {
   submittedAt?: string | null;
   /** @nullable */
   notes?: string | null;
+  reviewStatus?: WeeklyInvoiceReviewStatus;
+  /** @nullable */
+  reviewReason?: string | null;
+  /** @nullable */
+  reviewAdjustmentAmount?: number | null;
+  /** @nullable */
+  reviewRequestedAt?: string | null;
+  /** @nullable */
+  reviewRespondedAt?: string | null;
+  /** @nullable */
+  reviewResponseNotes?: string | null;
   createdAt: string;
 }
 
@@ -848,6 +872,10 @@ export interface WeeklyInvoiceUpdate {
   notes?: string;
   gstRegistered?: boolean;
   status?: WeeklyInvoiceUpdateStatus;
+  reviewStatus?: WeeklyInvoiceReviewStatus;
+  reviewReason?: string;
+  reviewAdjustmentAmount?: number;
+  reviewResponseNotes?: string;
 }
 
 export type SubcontractorLiveStatusSessionStatus =
