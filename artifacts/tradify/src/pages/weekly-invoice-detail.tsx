@@ -591,6 +591,25 @@ export default function WeeklyInvoiceDetail() {
                   ${invoice.total.toFixed(2)}
                 </span>
               </div>
+              {invoice.workerAcknowledgedAt ? (
+                <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Worker acknowledged invoice
+                  </div>
+                  <p className="mt-1">
+                    {format(
+                      new Date(invoice.workerAcknowledgedAt),
+                      "MMM d, yyyy h:mm a",
+                    )}
+                  </p>
+                  {invoice.workerAcknowledgementText ? (
+                    <p className="mt-1 text-green-700/80 dark:text-green-300/80">
+                      {invoice.workerAcknowledgementText}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </CardContent>
             {!isWorker || invoice.status !== "draft" ? (
               <CardFooter className="flex-col gap-3">

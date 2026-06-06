@@ -839,6 +839,10 @@ export interface WeeklyInvoice {
   /** @nullable */
   submittedAt?: string | null;
   /** @nullable */
+  workerAcknowledgedAt?: string | null;
+  /** @nullable */
+  workerAcknowledgementText?: string | null;
+  /** @nullable */
   notes?: string | null;
   reviewStatus?: WeeklyInvoiceReviewStatus;
   /** @nullable */

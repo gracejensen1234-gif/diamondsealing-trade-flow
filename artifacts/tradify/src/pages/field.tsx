@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -396,6 +397,7 @@ export default function FieldView() {
   const [selectedDispatchDate, setSelectedDispatchDate] = useState(() =>
     todayDateInputValue(),
   );
+  const [invoiceAcknowledged, setInvoiceAcknowledged] = useState(false);
   const [activeSection, setActiveSection] = useState<FieldSection>(() =>
     fieldSectionFromLocation(location),
   );
@@ -640,7 +642,10 @@ export default function FieldView() {
         const response = await fetch("/api/weekly-invoices/submit-current", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subcontractorId: subId }),
+          body: JSON.stringify({
+            subcontractorId: subId,
+            workerAcknowledged: invoiceAcknowledged,
+          }),
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) {
@@ -655,6 +660,7 @@ export default function FieldView() {
           queryKey: ["field-earnings-summary", subId],
         });
         queryClient.invalidateQueries();
+        setInvoiceAcknowledged(false);
         toast({
           title: data.xeroSubmissionFailed
             ? "Invoice prepared"
@@ -1944,11 +1950,34 @@ export default function FieldView() {
                   </div>
                 ) : null}
 
+                {isWorker ? (
+                  <div className="flex items-start gap-3 rounded-md border bg-muted/30 px-3 py-3">
+                    <Checkbox
+                      id="invoice-acknowledgement"
+                      className="mt-0.5"
+                      checked={invoiceAcknowledged}
+                      onCheckedChange={(checked) =>
+                        setInvoiceAcknowledged(Boolean(checked))
+                      }
+                      disabled={!canSubmitCurrentInvoice}
+                    />
+                    <Label
+                      htmlFor="invoice-acknowledgement"
+                      className="cursor-pointer text-sm leading-snug"
+                    >
+                      I have reviewed this invoice and agree that the completed
+                      work, hours, metres, rates, GST status and total amount are
+                      correct to the best of my knowledge.
+                    </Label>
+                  </div>
+                ) : null}
+
                 <Button
                   className="w-full"
                   onClick={() => submitCurrentInvoiceMutation.mutate()}
                   disabled={
                     !canSubmitCurrentInvoice ||
+                    (isWorker && !invoiceAcknowledged) ||
                     submitCurrentInvoiceMutation.isPending
                   }
                 >

@@ -28,6 +28,8 @@ import { getStoredXeroSettings, getUsableXeroSettings } from "../lib/xero.js";
 
 const router = Router();
 const XERO_INVOICES_URL = "https://api.xero.com/api.xro/2.0/Invoices";
+const WORKER_INVOICE_ACKNOWLEDGEMENT_TEXT =
+  "By submitting this invoice, I acknowledge and agree that I have reviewed the invoice details, including completed work, hours, metres, rates, GST status and total amount, and confirm they are correct to the best of my knowledge.";
 
 type WeeklyInvoiceLineItem = {
   jobId?: number | null;
@@ -758,6 +760,14 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
     return res.status(400).json({ error: "subcontractorId required" });
   if (!requireSubcontractorAccess(req, res, subcontractorId)) return;
 
+  const submittedByWorker = Boolean(workerSubcontractorId(req));
+  if (submittedByWorker && req.body.workerAcknowledged !== true) {
+    return res.status(400).json({
+      error:
+        "Please tick the invoice acknowledgement before submitting your invoice.",
+    });
+  }
+
   const tenantId = companyId(req);
   const prepared = await upsertCurrentWeeklyInvoice(
     tenantId,
@@ -790,6 +800,12 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
         "A metre rate or hourly rate must be set before sending an invoice to Xero",
     });
   }
+  const acknowledgementUpdates = submittedByWorker
+    ? {
+        workerAcknowledgedAt: new Date(),
+        workerAcknowledgementText: WORKER_INVOICE_ACKNOWLEDGEMENT_TEXT,
+      }
+    : {};
 
   let xeroInvoiceId: string;
   try {
@@ -800,11 +816,24 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not submit invoice to Xero";
+    let invoiceForResponse = prepared.invoice;
+    if (submittedByWorker) {
+      [invoiceForResponse] = await db
+        .update(weeklyInvoicesTable)
+        .set(acknowledgementUpdates)
+        .where(
+          and(
+            eq(weeklyInvoicesTable.id, prepared.invoice.id),
+            eq(weeklyInvoicesTable.companyId, tenantId),
+          ),
+        )
+        .returning();
+    }
     return res.status(202).json({
       error: "Xero submission failed",
       message,
       xeroSubmissionFailed: true,
-      invoice: serializeInvoice(prepared.invoice, prepared.sub.name),
+      invoice: serializeInvoice(invoiceForResponse, prepared.sub.name),
       summary: await buildEarningsSummary(
         tenantId,
         subcontractorId,
@@ -820,6 +849,7 @@ router.post("/weekly-invoices/submit-current", async (req, res) => {
       status: "submitted",
       submittedAt: new Date(),
       xeroInvoiceId,
+      ...acknowledgementUpdates,
     })
     .where(
       and(
@@ -1194,6 +1224,13 @@ router.post("/weekly-invoices/:id/submit", async (req, res) => {
     );
   if (!existing) return res.status(404).json({ error: "Not found" });
   if (!requireSubcontractorAccess(req, res, existing.subcontractorId)) return;
+  const submittedByWorker = Boolean(workerSubcontractorId(req));
+  if (submittedByWorker && req.body.workerAcknowledged !== true) {
+    return res.status(400).json({
+      error:
+        "Please tick the invoice acknowledgement before submitting your invoice.",
+    });
+  }
   if (existing.reviewStatus === "changes_requested") {
     return res.status(400).json({
       error:
@@ -1230,6 +1267,12 @@ router.post("/weekly-invoices/:id/submit", async (req, res) => {
       status: "submitted",
       submittedAt: new Date(),
       xeroInvoiceId,
+      ...(submittedByWorker
+        ? {
+            workerAcknowledgedAt: new Date(),
+            workerAcknowledgementText: WORKER_INVOICE_ACKNOWLEDGEMENT_TEXT,
+          }
+        : {}),
     })
     .where(
       and(
