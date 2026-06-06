@@ -72,6 +72,7 @@ function AdminRoutes() {
         <Route path="/admin/reports" component={AdminReports} />
         <Route path="/admin/live" component={AdminLive} />
         <Route path="/admin/timesheets" component={AdminTimesheets} />
+        <Route path="/dockets" component={Dockets} />
         <Route path="/weekly-invoices" component={WeeklyInvoices} />
         <Route path="/weekly-invoices/:id" component={WeeklyInvoiceDetail} />
         <Route path="/settings/xero" component={XeroSettings} />
@@ -90,7 +91,6 @@ function AdminRoutes() {
 
         {/* Finance */}
         <Route path="/bonuses" component={Bonuses} />
-        <Route path="/dockets" component={Dockets} />
 
         {/* Quality & Compliance */}
         <Route path="/audit" component={AuditFlags} />

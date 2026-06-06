@@ -89,6 +89,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { name: "Dispatch", href: "/dispatch", icon: ClipboardList },
         { name: "Reports", href: "/admin/reports", icon: FileText },
+        { name: "Dockets", href: "/dockets", icon: ScrollText },
         { name: "Live View", href: "/admin/live", icon: Radio },
         { name: "Timesheets", href: "/admin/timesheets", icon: Clock },
         {
@@ -133,7 +134,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         { name: "AI Audit", href: "/audit", icon: ShieldCheck },
         { name: "Awards", href: "/awards", icon: Award },
         { name: "Bonuses", href: "/bonuses", icon: Star },
-        { name: "Dockets", href: "/dockets", icon: ScrollText },
       ],
     },
     {
