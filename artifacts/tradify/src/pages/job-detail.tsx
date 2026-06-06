@@ -1,12 +1,14 @@
-import { useGetJob, getGetJobQueryKey, useUpdateJob, useListDispatch, useListAppointments, useListQuotes, useListInvoices } from "@workspace/api-client-react";
+import { useGetJob, getGetJobQueryKey, getListJobsQueryKey, useUpdateJob, useListDispatch, useListAppointments, useListQuotes, useListInvoices } from "@workspace/api-client-react";
 import { useRoute } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 function formatJobDate(value: string | null | undefined, fallback: string): string {
   return value ? new Date(value).toLocaleDateString("en-AU") : fallback;
@@ -22,6 +24,7 @@ const timeWindowLabels: Record<string, string> = {
 export default function JobDetail() {
   const [, params] = useRoute("/jobs/:id");
   const id = Number(params?.id);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const { data: job, isLoading } = useGetJob(id, { query: { enabled: !!id, queryKey: getGetJobQueryKey(id) } });
   const { data: dispatchBlocks = [], isLoading: loadingDispatch } = useListDispatch(
     undefined,
@@ -36,10 +39,27 @@ export default function JobDetail() {
       onSuccess: () => {
         toast({ title: "Job updated", description: "Status changed successfully." });
         queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["job-dispatch-blocks", id] });
       },
       onError: () => {
         toast({ title: "Error", description: "Failed to update job status.", variant: "destructive" });
       }
+    });
+  };
+
+  const handleCancelJob = () => {
+    updateJob.mutate({ id, data: { status: "cancelled" } }, {
+      onSuccess: () => {
+        toast({ title: "Job cancelled", description: "Pending dispatch blocks were removed." });
+        setCancelDialogOpen(false);
+        queryClient.invalidateQueries({ queryKey: getGetJobQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["job-dispatch-blocks", id] });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Failed to cancel job.", variant: "destructive" });
+      },
     });
   };
 
@@ -55,15 +75,15 @@ export default function JobDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">{job.title}</h1>
           <p className="text-muted-foreground mt-1">Client: {job.customerName}</p>
           <p className="text-muted-foreground">Address: {job.address}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
           <Select value={job.status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -74,6 +94,15 @@ export default function JobDetail() {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full sm:w-auto"
+            onClick={() => setCancelDialogOpen(true)}
+            disabled={job.status === "cancelled" || updateJob.isPending}
+          >
+            Cancel Job
+          </Button>
         </div>
       </div>
 
@@ -133,6 +162,26 @@ export default function JobDetail() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel job?</DialogTitle>
+            <DialogDescription>
+              This marks the job as cancelled and removes any pending dispatch blocks that have not been worked yet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-sm font-medium">{job.title}</div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={updateJob.isPending}>
+              Keep Job
+            </Button>
+            <Button variant="destructive" onClick={handleCancelJob} disabled={updateJob.isPending}>
+              {updateJob.isPending ? "Cancelling..." : "Cancel Job"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

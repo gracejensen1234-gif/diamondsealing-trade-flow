@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { jobsTable, customersTable, activityTable } from "@workspace/db";
+import { jobsTable, customersTable, activityTable, jobAssignmentsTable } from "@workspace/db";
 import { eq, ilike, and, or } from "drizzle-orm";
 import {
   ListJobsQueryParams,
@@ -190,6 +190,29 @@ router.patch("/jobs/:id", async (req, res) => {
       entityId: job.id,
       entityType: "job",
     });
+
+    if (body.data.status === "cancelled") {
+      const deletedPendingAssignments = await db
+        .delete(jobAssignmentsTable)
+        .where(
+          and(
+            eq(jobAssignmentsTable.companyId, tenantId),
+            eq(jobAssignmentsTable.jobId, job.id),
+            eq(jobAssignmentsTable.status, "pending"),
+          ),
+        )
+        .returning({ id: jobAssignmentsTable.id });
+
+      if (deletedPendingAssignments.length > 0) {
+        await db.insert(activityTable).values({
+          companyId: tenantId,
+          type: "job_updated",
+          description: `Cancelled job "${job.title}" and removed ${deletedPendingAssignments.length} pending dispatch block(s)`,
+          entityId: job.id,
+          entityType: "job",
+        });
+      }
+    }
   }
 
   const triggerFieldsChanged = [

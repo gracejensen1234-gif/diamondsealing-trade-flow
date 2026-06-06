@@ -10,6 +10,7 @@ import {
   stockItemsTable,
   subInventoryTable,
   subcontractorsTable,
+  workSessionsTable,
   workerSkillsTable,
 } from "@workspace/db";
 import { and, eq, gte, lte } from "drizzle-orm";
@@ -40,6 +41,14 @@ type StockRequirements = {
 };
 
 type TriggerName = "created" | "updated";
+
+type AssignmentTriggerOptions = {
+  reassignAssignmentId?: number;
+  excludeSubcontractorIds?: number[];
+  requireNotClockedOffOnDate?: boolean;
+  allowBestAvailable?: boolean;
+  reason?: string;
+};
 
 type Candidate = {
   subcontractorId: number;
@@ -391,10 +400,12 @@ export async function runJobAssignmentTriggers({
   tenantId,
   job,
   trigger,
+  options = {},
 }: {
   tenantId: number;
   job: JobRow;
   trigger: TriggerName;
+  options?: AssignmentTriggerOptions;
 }): Promise<AssignmentTriggerResult> {
   if (!["pending", "in_progress"].includes(job.status)) {
     return { status: "skipped", reason: `Job status ${job.status} is not eligible for assignment triggers` };
@@ -405,11 +416,34 @@ export async function runJobAssignmentTriggers({
     return { status: "skipped", reason: "Job has no scheduled or due date yet" };
   }
 
-  const [existingAssignment] = await db
+  let assignmentToReassign: typeof jobAssignmentsTable.$inferSelect | undefined;
+  if (options.reassignAssignmentId) {
+    [assignmentToReassign] = await db
+      .select()
+      .from(jobAssignmentsTable)
+      .where(and(eq(jobAssignmentsTable.companyId, tenantId), eq(jobAssignmentsTable.id, options.reassignAssignmentId)))
+      .limit(1);
+
+    if (!assignmentToReassign || assignmentToReassign.jobId !== job.id) {
+      return { status: "skipped", reason: "Reassignment work block could not be found for this job" };
+    }
+    if (assignmentToReassign.status !== "pending") {
+      return {
+        status: "skipped",
+        reason: "Only pending work blocks can be automatically reassigned",
+        jobAssignmentId: assignmentToReassign.id,
+      };
+    }
+  }
+
+  const existingAssignments = await db
     .select()
     .from(jobAssignmentsTable)
     .where(and(eq(jobAssignmentsTable.companyId, tenantId), eq(jobAssignmentsTable.jobId, job.id)))
-    .limit(1);
+    .limit(10);
+  const existingAssignment = assignmentToReassign
+    ? undefined
+    : existingAssignments.find((assignment) => assignment.id !== options.reassignAssignmentId);
 
   if (existingAssignment) {
     return syncExistingAssignment(job, tenantId, dispatchDate, existingAssignment);
@@ -423,7 +457,7 @@ export async function runJobAssignmentTriggers({
   const suburb = inferSuburb(job, customer);
   const requiredStock = stockRequirements(productType, job.requiredColours);
 
-  const [subs, allSkills, allLeave, sameDayAssignments, nearbyAssignments, stockItems, inventory] = await Promise.all([
+  const [subs, allSkills, allLeave, sameDayAssignments, nearbyAssignments, stockItems, inventory, workSessions] = await Promise.all([
     db
       .select()
       .from(subcontractorsTable)
@@ -467,6 +501,10 @@ export async function runJobAssignmentTriggers({
       ),
     db.select().from(stockItemsTable).where(eq(stockItemsTable.companyId, tenantId)),
     db.select().from(subInventoryTable).where(eq(subInventoryTable.companyId, tenantId)),
+    db
+      .select()
+      .from(workSessionsTable)
+      .where(and(eq(workSessionsTable.companyId, tenantId), eq(workSessionsTable.date, dispatchDate))),
   ]);
 
   if (subs.length === 0) {
@@ -481,6 +519,9 @@ export async function runJobAssignmentTriggers({
 
   const skillBySub = new Map(allSkills.map((row) => [row.subcontractorId, row]));
   const leaveBySub = new Set(allLeave.map((row) => row.subcontractorId));
+  const workSessionBySub = new Map(workSessions.map((row) => [row.subcontractorId, row]));
+  const excludedSubIds = new Set(options.excludeSubcontractorIds ?? []);
+  const availableSameDayAssignments = sameDayAssignments.filter((assignment) => assignment.id !== options.reassignAssignmentId);
   const inventoryBySub = new Map<number, Map<number, number>>();
   for (const row of inventory) {
     const subInventory = inventoryBySub.get(row.subcontractorId) ?? new Map<number, number>();
@@ -497,7 +538,18 @@ export async function runJobAssignmentTriggers({
     const hardBlocks: string[] = [];
     let score = 65;
 
-    const sameDayJobs = sameDayAssignments.filter((assignment) => assignment.subcontractorId === sub.id).length;
+    if (excludedSubIds.has(sub.id)) {
+      hardBlocks.push("Employee/subcontractor has been removed from this day's remaining work");
+      score -= 60;
+    }
+
+    const workerSession = workSessionBySub.get(sub.id);
+    if (options.requireNotClockedOffOnDate && workerSession?.status === "clocked_off") {
+      hardBlocks.push("Already clocked off today");
+      score -= 45;
+    }
+
+    const sameDayJobs = availableSameDayAssignments.filter((assignment) => assignment.subcontractorId === sub.id).length;
     if (sameDayJobs === 0) {
       reasons.push("Available with no jobs already assigned that day");
       score += 14;
@@ -638,7 +690,13 @@ export async function runJobAssignmentTriggers({
     top.suitabilityScore >= AUTO_ASSIGN_SCORE &&
     (!second || top.suitabilityScore - second.suitabilityScore >= AUTO_ASSIGN_MARGIN || top.suitabilityScore >= 92);
 
-  if (!clearWinner || !top) {
+  const canUseBestAvailable =
+    options.allowBestAvailable &&
+    top &&
+    top.triggerDecision !== "blocked" &&
+    top.availableOnDate;
+
+  if ((!clearWinner && !canUseBestAvailable) || !top) {
     const saved = await saveRecommendation(tenantId, job.id, dispatchDate, ranked, warnings);
     await db.insert(activityTable).values({
       companyId: tenantId,
@@ -655,23 +713,46 @@ export async function runJobAssignmentTriggers({
     };
   }
 
-  const existingForSub = sameDayAssignments.filter((assignment) => assignment.subcontractorId === top.subcontractorId);
+  const existingForSub = availableSameDayAssignments.filter((assignment) => assignment.subcontractorId === top.subcontractorId);
   const scheduledOrder = existingForSub.reduce((max, assignment) => Math.max(max, assignment.scheduledOrder), 0) + 1;
-  const [assignment] = await db
-    .insert(jobAssignmentsTable)
-    .values({
-      companyId: tenantId,
-      dispatchDate,
-      scheduledOrder,
-      jobId: job.id,
-      subcontractorId: top.subcontractorId,
-      builderContactName: job.builderContactName ?? null,
-      builderContactPhone: job.builderContactPhone ?? null,
-      requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : [],
-      notes: `Auto-assigned by trigger rules after job ${trigger}. Score ${top.suitabilityScore}/100.`,
-      status: "pending",
-    })
-    .returning();
+  let assignment: typeof jobAssignmentsTable.$inferSelect;
+
+  if (assignmentToReassign) {
+    const reassignmentNote = `Reassigned by trigger rules${options.reason ? `: ${options.reason}` : ""}. Score ${top.suitabilityScore}/100.`;
+    const notes = [assignmentToReassign.notes, reassignmentNote].filter(Boolean).join("\n");
+    const [updatedAssignment] = await db
+      .update(jobAssignmentsTable)
+      .set({
+        dispatchDate,
+        scheduledOrder,
+        subcontractorId: top.subcontractorId,
+        builderContactName: job.builderContactName ?? assignmentToReassign.builderContactName,
+        builderContactPhone: job.builderContactPhone ?? assignmentToReassign.builderContactPhone,
+        requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : assignmentToReassign.requiredColours,
+        notes,
+        status: "pending",
+      })
+      .where(and(eq(jobAssignmentsTable.id, assignmentToReassign.id), eq(jobAssignmentsTable.companyId, tenantId)))
+      .returning();
+    assignment = updatedAssignment;
+  } else {
+    const [insertedAssignment] = await db
+      .insert(jobAssignmentsTable)
+      .values({
+        companyId: tenantId,
+        dispatchDate,
+        scheduledOrder,
+        jobId: job.id,
+        subcontractorId: top.subcontractorId,
+        builderContactName: job.builderContactName ?? null,
+        builderContactPhone: job.builderContactPhone ?? null,
+        requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : [],
+        notes: `Auto-assigned by trigger rules after job ${trigger}. Score ${top.suitabilityScore}/100.`,
+        status: "pending",
+      })
+      .returning();
+    assignment = insertedAssignment;
+  }
 
   const saved = await saveRecommendation(tenantId, job.id, dispatchDate, ranked, warnings, top.subcontractorId, assignment.id);
 
@@ -680,7 +761,7 @@ export async function runJobAssignmentTriggers({
       subcontractorId: top.subcontractorId,
       type: "new_job",
       title: "New job assigned",
-      body: `${job.title}${job.address ? ` at ${job.address}` : ""}`,
+      body: `${job.title}${suburb ? ` in ${suburb}` : ""}`,
       priority: "high",
       actionUrl: "/field",
       linkedEntityType: "job_assignment",
@@ -693,14 +774,18 @@ export async function runJobAssignmentTriggers({
   await db.insert(activityTable).values({
     companyId: tenantId,
     type: "job_updated",
-    description: `Assignment trigger auto-assigned "${job.title}" to ${top.subcontractorName}`,
+    description: assignmentToReassign
+      ? `Assignment trigger reassigned "${job.title}" to ${top.subcontractorName}`
+      : `Assignment trigger auto-assigned "${job.title}" to ${top.subcontractorName}`,
     entityId: job.id,
     entityType: "job",
   });
 
   return {
     status: "auto_assigned",
-    reason: `Clear trigger match: ${top.subcontractorName} scored ${top.suitabilityScore}/100`,
+    reason: clearWinner
+      ? `Clear trigger match: ${top.subcontractorName} scored ${top.suitabilityScore}/100`
+      : `Best available reassignment: ${top.subcontractorName} scored ${top.suitabilityScore}/100`,
     jobAssignmentId: assignment.id,
     recommendationId: saved.id,
     selectedSubcontractorId: top.subcontractorId,

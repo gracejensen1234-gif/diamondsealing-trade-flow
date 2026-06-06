@@ -9,7 +9,7 @@ import {
   useListSubcontractors,
   getGetTodaySessionQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Edit2, Play, Square } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Edit2, Play, Square } from "lucide-react";
+
+function apiErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Try again.";
+}
 
 export default function AdminTimesheets() {
   const { toast } = useToast();
@@ -28,6 +33,7 @@ export default function AdminTimesheets() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [subId, setSubId] = useState<string>("all");
   const [manualSubId, setManualSubId] = useState<string>("");
+  const [earlyClockOffReason, setEarlyClockOffReason] = useState("");
   
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday start
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -90,10 +96,44 @@ export default function AdminTimesheets() {
       onError: (error) => {
         toast({
           title: "Could not clock off",
-          description: error instanceof Error ? error.message : "Try again.",
+          description: apiErrorMessage(error),
           variant: "destructive",
         });
       },
+    },
+  });
+
+  const earlyClockOff = useMutation({
+    mutationFn: async ({ subcontractorId, reason }: { subcontractorId: number; reason?: string }) => {
+      const response = await fetch("/api/work-sessions/admin-clock-off-early", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subcontractorId, reason: reason || undefined }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Could not clock off early");
+      }
+      return payload as {
+        remainingAssignmentsChecked: number;
+        reassignedCount: number;
+        reviewRequiredCount: number;
+      };
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Clocked off early",
+        description: `${result.reassignedCount} reassigned, ${result.reviewRequiredCount} need review from ${result.remainingAssignmentsChecked} remaining work block(s).`,
+      });
+      setEarlyClockOffReason("");
+      queryClient.invalidateQueries();
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not clock off early",
+        description: apiErrorMessage(error),
+        variant: "destructive",
+      });
     },
   });
 
@@ -142,6 +182,7 @@ export default function AdminTimesheets() {
     manualSession.status !== "clocked_off" &&
     !loadingManualSession,
   );
+  const canEarlyClockOff = Boolean(manualSubcontractorId && !loadingManualSession);
   const manualStatusLabel = !manualSubcontractorId
     ? "Select employee/subcontractor"
     : loadingManualSession
@@ -187,48 +228,77 @@ export default function AdminTimesheets() {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Admin Clock Controls</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] md:items-end">
-          <div className="space-y-2">
-            <Label>Employee/Subcontractor</Label>
-            <Select value={manualSubId} onValueChange={setManualSubId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select employee/subcontractor..." />
-              </SelectTrigger>
-              <SelectContent>
-                {subs?.map((s) => (
-                  <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Today</Label>
-            <div>
-              <Badge variant={manualSession?.status === "clocked_off" ? "secondary" : manualSession ? "default" : "outline"}>
-                {manualStatusLabel}
-              </Badge>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] md:items-end">
+            <div className="space-y-2">
+              <Label>Employee/Subcontractor</Label>
+              <Select value={manualSubId} onValueChange={setManualSubId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee/subcontractor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {subs?.map((s) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Today</Label>
+              <div>
+                <Badge variant={manualSession?.status === "clocked_off" ? "secondary" : manualSession ? "default" : "outline"}>
+                  {manualStatusLabel}
+                </Badge>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => manualSubcontractorId && manualClockOn.mutate({ data: { subcontractorId: manualSubcontractorId } })}
+              disabled={!canManualClockOn || manualClockOn.isPending || manualClockOff.isPending || earlyClockOff.isPending}
+            >
+              <Play className="mr-2 h-4 w-4" />
+              Clock On Now
+            </Button>
+
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => manualSubcontractorId && manualClockOff.mutate({ data: { subcontractorId: manualSubcontractorId } })}
+              disabled={!canManualClockOff || manualClockOn.isPending || manualClockOff.isPending || earlyClockOff.isPending}
+            >
+              <Square className="mr-2 h-4 w-4" />
+              Clock Off Now
+            </Button>
           </div>
 
-          <Button
-            type="button"
-            onClick={() => manualSubcontractorId && manualClockOn.mutate({ data: { subcontractorId: manualSubcontractorId } })}
-            disabled={!canManualClockOn || manualClockOn.isPending || manualClockOff.isPending}
-          >
-            <Play className="mr-2 h-4 w-4" />
-            Clock On Now
-          </Button>
-
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => manualSubcontractorId && manualClockOff.mutate({ data: { subcontractorId: manualSubcontractorId } })}
-            disabled={!canManualClockOff || manualClockOn.isPending || manualClockOff.isPending}
-          >
-            <Square className="mr-2 h-4 w-4" />
-            Clock Off Now
-          </Button>
+          <div className="grid gap-3 rounded-md border bg-muted/30 p-3 md:grid-cols-[minmax(14rem,1fr)_auto] md:items-end">
+            <div className="space-y-2">
+              <Label>Early finish reason</Label>
+              <Input
+                value={earlyClockOffReason}
+                onChange={(event) => setEarlyClockOffReason(event.target.value)}
+                placeholder="e.g. Sick, family emergency, wet weather"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full whitespace-normal text-center md:w-auto"
+              onClick={() =>
+                manualSubcontractorId &&
+                earlyClockOff.mutate({
+                  subcontractorId: manualSubcontractorId,
+                  reason: earlyClockOffReason.trim(),
+                })
+              }
+              disabled={!canEarlyClockOff || manualClockOn.isPending || manualClockOff.isPending || earlyClockOff.isPending}
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              {earlyClockOff.isPending ? "Reassigning..." : "Early Clock-Off & Reassign"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { workSessionsTable, subcontractorsTable, gpsTracksTable, activityTable, locationVerificationsTable } from "@workspace/db";
+import {
+  activityTable,
+  gpsTracksTable,
+  jobAssignmentsTable,
+  jobsTable,
+  locationVerificationsTable,
+  subcontractorsTable,
+  workSessionsTable,
+} from "@workspace/db";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import {
   ClockOnBody,
@@ -19,6 +27,7 @@ import {
   requireSubcontractorAccess,
   workerSubcontractorId,
 } from "../lib/auth.js";
+import { runJobAssignmentTriggers } from "../lib/assignmentTriggers.js";
 
 const router = Router();
 const MAX_BREAK_MINUTES = 60;
@@ -55,6 +64,19 @@ function enrichSession(session: typeof workSessionsTable.$inferSelect, subName: 
     subcontractorName: subName,
     totalWorkMinutes: calcWorkMinutes(session),
   };
+}
+
+function appendNote(existing: string | null | undefined, note: string) {
+  return [existing, note].filter(Boolean).join("\n");
+}
+
+function parseAdminClockOffEarlyBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const raw = body as { subcontractorId?: unknown; reason?: unknown };
+  const subcontractorId = Number(raw.subcontractorId);
+  if (!Number.isInteger(subcontractorId) || subcontractorId <= 0) return null;
+  const reason = typeof raw.reason === "string" ? raw.reason.slice(0, 500) : undefined;
+  return { subcontractorId, reason };
 }
 
 router.post("/work-sessions/clock-on", async (req, res) => {
@@ -184,6 +206,189 @@ router.post("/work-sessions/clock-off", async (req, res) => {
   });
 
   return res.json(enrichSession(updated, sub?.name ?? ""));
+});
+
+router.post("/work-sessions/admin-clock-off-early", requireAdmin, async (req, res) => {
+  const parsed = parseAdminClockOffEarlyBody(req.body);
+  if (!parsed) return res.status(400).json({ error: "Invalid body" });
+
+  const tenantId = companyId(req);
+  const today = new Date().toISOString().split("T")[0];
+  const reason = parsed.reason?.trim() || "admin early clock-off";
+
+  const [sub] = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(and(eq(subcontractorsTable.id, parsed.subcontractorId), eq(subcontractorsTable.companyId, tenantId)));
+  if (!sub) return res.status(404).json({ error: "Employee/subcontractor not found" });
+
+  const [session] = await db
+    .select()
+    .from(workSessionsTable)
+    .where(
+      and(
+        eq(workSessionsTable.companyId, tenantId),
+        eq(workSessionsTable.subcontractorId, parsed.subcontractorId),
+        eq(workSessionsTable.date, today),
+      ),
+    );
+
+  let updatedSession: typeof workSessionsTable.$inferSelect | null = session ?? null;
+  if (session && session.status !== "clocked_off") {
+    const totalBreakMinutes = sessionBreakMinutes(session);
+    [updatedSession] = await db
+      .update(workSessionsTable)
+      .set({
+        status: "clocked_off",
+        clockedOffAt: new Date(),
+        totalBreakMinutes,
+        breakEndAt: session.status === "on_break" ? new Date() : session.breakEndAt,
+      })
+      .where(and(eq(workSessionsTable.id, session.id), eq(workSessionsTable.companyId, tenantId)))
+      .returning();
+  }
+
+  const remainingAssignments = await db
+    .select()
+    .from(jobAssignmentsTable)
+    .where(
+      and(
+        eq(jobAssignmentsTable.companyId, tenantId),
+        eq(jobAssignmentsTable.subcontractorId, parsed.subcontractorId),
+        eq(jobAssignmentsTable.dispatchDate, today),
+        eq(jobAssignmentsTable.status, "pending"),
+      ),
+    )
+    .orderBy(jobAssignmentsTable.scheduledOrder);
+
+  const results: Array<{
+    assignmentId: number;
+    jobId: number | null;
+    status: string;
+    reason: string;
+    selectedSubcontractorId?: number;
+    replacementSubcontractorName?: string | null;
+  }> = [];
+
+  for (const assignment of remainingAssignments) {
+    if (!assignment.jobId) {
+      await db
+        .update(jobAssignmentsTable)
+        .set({
+          subcontractorId: null,
+          notes: appendNote(assignment.notes, `Released because ${sub.name} was clocked off early by admin: ${reason}.`),
+        })
+        .where(and(eq(jobAssignmentsTable.id, assignment.id), eq(jobAssignmentsTable.companyId, tenantId)));
+      results.push({
+        assignmentId: assignment.id,
+        jobId: null,
+        status: "released_unassigned",
+        reason: "Work block has no linked job, so it was released for manual review",
+      });
+      continue;
+    }
+
+    const [job] = await db
+      .select()
+      .from(jobsTable)
+      .where(and(eq(jobsTable.id, assignment.jobId), eq(jobsTable.companyId, tenantId)));
+
+    if (!job) {
+      await db
+        .update(jobAssignmentsTable)
+        .set({
+          subcontractorId: null,
+          notes: appendNote(assignment.notes, `Released because ${sub.name} was clocked off early by admin: ${reason}.`),
+        })
+        .where(and(eq(jobAssignmentsTable.id, assignment.id), eq(jobAssignmentsTable.companyId, tenantId)));
+      results.push({
+        assignmentId: assignment.id,
+        jobId: assignment.jobId,
+        status: "released_unassigned",
+        reason: "Linked job could not be found, so the work block was released for manual review",
+      });
+      continue;
+    }
+
+    try {
+      const triggerResult = await runJobAssignmentTriggers({
+        tenantId,
+        job,
+        trigger: "updated",
+        options: {
+          reassignAssignmentId: assignment.id,
+          excludeSubcontractorIds: [parsed.subcontractorId],
+          requireNotClockedOffOnDate: true,
+          allowBestAvailable: true,
+          reason: `${sub.name} clocked off early`,
+        },
+      });
+
+      let replacementName: string | null = null;
+      if (triggerResult.selectedSubcontractorId) {
+        const [replacement] = await db
+          .select({ name: subcontractorsTable.name })
+          .from(subcontractorsTable)
+          .where(
+            and(
+              eq(subcontractorsTable.id, triggerResult.selectedSubcontractorId),
+              eq(subcontractorsTable.companyId, tenantId),
+            ),
+          );
+        replacementName = replacement?.name ?? null;
+      }
+
+      if (!triggerResult.jobAssignmentId || triggerResult.status !== "auto_assigned") {
+        await db
+          .update(jobAssignmentsTable)
+          .set({
+            subcontractorId: null,
+            notes: appendNote(assignment.notes, `Released because ${sub.name} was clocked off early by admin: ${reason}. Review trigger recommendation before assigning.`),
+          })
+          .where(and(eq(jobAssignmentsTable.id, assignment.id), eq(jobAssignmentsTable.companyId, tenantId)));
+      }
+
+      results.push({
+        assignmentId: assignment.id,
+        jobId: assignment.jobId,
+        status: triggerResult.status,
+        reason: triggerResult.reason,
+        selectedSubcontractorId: triggerResult.selectedSubcontractorId,
+        replacementSubcontractorName: replacementName,
+      });
+    } catch (err) {
+      req.log.warn({ err, assignmentId: assignment.id }, "Early clock-off reassignment failed");
+      await db
+        .update(jobAssignmentsTable)
+        .set({
+          subcontractorId: null,
+          notes: appendNote(assignment.notes, `Released because ${sub.name} was clocked off early by admin: ${reason}. Automatic reassignment failed.`),
+        })
+        .where(and(eq(jobAssignmentsTable.id, assignment.id), eq(jobAssignmentsTable.companyId, tenantId)));
+      results.push({
+        assignmentId: assignment.id,
+        jobId: assignment.jobId,
+        status: "released_unassigned",
+        reason: "Automatic reassignment failed, so the work block was released for manual review",
+      });
+    }
+  }
+
+  await db.insert(activityTable).values({
+    companyId: tenantId,
+    type: "clocked_off",
+    description: `${sub.name} was clocked off early by admin; ${results.length} remaining work block(s) reviewed for reassignment`,
+    entityId: updatedSession?.id ?? sub.id,
+    entityType: updatedSession ? "work_session" : "subcontractor",
+  });
+
+  return res.json({
+    session: updatedSession ? enrichSession(updatedSession, sub.name) : null,
+    remainingAssignmentsChecked: remainingAssignments.length,
+    reassignedCount: results.filter((result) => result.status === "auto_assigned").length,
+    reviewRequiredCount: results.filter((result) => result.status !== "auto_assigned").length,
+    results,
+  });
 });
 
 router.post("/work-sessions/break-start", async (req, res) => {

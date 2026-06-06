@@ -6,9 +6,10 @@ import {
   useListSubcontractors,
   useCreateDispatch,
   useDeleteJobAssignment,
-  getListDispatchQueryKey
+  getListDispatchQueryKey,
+  getListJobsQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/speech-textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, XCircle } from "lucide-react";
 
 const timeWindowLabels: Record<string, string> = {
   full_day: "Full day",
@@ -57,6 +58,7 @@ export default function Dispatch() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [assignmentToRemove, setAssignmentToRemove] = useState<any | null>(null);
+  const [assignmentToCancel, setAssignmentToCancel] = useState<any | null>(null);
   
   // Create dispatch form state
   const [selectedJob, setSelectedJob] = useState("");
@@ -101,6 +103,35 @@ export default function Dispatch() {
           variant: "destructive",
         });
       },
+    },
+  });
+
+  const cancelJob = useMutation({
+    mutationFn: async (assignment: any) => {
+      if (!assignment.jobId) throw new Error("This work block is not linked to a job");
+      const response = await fetch(`/api/jobs/${assignment.jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Could not cancel job");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      toast({ title: "Job cancelled", description: "Pending dispatch blocks for this job were removed." });
+      setAssignmentToCancel(null);
+      queryClient.invalidateQueries({ queryKey: getListDispatchQueryKey({ date }) });
+      queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not cancel job",
+        description: errorMessage(error),
+        variant: "destructive",
+      });
     },
   });
 
@@ -405,6 +436,17 @@ export default function Dispatch() {
 
                     <div className="flex flex-col gap-2">
                       <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 justify-start text-xs"
+                        onClick={() => setAssignmentToCancel(assignment)}
+                        disabled={!assignment.jobId || assignment.status === "completed" || cancelJob.isPending}
+                        title="Cancel the linked job"
+                      >
+                        <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                        Cancel Job
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -448,6 +490,36 @@ export default function Dispatch() {
               disabled={!assignmentToRemove || deleteAssignment.isPending}
             >
               {deleteAssignment.isPending ? "Removing..." : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(assignmentToCancel)} onOpenChange={(open) => {
+        if (!open) setAssignmentToCancel(null);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel job?</DialogTitle>
+            <DialogDescription>
+              {assignmentToCancel?.jobTitle ?? "This job"} will be marked cancelled. Any pending dispatch blocks for this job will be removed.
+            </DialogDescription>
+          </DialogHeader>
+          {assignmentToCancel?.workArea ? (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm font-medium">
+              {assignmentToCancel.workArea}
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setAssignmentToCancel(null)} disabled={cancelJob.isPending}>
+              Keep Job
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => assignmentToCancel && cancelJob.mutate(assignmentToCancel)}
+              disabled={!assignmentToCancel || cancelJob.isPending}
+            >
+              {cancelJob.isPending ? "Cancelling..." : "Cancel Job"}
             </Button>
           </DialogFooter>
         </DialogContent>
