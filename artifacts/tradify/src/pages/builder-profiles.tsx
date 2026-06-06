@@ -1,16 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Plus, Star } from "lucide-react";
+import { Building2, Pencil, Plus, Star } from "lucide-react";
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   premium: { label: "Premium", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
@@ -21,35 +22,432 @@ const TIER_LABELS: Record<string, { label: string; color: string }> = {
   custom: { label: "Custom", color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300" },
 };
 
-const emptyForm = { name: "", contactName: "", contactPhone: "", qualityTier: "standard", finishExpectations: "", documentationRequirements: "", signOffRequired: false, siteNotes: "", specialInstructions: "" };
+type QualityTier = keyof typeof TIER_LABELS;
+
+type BuilderProfile = {
+  id: number;
+  name: string;
+  customerId?: number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  qualityTier: QualityTier;
+  customTierLabel?: string | null;
+  preferredWorkerIds?: number[];
+  avoidedWorkerIds?: number[];
+  finishExpectations?: string | null;
+  documentationRequirements?: string | null;
+  signOffRequired?: boolean;
+  signOffNotes?: string | null;
+  siteNotes?: string | null;
+  specialInstructions?: string | null;
+  active?: boolean;
+};
+
+type EmployeeOption = {
+  id: number;
+  name: string;
+  active?: boolean;
+};
+
+type BuilderForm = {
+  name: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  qualityTier: QualityTier;
+  customTierLabel: string;
+  preferredWorkerIds: number[];
+  avoidedWorkerIds: number[];
+  finishExpectations: string;
+  documentationRequirements: string;
+  signOffRequired: boolean;
+  signOffNotes: string;
+  siteNotes: string;
+  specialInstructions: string;
+  active: boolean;
+};
+
+function emptyForm(): BuilderForm {
+  return {
+    name: "",
+    contactName: "",
+    contactPhone: "",
+    contactEmail: "",
+    qualityTier: "standard",
+    customTierLabel: "",
+    preferredWorkerIds: [],
+    avoidedWorkerIds: [],
+    finishExpectations: "",
+    documentationRequirements: "",
+    signOffRequired: false,
+    signOffNotes: "",
+    siteNotes: "",
+    specialInstructions: "",
+    active: true,
+  };
+}
+
+function toBuilderForm(profile: BuilderProfile): BuilderForm {
+  return {
+    name: profile.name ?? "",
+    contactName: profile.contactName ?? "",
+    contactPhone: profile.contactPhone ?? "",
+    contactEmail: profile.contactEmail ?? "",
+    qualityTier: (profile.qualityTier ?? "standard") as QualityTier,
+    customTierLabel: profile.customTierLabel ?? "",
+    preferredWorkerIds: profile.preferredWorkerIds ?? [],
+    avoidedWorkerIds: profile.avoidedWorkerIds ?? [],
+    finishExpectations: profile.finishExpectations ?? "",
+    documentationRequirements: profile.documentationRequirements ?? "",
+    signOffRequired: profile.signOffRequired ?? false,
+    signOffNotes: profile.signOffNotes ?? "",
+    siteNotes: profile.siteNotes ?? "",
+    specialInstructions: profile.specialInstructions ?? "",
+    active: profile.active ?? true,
+  };
+}
+
+function optionalText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function formPayload(form: BuilderForm) {
+  return {
+    name: form.name.trim(),
+    contactName: optionalText(form.contactName),
+    contactPhone: optionalText(form.contactPhone),
+    contactEmail: optionalText(form.contactEmail),
+    qualityTier: form.qualityTier,
+    customTierLabel:
+      form.qualityTier === "custom" ? optionalText(form.customTierLabel) : null,
+    preferredWorkerIds: form.preferredWorkerIds,
+    avoidedWorkerIds: form.avoidedWorkerIds,
+    finishExpectations: optionalText(form.finishExpectations),
+    documentationRequirements: optionalText(form.documentationRequirements),
+    signOffRequired: form.signOffRequired,
+    signOffNotes: optionalText(form.signOffNotes),
+    siteNotes: optionalText(form.siteNotes),
+    specialInstructions: optionalText(form.specialInstructions),
+    active: form.active,
+  };
+}
+
+function toggleId(ids: number[], id: number, checked: boolean) {
+  return checked ? Array.from(new Set([...ids, id])) : ids.filter((item) => item !== id);
+}
+
+function BuilderFormFields({
+  form,
+  onChange,
+  employees,
+  showActive = false,
+}: {
+  form: BuilderForm;
+  onChange: (updates: Partial<BuilderForm>) => void;
+  employees: EmployeeOption[];
+  showActive?: boolean;
+}) {
+  const updatePreferred = (employeeId: number, checked: boolean) => {
+    onChange({
+      preferredWorkerIds: toggleId(form.preferredWorkerIds, employeeId, checked),
+      avoidedWorkerIds: checked
+        ? form.avoidedWorkerIds.filter((id) => id !== employeeId)
+        : form.avoidedWorkerIds,
+    });
+  };
+
+  const updateAvoided = (employeeId: number, checked: boolean) => {
+    onChange({
+      avoidedWorkerIds: toggleId(form.avoidedWorkerIds, employeeId, checked),
+      preferredWorkerIds: checked
+        ? form.preferredWorkerIds.filter((id) => id !== employeeId)
+        : form.preferredWorkerIds,
+    });
+  };
+
+  return (
+    <div className="space-y-4 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <Label>Builder / Company Name</Label>
+          <Input
+            className="mt-1"
+            value={form.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Contact Name</Label>
+          <Input
+            className="mt-1"
+            value={form.contactName}
+            onChange={(e) => onChange({ contactName: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Contact Phone</Label>
+          <Input
+            className="mt-1"
+            value={form.contactPhone}
+            onChange={(e) => onChange({ contactPhone: e.target.value })}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Contact Email</Label>
+          <Input
+            className="mt-1"
+            type="email"
+            value={form.contactEmail}
+            onChange={(e) => onChange({ contactEmail: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <Label>Quality Tier</Label>
+          <Select
+            value={form.qualityTier}
+            onValueChange={(value) => onChange({ qualityTier: value as QualityTier })}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="premium">Premium - highest quality</SelectItem>
+              <SelectItem value="high_end">High End - quality-focused</SelectItem>
+              <SelectItem value="standard">Standard - balanced</SelectItem>
+              <SelectItem value="production">Production - speed priority</SelectItem>
+              <SelectItem value="budget">Budget - price priority</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {form.qualityTier === "custom" && (
+          <div>
+            <Label>Custom Tier Label</Label>
+            <Input
+              className="mt-1"
+              value={form.customTierLabel}
+              onChange={(e) => onChange({ customTierLabel: e.target.value })}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <Label>Finish Expectations</Label>
+          <Textarea
+            className="mt-1 text-sm"
+            rows={3}
+            value={form.finishExpectations}
+            onChange={(e) => onChange({ finishExpectations: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Documentation Requirements</Label>
+          <Textarea
+            className="mt-1 text-sm"
+            rows={3}
+            value={form.documentationRequirements}
+            onChange={(e) =>
+              onChange({ documentationRequirements: e.target.value })
+            }
+          />
+        </div>
+        <div>
+          <Label>Site Notes</Label>
+          <Textarea
+            className="mt-1 text-sm"
+            rows={3}
+            value={form.siteNotes}
+            onChange={(e) => onChange({ siteNotes: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Special Instructions</Label>
+          <Textarea
+            className="mt-1 text-sm"
+            rows={3}
+            value={form.specialInstructions}
+            onChange={(e) => onChange({ specialInstructions: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-md border p-3">
+        <div className="flex items-center justify-between gap-3">
+          <Label>Builder sign-off required</Label>
+          <Switch
+            checked={form.signOffRequired}
+            onCheckedChange={(checked) => onChange({ signOffRequired: checked })}
+          />
+        </div>
+        {form.signOffRequired && (
+          <div>
+            <Label>Sign-off Notes</Label>
+            <Textarea
+              className="mt-1 text-sm"
+              rows={2}
+              value={form.signOffNotes}
+              onChange={(e) => onChange({ signOffNotes: e.target.value })}
+            />
+          </div>
+        )}
+        {showActive && (
+          <div className="flex items-center justify-between gap-3 border-t pt-3">
+            <Label>Active builder profile</Label>
+            <Switch
+              checked={form.active}
+              onCheckedChange={(checked) => onChange({ active: checked })}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-md border p-3">
+          <p className="text-sm font-medium">Preferred employees/subcontractors</p>
+          <div className="mt-3 space-y-2">
+            {employees.length === 0 && (
+              <p className="text-xs text-muted-foreground">No employee/subcontractor profiles yet.</p>
+            )}
+            {employees.map((employee) => (
+              <label key={employee.id} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.preferredWorkerIds.includes(employee.id)}
+                  onCheckedChange={(checked) =>
+                    updatePreferred(employee.id, checked === true)
+                  }
+                />
+                <span>{employee.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-md border p-3">
+          <p className="text-sm font-medium">Avoided employees/subcontractors</p>
+          <div className="mt-3 space-y-2">
+            {employees.length === 0 && (
+              <p className="text-xs text-muted-foreground">No employee/subcontractor profiles yet.</p>
+            )}
+            {employees.map((employee) => (
+              <label key={employee.id} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.avoidedWorkerIds.includes(employee.id)}
+                  onCheckedChange={(checked) =>
+                    updateAvoided(employee.id, checked === true)
+                  }
+                />
+                <span>{employee.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function BuilderProfiles() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ ...emptyForm });
+  const [form, setForm] = useState(emptyForm());
+  const [selectedProfile, setSelectedProfile] = useState<BuilderProfile | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm());
+  const editOpen = selectedProfile !== null;
 
-  const { data: profiles = [] } = useQuery({
+  const { data: profiles = [] } = useQuery<BuilderProfile[]>({
     queryKey: ["builder-profiles"],
     queryFn: () => fetch("/api/builder-profiles").then((r) => r.json()),
   });
 
-  const { data: ratings = [] } = useQuery({
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ["subcontractors"],
+    queryFn: () => fetch("/api/subcontractors").then((r) => r.json()),
+  });
+
+  const { data: ratings = [] } = useQuery<any[]>({
     queryKey: ["builder-ratings"],
     queryFn: () => fetch("/api/builder-ratings").then((r) => r.json()),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => fetch("/api/builder-profiles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then((r) => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["builder-profiles"] }); setOpen(false); setForm({ ...emptyForm }); toast({ title: "Builder profile created" }); },
+    mutationFn: async (data: BuilderForm) => {
+      const response = await fetch("/api/builder-profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formPayload(data)),
+      });
+      if (!response.ok) {
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not create builder profile",
+        );
+      }
+      return response.json() as Promise<BuilderProfile>;
+    },
+    onSuccess: (profile) => {
+      qc.invalidateQueries({ queryKey: ["builder-profiles"] });
+      setOpen(false);
+      setForm(emptyForm());
+      setSelectedProfile(profile);
+      setEditForm(toBuilderForm(profile));
+      toast({ title: "Builder profile created" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not create builder profile",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: BuilderForm }) => {
+      const response = await fetch(`/api/builder-profiles/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formPayload(data)),
+      });
+      if (!response.ok) {
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not save builder profile",
+        );
+      }
+      return response.json() as Promise<BuilderProfile>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["builder-profiles"] });
+      setSelectedProfile(null);
+      toast({ title: "Builder profile saved" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not save builder profile",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const ratingsMap = new Map<number, any[]>();
-  for (const r of ratings as any[]) {
+  for (const r of ratings) {
     const arr = ratingsMap.get(r.builderProfileId) ?? [];
     arr.push(r);
     ratingsMap.set(r.builderProfileId, arr);
   }
+
+  const openProfile = (profile: BuilderProfile) => {
+    setSelectedProfile(profile);
+    setEditForm(toBuilderForm(profile));
+  };
 
   return (
     <div className="space-y-6">
@@ -62,51 +460,46 @@ export default function BuilderProfiles() {
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-2" />Add Builder</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>New Builder Profile</DialogTitle></DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2"><Label>Builder / Company Name</Label><Input className="mt-1" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} /></div>
-                <div><Label>Contact Name</Label><Input className="mt-1" value={form.contactName} onChange={(e) => setForm((p) => ({ ...p, contactName: e.target.value }))} /></div>
-                <div><Label>Contact Phone</Label><Input className="mt-1" value={form.contactPhone} onChange={(e) => setForm((p) => ({ ...p, contactPhone: e.target.value }))} /></div>
-              </div>
-              <div>
-                <Label>Quality Tier</Label>
-                <Select value={form.qualityTier} onValueChange={(v) => setForm((p) => ({ ...p, qualityTier: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="premium">Premium — highest quality, best employees/subcontractors</SelectItem>
-                    <SelectItem value="high_end">High End — quality-focused</SelectItem>
-                    <SelectItem value="standard">Standard — balanced quality & efficiency</SelectItem>
-                    <SelectItem value="production">Production — speed & availability priority</SelectItem>
-                    <SelectItem value="budget">Budget — price & availability primary</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Finish Expectations</Label><Textarea className="mt-1 text-sm" rows={2} value={form.finishExpectations} onChange={(e) => setForm((p) => ({ ...p, finishExpectations: e.target.value }))} /></div>
-              <div><Label>Site Notes</Label><Textarea className="mt-1 text-sm" rows={2} value={form.siteNotes} onChange={(e) => setForm((p) => ({ ...p, siteNotes: e.target.value }))} /></div>
-              <div className="flex items-center gap-2">
-                <Switch checked={form.signOffRequired} onCheckedChange={(v) => setForm((p) => ({ ...p, signOffRequired: v }))} />
-                <Label>Builder sign-off required</Label>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button className="flex-1" onClick={() => createMutation.mutate(form)} disabled={!form.name}>Create Profile</Button>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              </div>
-            </div>
+            <BuilderFormFields
+              form={form}
+              employees={employees}
+              onChange={(updates) => setForm((current) => ({ ...current, ...updates }))}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => createMutation.mutate(form)}
+                disabled={!form.name.trim() || createMutation.isPending}
+              >
+                {createMutation.isPending ? "Creating..." : "Create Profile"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {(profiles as any[]).map((p: any) => {
+        {profiles.map((p) => {
           const tier = TIER_LABELS[p.qualityTier] ?? TIER_LABELS.standard;
           const bRatings = ratingsMap.get(p.id) ?? [];
           const avgRating = bRatings.length ? (bRatings.reduce((a: number, r: any) => a + r.rating, 0) / bRatings.length).toFixed(1) : null;
 
           return (
-            <Card key={p.id}>
+            <Card
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              className="cursor-pointer transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => openProfile(p)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openProfile(p);
+                }
+              }}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -118,11 +511,15 @@ export default function BuilderProfiles() {
                       {p.contactName && <p className="text-xs text-muted-foreground">{p.contactName}{p.contactPhone ? ` · ${p.contactPhone}` : ""}</p>}
                     </div>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tier.color}`}>{tier.label}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tier.color}`}>{tier.label}</span>
+                    {p.active === false && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 {p.finishExpectations && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Finish: </span>{p.finishExpectations}</p>}
+                {p.documentationRequirements && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Docs: </span>{p.documentationRequirements}</p>}
                 {p.siteNotes && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Site: </span>{p.siteNotes}</p>}
                 {p.specialInstructions && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Instructions: </span>{p.specialInstructions}</p>}
                 <div className="flex items-center gap-4 pt-1">
@@ -135,14 +532,48 @@ export default function BuilderProfiles() {
                     </div>
                   )}
                 </div>
+                <div className="pt-2 text-xs font-medium text-primary inline-flex items-center gap-1">
+                  <Pencil className="w-3 h-3" />
+                  View / edit
+                </div>
               </CardContent>
             </Card>
           );
         })}
       </div>
-      {(profiles as any[]).length === 0 && (
+      {profiles.length === 0 && (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No builder profiles yet. Add one to start managing quality tiers and preferences.</CardContent></Card>
       )}
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedProfile(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editForm.name || "Builder Profile"}</DialogTitle>
+          </DialogHeader>
+          <BuilderFormFields
+            form={editForm}
+            employees={employees}
+            showActive
+            onChange={(updates) => setEditForm((current) => ({ ...current, ...updates }))}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedProfile(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (selectedProfile) updateMutation.mutate({ id: selectedProfile.id, data: editForm });
+              }}
+              disabled={!editForm.name.trim() || updateMutation.isPending}
+            >
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
