@@ -451,8 +451,8 @@ export default function BuilderProfiles() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Builder Profiles</h1>
           <p className="text-muted-foreground mt-1">Quality tiers, preferences, sign-off requirements and ratings</p>
         </div>
@@ -501,17 +501,17 @@ export default function BuilderProfiles() {
               }}
             >
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="w-9 h-9 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
                       <Building2 className="w-5 h-5 text-primary" />
                     </div>
-                    <div>
-                      <p className="font-semibold">{p.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-snug">{p.name}</p>
                       {p.contactName && <p className="text-xs text-muted-foreground">{p.contactName}{p.contactPhone ? ` · ${p.contactPhone}` : ""}</p>}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex shrink-0 flex-row flex-wrap items-center gap-1 sm:flex-col sm:items-end">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tier.color}`}>{tier.label}</span>
                     {p.active === false && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                   </div>
@@ -522,7 +522,7 @@ export default function BuilderProfiles() {
                 {p.documentationRequirements && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Docs: </span>{p.documentationRequirements}</p>}
                 {p.siteNotes && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Site: </span>{p.siteNotes}</p>}
                 {p.specialInstructions && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Instructions: </span>{p.specialInstructions}</p>}
-                <div className="flex items-center gap-4 pt-1">
+                <div className="flex flex-wrap items-center gap-4 pt-1">
                   {p.signOffRequired && <Badge variant="outline" className="text-xs">Sign-off required</Badge>}
                   {avgRating && (
                     <div className="flex items-center gap-1 text-amber-600 text-xs">

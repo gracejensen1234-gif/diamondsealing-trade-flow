@@ -227,14 +227,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     key={item.name}
                     href={item.href}
                     onClick={onNavigate}
-                    className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                    className={`flex min-w-0 items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
                       isActive
                         ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     }`}
                   >
                     <item.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="flex-1">{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
                     {"badge" in item && item.badge ? (
                       <span className="min-w-[1.2rem] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
                         {(item.badge as number) > 99 ? "99+" : item.badge}
@@ -270,12 +270,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen max-w-full overflow-hidden bg-background">
       <NotificationPermissionPrompt subcontractorId={subId} />
       <nav className="hidden w-60 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex-shrink-0 md:flex flex-col">
         {sidebarContent()}
       </nav>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col">
         <header className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-sidebar-border bg-sidebar px-3 text-sidebar-foreground md:hidden">
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
@@ -304,8 +304,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {user?.companyName ?? "Operations"}
           </span>
         </header>
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto p-4 sm:p-6">{children}</div>
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="mx-auto w-full min-w-0 max-w-7xl p-3 sm:p-6">
+            {children}
+          </div>
         </main>
       </div>
     </div>

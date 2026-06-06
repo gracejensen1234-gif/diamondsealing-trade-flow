@@ -40,7 +40,7 @@ export default function Dockets() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dockets</h1>
           <p className="text-muted-foreground mt-1">Job completion dockets with signature capture and work records</p>
@@ -92,7 +92,7 @@ export default function Dockets() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {(["draft", "pending_signature", "signed", "disputed"] as const).map((status) => {
           const count = (dockets as any[]).filter((d: any) => d.status === status).length;
           const cfg = STATUS_CFG[status];

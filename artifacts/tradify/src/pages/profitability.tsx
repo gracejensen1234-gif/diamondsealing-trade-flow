@@ -47,12 +47,12 @@ export default function Profitability() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Profitability</h1>
           <p className="text-muted-foreground mt-1">Revenue, margins, and cost breakdown per subcontractor</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -68,7 +68,7 @@ export default function Profitability() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -115,15 +115,15 @@ export default function Profitability() {
           return (
             <Card key={s.id}>
               <CardContent className="pt-5">
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{s.subcontractorName ?? `Sub #${s.subcontractorId}`}</p>
                       <Badge variant={margin >= 30 ? "default" : margin >= 15 ? "secondary" : "destructive"} className="text-xs">
                         {pct(margin)} margin
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-5 gap-4 text-sm">
+                    <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 xl:grid-cols-5">
                       <div><p className="text-xs text-muted-foreground">Revenue</p><p className="font-semibold text-green-700 dark:text-green-400">{currency(s.revenue)}</p></div>
                       <div><p className="text-xs text-muted-foreground">Labour</p><p className="font-semibold">{currency(s.labourCost)}</p></div>
                       <div><p className="text-xs text-muted-foreground">Materials</p><p className="font-semibold">{currency(s.materialCost)}</p></div>

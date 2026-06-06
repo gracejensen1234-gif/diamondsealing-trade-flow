@@ -638,8 +638,9 @@ export default function WorkerProfiles() {
                 autoComplete="new-password"
               />
             </div>
-            <div className="flex gap-2 md:col-span-6">
+            <div className="flex flex-col gap-2 sm:flex-row md:col-span-6">
               <Button
+                className="sm:w-auto"
                 onClick={() => createWorkerMutation.mutate(newWorker)}
                 disabled={
                   !newWorker.name ||
@@ -657,7 +658,11 @@ export default function WorkerProfiles() {
                     ? "Add and set login"
                     : "Add employee/subcontractor"}
               </Button>
-              <Button variant="outline" onClick={() => setShowNewWorker(false)}>
+              <Button
+                variant="outline"
+                className="sm:w-auto"
+                onClick={() => setShowNewWorker(false)}
+              >
                 Cancel
               </Button>
             </div>
@@ -683,14 +688,14 @@ export default function WorkerProfiles() {
                   className="pb-3 cursor-pointer"
                   onClick={() => setExpanded(isOpen ? null : sub.id)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="w-9 h-9 shrink-0 rounded-full bg-primary/10 flex items-center justify-center">
                         <HardHat className="w-5 h-5 text-primary" />
                       </div>
-                      <div>
-                        <p className="font-semibold">{sub.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold leading-snug">{sub.name}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
                           {isAdmin ? (
                             <Badge variant="outline" className="text-xs">
                               Grade: {experienceLabel(sk?.experienceLevel)}
@@ -732,10 +737,10 @@ export default function WorkerProfiles() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
                       {isAdmin ? (
                         <div className="text-right text-sm">
-                          <div className="flex items-center gap-1 text-amber-600">
+                          <div className="flex items-center justify-end gap-1 text-amber-600">
                             <Star className="w-3.5 h-3.5" />
                             <span className="font-semibold">
                               {Number(sk?.qualityScore ?? 100).toFixed(0)}
@@ -820,8 +825,8 @@ export default function WorkerProfiles() {
                               }
                             />
                           </div>
-                          <div className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 sm:col-span-2">
-                            <div>
+                          <div className="flex flex-col gap-3 rounded-md border bg-background px-3 py-2 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
                               <Label className="text-xs">GST registered</Label>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Adds 10% GST to this worker's weekly invoices.
@@ -834,7 +839,7 @@ export default function WorkerProfiles() {
                               }
                             />
                           </div>
-                          <div className="flex items-end">
+                          <div className="flex items-end sm:justify-end">
                             <Button
                               size="sm"
                               onClick={() =>
@@ -918,7 +923,7 @@ export default function WorkerProfiles() {
                               autoComplete="new-password"
                             />
                           </div>
-                          <div className="flex items-end">
+                          <div className="flex items-end sm:justify-end">
                             <Button
                               size="sm"
                               className="gap-2"
@@ -947,8 +952,8 @@ export default function WorkerProfiles() {
                     {/* Admin-only grading */}
                     {isAdmin ? (
                       <div className="rounded-lg border bg-muted/20 p-3">
-                        <div className="mb-3 flex items-start justify-between gap-3">
-                          <div>
+                        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                               Admin-only grading
                             </p>
@@ -1020,7 +1025,7 @@ export default function WorkerProfiles() {
                               }
                             />
                           </div>
-                          <div className="flex items-end">
+                          <div className="flex items-end sm:justify-end">
                             <Button
                               size="sm"
                               onClick={() =>
@@ -1047,13 +1052,13 @@ export default function WorkerProfiles() {
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                               {group}
                             </p>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               {SKILL_FIELDS.filter(
                                 (f) => f.group === group,
                               ).map((f) => (
                                 <div
                                   key={f.key}
-                                  className="flex items-center gap-2"
+                                  className="flex min-w-0 items-center gap-2"
                                 >
                                   <Switch
                                     checked={edit[f.key] ?? false}
@@ -1061,7 +1066,7 @@ export default function WorkerProfiles() {
                                       updateEdit(sub.id, f.key, v)
                                     }
                                   />
-                                  <Label className="text-sm cursor-pointer">
+                                  <Label className="min-w-0 cursor-pointer text-sm leading-snug">
                                     {f.label}
                                   </Label>
                                 </div>
@@ -1197,7 +1202,7 @@ export default function WorkerProfiles() {
                             placeholder="Card number, licence class, restrictions..."
                           />
                         </div>
-                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted sm:col-span-2">
+                        <label className="flex cursor-pointer flex-wrap items-center justify-center gap-2 rounded-md border-2 border-dashed border-muted-foreground/30 bg-background px-3 py-3 text-center text-sm font-medium text-muted-foreground transition-colors hover:bg-muted sm:col-span-2">
                           {uploadCredentialMutation.isPending ? (
                             <ImageIcon className="h-4 w-4 animate-pulse" />
                           ) : (
@@ -1221,7 +1226,7 @@ export default function WorkerProfiles() {
 
                     {/* Performance scores (read-only) */}
                     {isAdmin && sk && (
-                      <div className="grid grid-cols-4 gap-3 p-3 bg-muted/30 rounded-lg text-xs">
+                      <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg text-xs sm:grid-cols-4">
                         <div>
                           <p className="text-muted-foreground">Punctuality</p>
                           <p className="font-semibold">

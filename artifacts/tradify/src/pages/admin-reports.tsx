@@ -145,7 +145,7 @@ export default function AdminReports() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="p-4">
             <div className="text-sm font-medium text-muted-foreground mb-1">
