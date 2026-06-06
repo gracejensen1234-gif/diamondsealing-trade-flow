@@ -570,7 +570,13 @@ export interface JobAssignment {
   /** @nullable */
   jobAddress?: string | null;
   /** @nullable */
+  jobSuburb?: string | null;
+  jobAddressVisible?: boolean;
+  addressVisibilityReason?: string;
+  /** @nullable */
   jobDescription?: string | null;
+  /** @nullable */
+  clientName?: string | null;
   /** @nullable */
   subcontractorId?: number | null;
   /** @nullable */

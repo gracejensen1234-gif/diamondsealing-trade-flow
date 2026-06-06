@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { jobAssignmentsTable, jobReportsTable, jobsTable, subcontractorsTable, workSessionsTable } from "@workspace/db";
+import { jobAssignmentsTable, jobReportsTable, jobsTable, subcontractorsTable, workSessionsTable, customersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   CreateDispatchBody,
@@ -15,6 +15,73 @@ import { createAndSendNotification } from "../lib/notificationService.js";
 import { canAccessSubcontractor, companyId, isAdmin, requireAdmin, workerSubcontractorId } from "../lib/auth.js";
 
 const router = Router();
+
+type AssignmentProgress = Pick<
+  typeof jobAssignmentsTable.$inferSelect,
+  "id" | "dispatchDate" | "scheduledOrder" | "subcontractorId" | "status"
+>;
+
+type AssignmentVisibilityContext = {
+  workerSubcontractorId?: number | null;
+  dayAssignments?: AssignmentProgress[];
+};
+
+function deriveSuburb(address?: string | null) {
+  if (!address) return null;
+  const statePostcodeMatch = address.match(
+    /(?:^|,|\s)([A-Za-z][A-Za-z\s'’-]+?)\s+(?:QLD|NSW|VIC|ACT|SA|WA|TAS|NT)\s+\d{4}(?:\s|$)/i,
+  );
+  if (statePostcodeMatch?.[1]) return statePostcodeMatch[1].trim();
+
+  const parts = address
+    .split(",")
+    .map((part) =>
+      part
+        .replace(/\b(QLD|NSW|VIC|ACT|SA|WA|TAS|NT|Australia)\b/gi, "")
+        .replace(/\b\d{4}\b/g, "")
+        .trim(),
+    )
+    .filter(Boolean);
+  if (parts.length >= 2) return parts[parts.length - 1];
+  return null;
+}
+
+function canShowWorkerAddress(
+  assignment: AssignmentProgress,
+  context: AssignmentVisibilityContext,
+) {
+  const workerSubcontractorId = context.workerSubcontractorId;
+  if (!workerSubcontractorId) return true;
+  if (assignment.subcontractorId !== workerSubcontractorId) return false;
+  if (assignment.status !== "pending") return true;
+
+  const sameDayAssignments = (context.dayAssignments ?? [])
+    .filter(
+      (item) =>
+        item.subcontractorId === assignment.subcontractorId &&
+        item.dispatchDate === assignment.dispatchDate,
+    )
+    .sort((a, b) => a.scheduledOrder - b.scheduledOrder);
+  const previousAssignments = sameDayAssignments.filter(
+    (item) => item.scheduledOrder < assignment.scheduledOrder,
+  );
+
+  return (
+    previousAssignments.length === 0 ||
+    previousAssignments.every((item) => item.status === "completed")
+  );
+}
+
+function addressVisibilityReason(
+  assignment: AssignmentProgress,
+  context: AssignmentVisibilityContext,
+) {
+  if (!context.workerSubcontractorId) return "admin";
+  if (assignment.status !== "pending") return "current_or_completed";
+  return canShowWorkerAddress(assignment, context)
+    ? "next_job_unlocked"
+    : "locked_until_previous_job_completed";
+}
 
 async function requireOpenWorkdayForWorker(req: Request, res: Response, subcontractorId: number | null | undefined) {
   if (isAdmin(req)) return true;
@@ -43,21 +110,87 @@ async function requireOpenWorkdayForWorker(req: Request, res: Response, subcontr
   return true;
 }
 
-async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
+async function requirePreviousJobsCompleted(
+  req: Request,
+  res: Response,
+  assignment: typeof jobAssignmentsTable.$inferSelect,
+) {
+  if (isAdmin(req)) return true;
+  if (!assignment.subcontractorId) {
+    res.status(400).json({ error: "Assigned employee/subcontractor is required" });
+    return false;
+  }
+
+  const previousAssignments = await db
+    .select({
+      id: jobAssignmentsTable.id,
+      status: jobAssignmentsTable.status,
+      scheduledOrder: jobAssignmentsTable.scheduledOrder,
+    })
+    .from(jobAssignmentsTable)
+    .where(
+      and(
+        eq(jobAssignmentsTable.companyId, companyId(req)),
+        eq(jobAssignmentsTable.subcontractorId, assignment.subcontractorId),
+        eq(jobAssignmentsTable.dispatchDate, assignment.dispatchDate),
+      ),
+    );
+
+  const unfinishedPrevious = previousAssignments
+    .filter((item) => item.scheduledOrder < assignment.scheduledOrder)
+    .some((item) => item.status !== "completed");
+  if (unfinishedPrevious) {
+    res.status(400).json({
+      error: "Complete the previous job report before checking in to this job",
+    });
+    return false;
+  }
+
+  return true;
+}
+
+async function enrichAssignment(
+  a: typeof jobAssignmentsTable.$inferSelect,
+  context: AssignmentVisibilityContext = {},
+) {
   const tenantId = a.companyId ?? 0;
   let jobTitle: string | null = null;
-  let jobAddress: string | null = null;
+  let fullJobAddress: string | null = null;
   let jobDescription: string | null = null;
+  let jobSuburb: string | null = null;
+  let clientName: string | null = null;
+  let jobBuilderContactName: string | null = null;
+  let jobBuilderContactPhone: string | null = null;
+  let jobRequiredColours: string[] = [];
   let subcontractorName: string | null = null;
 
   if (a.jobId) {
-    const [j] = await db
-      .select()
+    const [row] = await db
+      .select({
+        job: jobsTable,
+        customerName: customersTable.name,
+        customerSuburb: customersTable.suburb,
+      })
       .from(jobsTable)
+      .leftJoin(
+        customersTable,
+        and(
+          eq(jobsTable.customerId, customersTable.id),
+          eq(customersTable.companyId, tenantId),
+        ),
+      )
       .where(and(eq(jobsTable.id, a.jobId), eq(jobsTable.companyId, tenantId)));
+    const j = row?.job;
     jobTitle = j?.title ?? null;
-    jobAddress = j?.address ?? null;
+    fullJobAddress = j?.address ?? null;
     jobDescription = j?.description ?? null;
+    jobSuburb = row?.customerSuburb ?? deriveSuburb(j?.address) ?? null;
+    clientName = row?.customerName ?? null;
+    jobBuilderContactName = j?.builderContactName ?? null;
+    jobBuilderContactPhone = j?.builderContactPhone ?? null;
+    jobRequiredColours = Array.isArray(j?.requiredColours)
+      ? (j.requiredColours as string[])
+      : [];
   }
   if (a.subcontractorId) {
     const [s] = await db
@@ -72,19 +205,30 @@ async function enrichAssignment(a: typeof jobAssignmentsTable.$inferSelect) {
     .where(and(eq(jobReportsTable.jobAssignmentId, a.id), eq(jobReportsTable.companyId, tenantId)))
     .limit(1);
   const reportPhotos = Array.isArray(report?.photos) ? report.photos : [];
+  const jobAddressVisible = canShowWorkerAddress(a, context);
 
   return {
     ...a,
     jobTitle,
-    jobAddress,
-    jobDescription,
+    jobAddress: jobAddressVisible ? fullJobAddress : null,
+    jobSuburb,
+    jobAddressVisible,
+    addressVisibilityReason: addressVisibilityReason(a, context),
+    jobDescription: jobAddressVisible ? jobDescription : null,
+    clientName,
     subcontractorName,
     workArea: a.workArea,
     timeWindow: a.timeWindow ?? "full_day",
     plannedStartTime: a.plannedStartTime,
     plannedEndTime: a.plannedEndTime,
     estimatedMetres: a.estimatedMetres ? Number(a.estimatedMetres) : null,
-    requiredColours: Array.isArray(a.requiredColours) ? a.requiredColours : [],
+    builderContactName: a.builderContactName ?? jobBuilderContactName,
+    builderContactPhone: a.builderContactPhone ?? jobBuilderContactPhone,
+    requiredColours:
+      Array.isArray(a.requiredColours) && a.requiredColours.length > 0
+        ? a.requiredColours
+        : jobRequiredColours,
+    notes: jobAddressVisible ? a.notes : null,
     hasJobReport: Boolean(report),
     jobReportPhotoCount: reportPhotos.length,
   };
@@ -103,7 +247,14 @@ router.get("/dispatch", async (req, res) => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(jobAssignmentsTable.scheduledOrder);
 
-  const enriched = await Promise.all(assignments.map(enrichAssignment));
+  const enriched = await Promise.all(
+    assignments.map((assignment) =>
+      enrichAssignment(assignment, {
+        workerSubcontractorId: workerSubcontractorId(req),
+        dayAssignments: assignments,
+      }),
+    ),
+  );
   return res.json(enriched);
 });
 
@@ -132,7 +283,7 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
     }))
   ).returning();
 
-  const enriched = await Promise.all(inserted.map(enrichAssignment));
+  const enriched = await Promise.all(inserted.map((assignment) => enrichAssignment(assignment)));
 
   await Promise.all(
     enriched.map(async (assignment) => {
@@ -142,7 +293,7 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
           subcontractorId: assignment.subcontractorId,
           type: "new_job",
           title: "New job assigned",
-          body: `${assignment.jobTitle ?? "Job"}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${assignment.jobAddress ? ` at ${assignment.jobAddress}` : ""}`,
+          body: `${assignment.jobTitle ?? "Job"}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${assignment.jobSuburb ? ` in ${assignment.jobSuburb}` : ""}`,
           priority: "high",
           actionUrl: "/field",
           linkedEntityType: "job_assignment",
@@ -209,7 +360,10 @@ router.patch("/dispatch/:id", async (req, res) => {
     .returning();
   if (!a) return res.status(404).json({ error: "Not found" });
 
-  const enriched = await enrichAssignment(a);
+  const enriched = await enrichAssignment(a, {
+    workerSubcontractorId: workerSubcontractorId(req),
+    dayAssignments: [a],
+  });
 
   if (
     enriched.subcontractorId &&
@@ -289,6 +443,7 @@ router.post("/dispatch/:id/arrive", async (req, res) => {
     return res.status(403).json({ error: "You can only mark your own assigned jobs" });
   }
   if (!(await requireOpenWorkdayForWorker(req, res, existing.subcontractorId))) return;
+  if (!(await requirePreviousJobsCompleted(req, res, existing))) return;
   if (!isAdmin(req) && existing.status !== "pending") {
     return res.status(400).json({ error: "Only pending jobs can be checked in" });
   }
@@ -297,7 +452,12 @@ router.post("/dispatch/:id/arrive", async (req, res) => {
     status: "arrived",
     arrivedAt: new Date(),
   }).where(and(eq(jobAssignmentsTable.id, parsed.data.id), eq(jobAssignmentsTable.companyId, companyId(req)))).returning();
-  return res.json(await enrichAssignment(a));
+  return res.json(
+    await enrichAssignment(a, {
+      workerSubcontractorId: workerSubcontractorId(req),
+      dayAssignments: [a],
+    }),
+  );
 });
 
 router.post("/dispatch/:id/depart", async (req, res) => {
@@ -334,7 +494,12 @@ router.post("/dispatch/:id/depart", async (req, res) => {
     status: "completed",
     departedAt: new Date(),
   }).where(and(eq(jobAssignmentsTable.id, parsed.data.id), eq(jobAssignmentsTable.companyId, companyId(req)))).returning();
-  return res.json(await enrichAssignment(a));
+  return res.json(
+    await enrichAssignment(a, {
+      workerSubcontractorId: workerSubcontractorId(req),
+      dayAssignments: [a],
+    }),
+  );
 });
 
 export default router;

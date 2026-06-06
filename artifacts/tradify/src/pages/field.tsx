@@ -19,6 +19,7 @@ import {
   useUpdateJobAssignment,
   getGetTodaySessionQueryKey,
   getListDispatchQueryKey,
+  type JobAssignment,
   type WorkSession,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -105,6 +106,9 @@ const timeWindowLabels: Record<string, string> = {
   custom: "Custom time",
 };
 
+const OPEN_NEXT_DIRECTIONS_KEY =
+  "sealflow_open_next_directions_after_assignment";
+
 type FieldSection =
   | "home"
   | "schedule"
@@ -166,6 +170,11 @@ type LocationVerificationResult = {
   status: string;
   distanceMetres?: number | null;
   withinBounds?: boolean | null;
+};
+
+type DirectionsOrigin = {
+  lat: number;
+  lng: number;
 };
 
 type FieldInventoryItem = {
@@ -361,9 +370,187 @@ function inventoryTransactionLabel(
   return labels[type];
 }
 
-function mapsDirectionsUrl(address?: string | null) {
+function mapsDirectionsUrl(
+  address?: string | null,
+  origin?: DirectionsOrigin | null,
+) {
   if (!address) return null;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  const params = new URLSearchParams({
+    api: "1",
+    destination: address,
+    travelmode: "driving",
+  });
+  if (origin) params.set("origin", `${origin.lat},${origin.lng}`);
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+function mapsEmbedUrl(
+  address?: string | null,
+  origin?: DirectionsOrigin | null,
+) {
+  if (!address) return null;
+  if (origin) {
+    return `https://maps.google.com/maps?saddr=${encodeURIComponent(`${origin.lat},${origin.lng}`)}&daddr=${encodeURIComponent(address)}&output=embed`;
+  }
+  return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
+}
+
+function assignmentLocationLabel(assignment?: JobAssignment | null) {
+  if (!assignment) return null;
+  if (assignment.jobAddress) return assignment.jobAddress;
+  if (assignment.jobSuburb) return `${assignment.jobSuburb} suburb`;
+  return "Address locked";
+}
+
+function addressLockLabel(assignment?: JobAssignment | null) {
+  if (!assignment || assignment.jobAddress) return null;
+  if (assignment.addressVisibilityReason === "locked_until_previous_job_completed") {
+    return "Exact address unlocks after the previous job is completed.";
+  }
+  return "Exact address not available yet.";
+}
+
+function InAppDirectionsCard({
+  assignment,
+  origin,
+  error,
+  onClose,
+}: {
+  assignment: JobAssignment;
+  origin?: DirectionsOrigin | null;
+  error?: string | null;
+  onClose: () => void;
+}) {
+  const embedUrl = mapsEmbedUrl(assignment.jobAddress, origin);
+  const directionsUrl = mapsDirectionsUrl(assignment.jobAddress, origin);
+  if (!assignment.jobAddress || !embedUrl) return null;
+
+  return (
+    <Card className="overflow-hidden border-primary/40">
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="text-base">Directions</CardTitle>
+            <p className="mt-1 text-sm font-medium">{assignment.jobTitle}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {assignment.jobAddress}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={onClose}
+            title="Close directions"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 pt-2">
+        <div className="aspect-[4/3] overflow-hidden rounded-md border bg-muted">
+          <iframe
+            title={`Directions to ${assignment.jobTitle ?? "job"}`}
+            src={embedUrl}
+            className="h-full w-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
+        {error ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300">{error}</p>
+        ) : null}
+        {directionsUrl ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => window.open(directionsUrl, "_blank", "noopener,noreferrer")}
+          >
+            <Navigation className="mr-2 h-4 w-4" />
+            Open live navigation
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AssignmentQuickDetails({
+  assignment,
+  showTiming = true,
+}: {
+  assignment: JobAssignment;
+  showTiming?: boolean;
+}) {
+  const locationLabel = assignmentLocationLabel(assignment);
+  const lockedLabel = addressLockLabel(assignment);
+
+  return (
+    <div className="space-y-2">
+      {locationLabel ? (
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{locationLabel}</span>
+        </div>
+      ) : null}
+      {lockedLabel ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          {lockedLabel}
+        </p>
+      ) : null}
+      {(assignment.clientName ||
+        assignment.builderContactName ||
+        assignment.builderContactPhone) && (
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <UsersIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {assignment.clientName ? `${assignment.clientName}` : "Builder"}
+            {assignment.builderContactName
+              ? ` · ${assignment.builderContactName}`
+              : ""}
+            {assignment.builderContactPhone
+              ? ` · ${assignment.builderContactPhone}`
+              : ""}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {showTiming ? (
+          <Badge variant="outline" className="text-xs">
+            {timeWindowLabels[assignment.timeWindow ?? "full_day"] ??
+              assignment.timeWindow}
+          </Badge>
+        ) : null}
+        {(assignment.plannedStartTime || assignment.plannedEndTime) && (
+          <Badge variant="outline" className="text-xs">
+            {assignment.plannedStartTime || "Start"} -{" "}
+            {assignment.plannedEndTime || "Finish"}
+          </Badge>
+        )}
+        {assignment.estimatedMetres != null && (
+          <Badge variant="secondary" className="text-xs">
+            Target: {assignment.estimatedMetres}m
+          </Badge>
+        )}
+        {assignment.jobSuburb && assignment.jobAddress ? (
+          <Badge variant="outline" className="text-xs">
+            {assignment.jobSuburb}
+          </Badge>
+        ) : null}
+      </div>
+      {assignment.requiredColours && assignment.requiredColours.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {assignment.requiredColours.map((colour) => (
+            <Badge key={colour} variant="secondary" className="bg-muted text-xs">
+              {colour}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -386,6 +573,10 @@ export default function FieldView() {
     null,
   );
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [directionsJobId, setDirectionsJobId] = useState<number | null>(null);
+  const [directionsOrigin, setDirectionsOrigin] =
+    useState<DirectionsOrigin | null>(null);
+  const [directionsError, setDirectionsError] = useState<string | null>(null);
 
   // Push notification state
   const [pushStatus, setPushStatus] = useState<PushPermissionState>("unknown");
@@ -1233,6 +1424,10 @@ export default function FieldView() {
     (assignment) => assignment.status === "pending",
   );
   const nextFlowJob = activeTodayJob ?? nextPendingTodayJob ?? null;
+  const directionsAssignment = useMemo(
+    () => todayJobs.find((assignment) => assignment.id === directionsJobId),
+    [directionsJobId, todayJobs],
+  );
   const canClockOffForDay = isClockedOn && unfinishedTodayJobs.length === 0;
   const isCurrentJobLast = Boolean(
     activeTodayJob && unfinishedTodayJobs.length === 1,
@@ -1310,19 +1505,87 @@ export default function FieldView() {
     fieldSections.find((section) => section.id === activeSection)?.label ??
     "Home";
 
-  const openMapsForJob = useCallback(
-    (jobAddress?: string | null) => {
-      const directionsUrl = mapsDirectionsUrl(jobAddress);
-      if (!directionsUrl) {
+  useEffect(() => {
+    if (!directionsJobId) return;
+    if (!directionsAssignment?.jobAddress) {
+      setDirectionsJobId(null);
+    }
+  }, [directionsAssignment?.jobAddress, directionsJobId]);
+
+  useEffect(() => {
+    if (!directionsAssignment?.jobAddress) {
+      setDirectionsOrigin(null);
+      setDirectionsError(null);
+      return;
+    }
+    if (!navigator.geolocation) {
+      setDirectionsOrigin(null);
+      setDirectionsError("Phone location is not available for the map.");
+      return;
+    }
+
+    setDirectionsError(null);
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setDirectionsOrigin({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setDirectionsError(null);
+      },
+      () => {
+        setDirectionsOrigin(null);
+        setDirectionsError(
+          "Turn on location access for the most accurate route.",
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 15000,
+        timeout: 10000,
+      },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [directionsAssignment?.id, directionsAssignment?.jobAddress]);
+
+  useEffect(() => {
+    if (!isClockedOn || loadingTodayDispatch || todayJobs.length === 0) return;
+    const completedAssignmentId = Number(
+      window.sessionStorage.getItem(OPEN_NEXT_DIRECTIONS_KEY),
+    );
+    if (!completedAssignmentId) return;
+
+    const completedAssignment = todayJobs.find(
+      (assignment) => assignment.id === completedAssignmentId,
+    );
+    const nextUnlockedJob = todayJobs.find(
+      (assignment) =>
+        assignment.status === "pending" &&
+        Boolean(assignment.jobAddress) &&
+        (!completedAssignment ||
+          assignment.scheduledOrder > completedAssignment.scheduledOrder),
+    );
+
+    if (nextUnlockedJob) {
+      setDirectionsJobId(nextUnlockedJob.id);
+      window.sessionStorage.removeItem(OPEN_NEXT_DIRECTIONS_KEY);
+    }
+  }, [isClockedOn, loadingTodayDispatch, todayJobs]);
+
+  const openDirectionsForJob = useCallback(
+    (assignment?: JobAssignment | null) => {
+      if (!assignment?.jobAddress) {
         toast({
-          title: "No job address",
+          title: "Address locked",
           description:
-            "Admin needs to add an address before directions can open.",
+            addressLockLabel(assignment) ??
+            "The exact address is not available yet.",
           variant: "destructive",
         });
         return;
       }
-      window.open(directionsUrl, "_blank", "noopener,noreferrer");
+      setDirectionsJobId(assignment.id);
     },
     [toast],
   );
@@ -1575,12 +1838,12 @@ export default function FieldView() {
                             {firstTodayJob.workArea}
                           </p>
                         ) : null}
-                        {firstTodayJob.jobAddress ? (
-                          <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
-                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <span>{firstTodayJob.jobAddress}</span>
-                          </div>
-                        ) : null}
+                        <div className="mt-3">
+                          <AssignmentQuickDetails
+                            assignment={firstTodayJob}
+                            showTiming={false}
+                          />
+                        </div>
                       </div>
                     ) : null}
                     <Button
@@ -1752,13 +2015,26 @@ export default function FieldView() {
                         {activeTodayJob.status.replace("_", " ")}
                       </Badge>
                     </div>
-                    {activeTodayJob.jobAddress ? (
-                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>{activeTodayJob.jobAddress}</span>
-                      </div>
+                    <AssignmentQuickDetails assignment={activeTodayJob} />
+                    {directionsAssignment?.id === activeTodayJob.id ? (
+                      <InAppDirectionsCard
+                        assignment={activeTodayJob}
+                        origin={directionsOrigin}
+                        error={directionsError}
+                        onClose={() => setDirectionsJobId(null)}
+                      />
                     ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
+                      {activeTodayJob.jobAddress ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => openDirectionsForJob(activeTodayJob)}
+                        >
+                          <Navigation className="mr-2 h-4 w-4" />
+                          Directions
+                        </Button>
+                      ) : null}
                       {activeTodayJob.status === "arrived" ? (
                         <Button
                           variant="secondary"
@@ -1776,7 +2052,8 @@ export default function FieldView() {
                       <Button
                         asChild
                         className={
-                          activeTodayJob.status === "arrived"
+                          activeTodayJob.status === "arrived" ||
+                          activeTodayJob.jobAddress
                             ? ""
                             : "sm:col-span-2"
                         }
@@ -1807,22 +2084,24 @@ export default function FieldView() {
                       </div>
                       <Badge variant="outline">waiting</Badge>
                     </div>
-                    {nextPendingTodayJob.jobAddress ? (
-                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>{nextPendingTodayJob.jobAddress}</span>
-                      </div>
+                    <AssignmentQuickDetails assignment={nextPendingTodayJob} />
+                    {directionsAssignment?.id === nextPendingTodayJob.id ? (
+                      <InAppDirectionsCard
+                        assignment={nextPendingTodayJob}
+                        origin={directionsOrigin}
+                        error={directionsError}
+                        onClose={() => setDirectionsJobId(null)}
+                      />
                     ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() =>
-                          openMapsForJob(nextPendingTodayJob.jobAddress)
-                        }
+                        onClick={() => openDirectionsForJob(nextPendingTodayJob)}
+                        disabled={!nextPendingTodayJob.jobAddress}
                       >
                         <Navigation className="mr-2 h-4 w-4" />
-                        Open Maps
+                        Directions
                       </Button>
                       <Button
                         onClick={() =>
@@ -2382,56 +2661,16 @@ export default function FieldView() {
                       </p>
                     )}
                   </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-2 text-sm">
-                    {assignment.jobAddress && (
-                      <div className="flex items-start gap-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>{assignment.jobAddress}</span>
-                      </div>
-                    )}
-                    {assignment.builderContactName && (
-                      <div className="flex items-start gap-2 text-muted-foreground">
-                        <UsersIcon className="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>
-                          {assignment.builderContactName}{" "}
-                          {assignment.builderContactPhone &&
-                            `(${assignment.builderContactPhone})`}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge variant="outline" className="text-xs">
-                        {timeWindowLabels[
-                          assignment.timeWindow ?? "full_day"
-                        ] ?? assignment.timeWindow}
-                      </Badge>
-                      {(assignment.plannedStartTime ||
-                        assignment.plannedEndTime) && (
-                        <Badge variant="outline" className="text-xs">
-                          {assignment.plannedStartTime || "Start"} -{" "}
-                          {assignment.plannedEndTime || "Finish"}
-                        </Badge>
-                      )}
-                      {assignment.estimatedMetres != null && (
-                        <Badge variant="secondary" className="text-xs">
-                          Target: {assignment.estimatedMetres}m
-                        </Badge>
-                      )}
-                    </div>
-                    {assignment.requiredColours &&
-                      assignment.requiredColours.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {assignment.requiredColours.map((c) => (
-                            <Badge
-                              key={c}
-                              variant="secondary"
-                              className="text-xs bg-muted"
-                            >
-                              {c}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                  <CardContent className="p-4 pt-0 space-y-3 text-sm">
+                    <AssignmentQuickDetails assignment={assignment} />
+                    {directionsAssignment?.id === assignment.id ? (
+                      <InAppDirectionsCard
+                        assignment={assignment}
+                        origin={directionsOrigin}
+                        error={directionsError}
+                        onClose={() => setDirectionsJobId(null)}
+                      />
+                    ) : null}
                     {assignment.notes && (
                       <p className="rounded-md bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
                         {assignment.notes}
@@ -2450,7 +2689,11 @@ export default function FieldView() {
                                 assignment.jobAddress ?? undefined,
                               )
                             }
-                            disabled={markArrived.isPending || !!locationPrompt}
+                            disabled={
+                              markArrived.isPending ||
+                              !!locationPrompt ||
+                              (isWorker && !assignment.jobAddress)
+                            }
                           >
                             Check In to Job
                           </Button>
@@ -2473,6 +2716,17 @@ export default function FieldView() {
                                 Start Work
                               </Button>
                             )}
+                            {assignment.jobAddress ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => openDirectionsForJob(assignment)}
+                              >
+                                <Navigation className="mr-2 h-4 w-4" />
+                                Directions
+                              </Button>
+                            ) : null}
                             {isWorker ? (
                               <Button asChild className="flex-1">
                                 <Link href={`/field/jobs/${assignment.id}`}>

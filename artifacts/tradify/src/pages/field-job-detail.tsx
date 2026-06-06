@@ -14,6 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Upload, X, MapPin } from "lucide-react";
 
+const OPEN_NEXT_DIRECTIONS_KEY =
+  "sealflow_open_next_directions_after_assignment";
+
 const timeWindowLabels: Record<string, string> = {
   full_day: "Full day",
   morning: "Morning",
@@ -188,12 +191,21 @@ export default function FieldJobDetail() {
       onSuccess: () => {
         toast({ title: "Job report submitted successfully" });
         queryClient.invalidateQueries({ queryKey: getListJobReportsQueryKey() });
+        queryClient.invalidateQueries({
+          queryKey: getListDispatchQueryKey({ date: today, subcontractorId }),
+        });
         queryClient.invalidateQueries({ queryKey: ["field-report-inventory", assignment?.subcontractorId] });
         queryClient.invalidateQueries({ queryKey: ["field-inventory", assignment?.subcontractorId] });
         queryClient.invalidateQueries({ queryKey: ["field-inventory-transactions", assignment?.subcontractorId] });
         queryClient.invalidateQueries({ queryKey: ["sub-inventory"] });
         queryClient.invalidateQueries({ queryKey: ["sub-inventory-transactions"] });
-        setLocation("/field");
+        if (assignment?.id) {
+          window.sessionStorage.setItem(
+            OPEN_NEXT_DIRECTIONS_KEY,
+            String(assignment.id),
+          );
+        }
+        setLocation("/field/home");
       },
       onError: (error) => {
         toast({
