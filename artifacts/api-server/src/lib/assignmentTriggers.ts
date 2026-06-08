@@ -30,6 +30,7 @@ const ADMIN_REVIEW_TIERS = new Set(["premium", "high_end"]);
 const AUTO_ASSIGN_SCORE = 82;
 const AUTO_ASSIGN_MARGIN = 8;
 const MAX_JOBS_PER_DAY = 4;
+const DEFAULT_FULL_TIME_DAYS = [1, 2, 3, 4, 5];
 
 type JobRow = typeof jobsTable.$inferSelect;
 type CustomerRow = typeof customersTable.$inferSelect;
@@ -68,6 +69,8 @@ type Candidate = {
   qualityScore: number;
   callbackRate: number;
   sameDayJobs: number;
+  employmentType: string;
+  dailyCapacity: number;
   nearbyJobSuburb: string | null;
   triggerDecision: "auto_eligible" | "review_required" | "blocked";
 };
@@ -150,6 +153,52 @@ function scoreToRecommendation(score: number): Candidate["recommendation"] {
   if (score >= 65) return "suitable";
   if (score >= 45) return "possible";
   return "not_recommended";
+}
+
+function normalizeAvailableDays(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const days = value
+    .map((day) => Number(day))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  return Array.from(new Set(days)).sort((a, b) => a - b);
+}
+
+function dispatchWeekday(date: string) {
+  return new Date(`${date}T12:00:00`).getDay();
+}
+
+function employmentLabel(value?: string | null) {
+  if (value === "full_time") return "Full-time";
+  if (value === "part_time") return "Part-time";
+  return "Casual";
+}
+
+function dailyCapacityForEmployment(value?: string | null) {
+  return value === "full_time" ? MAX_JOBS_PER_DAY : 2;
+}
+
+function scheduleAvailabilityForSub(
+  sub: typeof subcontractorsTable.$inferSelect,
+  dispatchDate: string,
+) {
+  const employmentType = sub.employmentType ?? "casual";
+  const configuredDays = normalizeAvailableDays(sub.availableDays);
+  const allowedDays =
+    configuredDays && configuredDays.length > 0
+      ? configuredDays
+      : employmentType === "full_time"
+        ? DEFAULT_FULL_TIME_DAYS
+        : null;
+  const weekday = dispatchWeekday(dispatchDate);
+  const available = allowedDays ? allowedDays.includes(weekday) : true;
+
+  return {
+    available,
+    employmentType,
+    label: employmentLabel(employmentType),
+    dailyCapacity: dailyCapacityForEmployment(employmentType),
+    hasConfiguredDays: Boolean(configuredDays && configuredDays.length > 0),
+  };
 }
 
 function checkSkillRules(
@@ -537,6 +586,16 @@ export async function runJobAssignmentTriggers({
     const warnings: string[] = [];
     const hardBlocks: string[] = [];
     let score = 65;
+    const schedule = scheduleAvailabilityForSub(sub, dispatchDate);
+    reasons.push(`${schedule.label} schedule`);
+    if (!schedule.hasConfiguredDays && schedule.employmentType !== "full_time") {
+      warnings.push(`${schedule.label} availability days are not set yet`);
+      score -= 4;
+    }
+    if (!schedule.available) {
+      hardBlocks.push(`${schedule.label} schedule is not available on this date`);
+      score -= 55;
+    }
 
     if (excludedSubIds.has(sub.id)) {
       hardBlocks.push("Employee/subcontractor has been removed from this day's remaining work");
@@ -553,11 +612,11 @@ export async function runJobAssignmentTriggers({
     if (sameDayJobs === 0) {
       reasons.push("Available with no jobs already assigned that day");
       score += 14;
-    } else if (sameDayJobs < MAX_JOBS_PER_DAY) {
+    } else if (sameDayJobs < schedule.dailyCapacity) {
       reasons.push(`${sameDayJobs} existing job(s) that day - can group route`);
       score += Math.max(0, 8 - sameDayJobs * 2);
     } else {
-      hardBlocks.push(`Already has ${sameDayJobs} jobs on this date`);
+      hardBlocks.push(`Already has ${sameDayJobs} job(s) on this date for ${schedule.label} capacity`);
       score -= 35;
     }
 
@@ -635,7 +694,7 @@ export async function runJobAssignmentTriggers({
       score -= 3;
     }
 
-    const availableOnDate = !leaveBySub.has(sub.id) && sameDayJobs < MAX_JOBS_PER_DAY;
+    const availableOnDate = schedule.available && !leaveBySub.has(sub.id) && sameDayJobs < schedule.dailyCapacity;
     score = hardBlocks.length > 0 ? Math.min(score, 40) : score;
     score = Math.max(0, Math.min(100, Math.round(score)));
 
@@ -662,6 +721,8 @@ export async function runJobAssignmentTriggers({
       qualityScore: quality,
       callbackRate,
       sameDayJobs,
+      employmentType: schedule.employmentType,
+      dailyCapacity: schedule.dailyCapacity,
       nearbyJobSuburb,
       triggerDecision: hardBlocks.length > 0 ? "blocked" : reviewRequired ? "review_required" : "auto_eligible",
     };

@@ -18,6 +18,15 @@ import {
 
 const router = Router();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMPLOYMENT_TYPES = new Set(["full_time", "part_time", "casual"]);
+
+function normalizeAvailableDays(value: unknown) {
+  if (!Array.isArray(value)) return null;
+  const days = value
+    .map((day) => Number(day))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  return Array.from(new Set(days)).sort((a, b) => a - b);
+}
 
 function serializeSubcontractor(
   sub: typeof subcontractorsTable.$inferSelect,
@@ -32,6 +41,9 @@ function serializeSubcontractor(
     abn: sub.abn,
     hourlyRate: sub.hourlyRate ? Number(sub.hourlyRate) : null,
     gstRegistered: sub.gstRegistered,
+    employmentType: sub.employmentType ?? "casual",
+    availableDays: normalizeAvailableDays(sub.availableDays),
+    scheduleNotes: sub.scheduleNotes ?? null,
     active: sub.active,
     createdAt: sub.createdAt,
   };
@@ -83,6 +95,9 @@ router.post("/subcontractors", requireAdmin, async (req, res) => {
       hourlyRate:
         parsed.data.hourlyRate != null ? String(parsed.data.hourlyRate) : null,
       gstRegistered: parsed.data.gstRegistered ?? false,
+      employmentType: parsed.data.employmentType ?? "casual",
+      availableDays: normalizeAvailableDays(parsed.data.availableDays),
+      scheduleNotes: parsed.data.scheduleNotes?.trim() || null,
       active: parsed.data.active ?? true,
     })
     .returning();
@@ -283,6 +298,16 @@ router.patch("/subcontractors/:id", requireAdmin, async (req, res) => {
     updates.hourlyRate = String(body.data.hourlyRate);
   if (body.data.gstRegistered !== undefined)
     updates.gstRegistered = body.data.gstRegistered;
+  if (body.data.employmentType !== undefined) {
+    if (!EMPLOYMENT_TYPES.has(body.data.employmentType)) {
+      return res.status(400).json({ error: "Invalid employment type" });
+    }
+    updates.employmentType = body.data.employmentType;
+  }
+  if (body.data.availableDays !== undefined)
+    updates.availableDays = normalizeAvailableDays(body.data.availableDays);
+  if (body.data.scheduleNotes !== undefined)
+    updates.scheduleNotes = body.data.scheduleNotes?.trim() || null;
   if (body.data.active !== undefined) updates.active = body.data.active;
   const [sub] = await db
     .update(subcontractorsTable)

@@ -26,6 +26,9 @@ import { runJobAssignmentTriggers } from "../lib/assignmentTriggers.js";
 import type OpenAI from "openai";
 
 const router = Router();
+const MAX_FULL_TIME_JOBS_PER_DAY = 4;
+const MAX_LIMITED_SCHEDULE_JOBS_PER_DAY = 2;
+const DEFAULT_FULL_TIME_DAYS = [1, 2, 3, 4, 5];
 
 const TIER_QUALITY_MIN: Record<string, number> = {
   premium: 90,
@@ -206,10 +209,59 @@ function jobNotesFromDraft(draft: IntakeJobDraft) {
 interface SubInfo {
   id: number;
   name: string;
+  employmentType: string;
+  availableDays: number[] | null;
   skills: typeof workerSkillsTable.$inferSelect | null;
   inventory: Map<number, number>;
   assignedDates: string[];
   assignedSuburbs: string[];
+}
+
+function normalizeAvailableDays(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const days = value
+    .map((day) => Number(day))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  return Array.from(new Set(days)).sort((a, b) => a - b);
+}
+
+function employmentLabel(value?: string | null) {
+  if (value === "full_time") return "Full-time";
+  if (value === "part_time") return "Part-time";
+  return "Casual";
+}
+
+function dailyCapacityForEmployment(value?: string | null) {
+  return value === "full_time"
+    ? MAX_FULL_TIME_JOBS_PER_DAY
+    : MAX_LIMITED_SCHEDULE_JOBS_PER_DAY;
+}
+
+function weekdayForDate(date: string) {
+  return new Date(`${date}T12:00:00`).getDay();
+}
+
+function scheduleAvailability(input: {
+  employmentType?: string | null;
+  availableDays?: number[] | null;
+  date: string;
+}) {
+  const employmentType = input.employmentType ?? "casual";
+  const allowedDays =
+    input.availableDays && input.availableDays.length > 0
+      ? input.availableDays
+      : employmentType === "full_time"
+        ? DEFAULT_FULL_TIME_DAYS
+        : null;
+  const weekday = weekdayForDate(input.date);
+
+  return {
+    employmentType,
+    label: employmentLabel(employmentType),
+    dailyCapacity: dailyCapacityForEmployment(employmentType),
+    available: allowedDays ? allowedDays.includes(weekday) : true,
+    hasConfiguredDays: Boolean(input.availableDays && input.availableDays.length > 0),
+  };
 }
 
 async function loadSubInfo(
@@ -319,6 +371,8 @@ async function loadSubInfo(
       return {
         id: sub.id,
         name: sub.name,
+        employmentType: sub.employmentType ?? "casual",
+        availableDays: normalizeAvailableDays(sub.availableDays),
         skills: skills ?? null,
         inventory,
         assignedDates,
@@ -819,12 +873,32 @@ router.post("/allocation/recommend", async (req, res) => {
     let score = 100;
 
     // Availability
-    const alreadyBooked = sub.assignedDates.includes(date);
-    if (alreadyBooked) {
-      warnings.push("Already scheduled on this date");
+    const schedule = scheduleAvailability({
+      employmentType: sub.employmentType,
+      availableDays: sub.availableDays,
+      date,
+    });
+    reasons.push(`✓ ${schedule.label} schedule`);
+    if (!schedule.hasConfiguredDays && schedule.employmentType !== "full_time") {
+      warnings.push(`${schedule.label} availability days are not set yet`);
+      score -= 4;
+    }
+    const sameDayJobs = sub.assignedDates.filter(
+      (assignedDate) => assignedDate === date,
+    ).length;
+    const scheduleFit = schedule.available && sameDayJobs < schedule.dailyCapacity;
+    if (!schedule.available) {
+      warnings.push(`${schedule.label} schedule is not available on this date`);
+      score -= 45;
+    } else if (sameDayJobs >= schedule.dailyCapacity) {
+      warnings.push(
+        `Already has ${sameDayJobs} job(s) on this date for ${schedule.label} capacity`,
+      );
       score -= 40;
     } else {
-      reasons.push("✓ Available on this date");
+      reasons.push(
+        `✓ Available on this date (${sameDayJobs}/${schedule.dailyCapacity} jobs scheduled)`,
+      );
     }
 
     // Skill check
@@ -916,11 +990,13 @@ router.post("/allocation/recommend", async (req, res) => {
       stockShortfall: stockResult.shortfall,
       proximityScore: prox.score,
       nearbyJobSuburb: prox.nearbySuburb,
-      scheduleFit: !alreadyBooked,
+      scheduleFit,
       builderTierMatch: tierMatch,
       qualityScore: quality,
       callbackRate,
-      availableOnDate: !alreadyBooked,
+      availableOnDate: scheduleFit,
+      employmentType: schedule.employmentType,
+      dailyCapacity: schedule.dailyCapacity,
     };
   });
 

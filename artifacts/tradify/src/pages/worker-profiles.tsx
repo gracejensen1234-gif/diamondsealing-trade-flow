@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
+  CalendarDays,
   ChevronDown,
   ChevronUp,
   DollarSign,
@@ -61,11 +62,67 @@ const EXPERIENCE_LEVELS = [
   { value: "specialist", label: "Specialist" },
 ];
 
+const EMPLOYMENT_TYPES = [
+  { value: "full_time", label: "Full-time" },
+  { value: "part_time", label: "Part-time" },
+  { value: "casual", label: "Casual" },
+] as const;
+
+const WORK_DAYS = [
+  { value: 1, short: "Mon", label: "Monday" },
+  { value: 2, short: "Tue", label: "Tuesday" },
+  { value: 3, short: "Wed", label: "Wednesday" },
+  { value: 4, short: "Thu", label: "Thursday" },
+  { value: 5, short: "Fri", label: "Friday" },
+  { value: 6, short: "Sat", label: "Saturday" },
+  { value: 0, short: "Sun", label: "Sunday" },
+];
+
+type EmploymentType = (typeof EMPLOYMENT_TYPES)[number]["value"];
+type ScheduleEdit = {
+  employmentType: EmploymentType;
+  availableDays: number[];
+  scheduleNotes: string;
+};
+
+const DEFAULT_FULL_TIME_DAYS = [1, 2, 3, 4, 5];
+
 function experienceLabel(value?: string | null) {
   return (
     EXPERIENCE_LEVELS.find((level) => level.value === value)?.label ??
     "Intermediate"
   );
+}
+
+function employmentLabel(value?: string | null) {
+  return (
+    EMPLOYMENT_TYPES.find((type) => type.value === value)?.label ?? "Casual"
+  );
+}
+
+function normalizeAvailableDays(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((day) => Number(day))
+        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
+    ),
+  ).sort((a, b) => a - b);
+}
+
+function displayAvailableDays(employmentType: string, availableDays: number[]) {
+  const days =
+    availableDays.length > 0
+      ? availableDays
+      : employmentType === "full_time"
+        ? DEFAULT_FULL_TIME_DAYS
+        : [];
+
+  if (days.length === 0) return "No set days";
+  return WORK_DAYS.filter((day) => days.includes(day.value))
+    .map((day) => day.short)
+    .join(", ");
 }
 
 export default function WorkerProfiles() {
@@ -81,6 +138,9 @@ export default function WorkerProfiles() {
       { hourlyRate: string; ratePerMetre: string; gstRegistered: boolean }
     >
   >({});
+  const [scheduleEdits, setScheduleEdits] = useState<
+    Record<number, ScheduleEdit>
+  >({});
   const [accountDrafts, setAccountDrafts] = useState<
     Record<number, { email: string; temporaryPassword: string }>
   >({});
@@ -95,6 +155,9 @@ export default function WorkerProfiles() {
     abn: "",
     hourlyRate: "",
     gstRegistered: false,
+    employmentType: "casual" as EmploymentType,
+    availableDays: [] as number[],
+    scheduleNotes: "",
     temporaryPassword: "",
   });
 
@@ -161,6 +224,9 @@ export default function WorkerProfiles() {
           hourlyRate:
             Number(data.hourlyRate) > 0 ? Number(data.hourlyRate) : undefined,
           gstRegistered: data.gstRegistered,
+          employmentType: data.employmentType,
+          availableDays: data.availableDays,
+          scheduleNotes: data.scheduleNotes || undefined,
           active: true,
         }),
       });
@@ -205,6 +271,9 @@ export default function WorkerProfiles() {
         abn: "",
         hourlyRate: "",
         gstRegistered: false,
+        employmentType: "casual",
+        availableDays: [],
+        scheduleNotes: "",
         temporaryPassword: "",
       });
       setShowNewWorker(false);
@@ -263,6 +332,48 @@ export default function WorkerProfiles() {
     onError: (error) => {
       toast({
         title: "Could not save pay rates",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateScheduleMutation = useMutation({
+    mutationFn: async ({
+      subId,
+      schedule,
+    }: {
+      subId: number;
+      schedule: ScheduleEdit;
+    }) => {
+      const response = await fetch(`/api/subcontractors/${subId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employmentType: schedule.employmentType,
+          availableDays: schedule.availableDays,
+          scheduleNotes: schedule.scheduleNotes,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not save schedule",
+        );
+      return response.json();
+    },
+    onSuccess: (_saved, variables) => {
+      qc.invalidateQueries({ queryKey: ["subcontractors"] });
+      setScheduleEdits((prev) => {
+        const next = { ...prev };
+        delete next[variables.subId];
+        return next;
+      });
+      toast({ title: "Schedule saved" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not save schedule",
         description: error instanceof Error ? error.message : "Try again.",
         variant: "destructive",
       });
@@ -427,6 +538,24 @@ export default function WorkerProfiles() {
     );
   }
 
+  function initialScheduleEdit(sub: any): ScheduleEdit {
+    const employmentType = EMPLOYMENT_TYPES.some(
+      (type) => type.value === sub.employmentType,
+    )
+      ? (sub.employmentType as EmploymentType)
+      : "casual";
+
+    return {
+      employmentType,
+      availableDays: normalizeAvailableDays(sub.availableDays),
+      scheduleNotes: sub.scheduleNotes ?? "",
+    };
+  }
+
+  function getScheduleEdit(sub: any): ScheduleEdit {
+    return scheduleEdits[sub.id] ?? initialScheduleEdit(sub);
+  }
+
   function getAccountDraft(sub: any) {
     return (
       accountDrafts[sub.id] ?? {
@@ -452,6 +581,61 @@ export default function WorkerProfiles() {
       ...prev,
       [sub.id]: { ...getRateEdit(sub), gstRegistered: value },
     }));
+  }
+
+  function updateScheduleType(sub: any, employmentType: EmploymentType) {
+    setScheduleEdits((prev) => {
+      const current = prev[sub.id] ?? initialScheduleEdit(sub);
+      const availableDays =
+        employmentType === "full_time" && current.availableDays.length === 0
+          ? DEFAULT_FULL_TIME_DAYS
+          : current.availableDays;
+      return {
+        ...prev,
+        [sub.id]: { ...current, employmentType, availableDays },
+      };
+    });
+  }
+
+  function toggleScheduleDay(sub: any, day: number) {
+    setScheduleEdits((prev) => {
+      const current = prev[sub.id] ?? initialScheduleEdit(sub);
+      const selected = current.availableDays.includes(day);
+      const availableDays = selected
+        ? current.availableDays.filter((value) => value !== day)
+        : [...current.availableDays, day].sort((a, b) => a - b);
+      return { ...prev, [sub.id]: { ...current, availableDays } };
+    });
+  }
+
+  function updateScheduleNotes(sub: any, value: string) {
+    setScheduleEdits((prev) => {
+      const current = prev[sub.id] ?? initialScheduleEdit(sub);
+      return { ...prev, [sub.id]: { ...current, scheduleNotes: value } };
+    });
+  }
+
+  function updateNewWorkerEmploymentType(employmentType: EmploymentType) {
+    setNewWorker((worker) => ({
+      ...worker,
+      employmentType,
+      availableDays:
+        employmentType === "full_time" && worker.availableDays.length === 0
+          ? DEFAULT_FULL_TIME_DAYS
+          : worker.availableDays,
+    }));
+  }
+
+  function toggleNewWorkerDay(day: number) {
+    setNewWorker((worker) => {
+      const selected = worker.availableDays.includes(day);
+      return {
+        ...worker,
+        availableDays: selected
+          ? worker.availableDays.filter((value) => value !== day)
+          : [...worker.availableDays, day].sort((a, b) => a - b),
+      };
+    });
   }
 
   function updateAccountDraft(
@@ -623,6 +807,63 @@ export default function WorkerProfiles() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="newWorkerEmploymentType">Schedule type</Label>
+              <Select
+                value={newWorker.employmentType}
+                onValueChange={(value) =>
+                  updateNewWorkerEmploymentType(value as EmploymentType)
+                }
+              >
+                <SelectTrigger id="newWorkerEmploymentType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EMPLOYMENT_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 md:col-span-2 xl:col-span-3">
+              <Label>Available days</Label>
+              <div className="flex flex-wrap gap-2">
+                {WORK_DAYS.map((day) => {
+                  const selected = newWorker.availableDays.includes(day.value);
+                  return (
+                    <Button
+                      key={day.value}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      className="h-9 min-w-12 px-3"
+                      onClick={() => toggleNewWorkerDay(day.value)}
+                      aria-pressed={selected}
+                      title={day.label}
+                    >
+                      {day.short}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-3 xl:col-span-6">
+              <Label htmlFor="newWorkerScheduleNotes">Schedule notes</Label>
+              <Textarea
+                id="newWorkerScheduleNotes"
+                className="min-h-20 text-sm"
+                value={newWorker.scheduleNotes}
+                onChange={(event) =>
+                  setNewWorker((worker) => ({
+                    ...worker,
+                    scheduleNotes: event.target.value,
+                  }))
+                }
+                placeholder="Preferred days, school pickup limits, part-time hours, casual availability..."
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="newWorkerTemporaryPassword">
                 Temporary password
               </Label>
@@ -680,6 +921,8 @@ export default function WorkerProfiles() {
             const accountDraft = getAccountDraft(sub);
             const subCredentials = credentialsBySub.get(sub.id) ?? [];
             const credentialDraft = getCredentialDraft(sub.id);
+            const savedSchedule = initialScheduleEdit(sub);
+            const schedule = getScheduleEdit(sub);
             const isOpen = expanded === sub.id;
 
             return (
@@ -726,6 +969,16 @@ export default function WorkerProfiles() {
                               <StickyNote className="h-3 w-3" /> Notes
                             </Badge>
                           ) : null}
+                          <Badge variant="outline" className="gap-1 text-xs">
+                            <CalendarDays className="h-3 w-3" />
+                            {employmentLabel(savedSchedule.employmentType)}
+                          </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            {displayAvailableDays(
+                              savedSchedule.employmentType,
+                              savedSchedule.availableDays,
+                            )}
+                          </Badge>
                           {!isAdmin ? (
                             <Badge variant="outline" className="gap-1 text-xs">
                               <DollarSign className="h-3 w-3" />
@@ -872,6 +1125,138 @@ export default function WorkerProfiles() {
                               {sub.gstRegistered ? "GST registered" : "No GST"}
                             </p>
                           </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border bg-muted/20 p-3">
+                      <div className="mb-3 flex items-start gap-2">
+                        <CalendarDays className="mt-0.5 h-4 w-4 text-primary" />
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Schedule
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {isAdmin
+                              ? "Used by automatic allocation and daily capacity."
+                              : "Your current work schedule."}
+                          </p>
+                        </div>
+                      </div>
+                      {isAdmin ? (
+                        <div className="grid gap-3 lg:grid-cols-[14rem_1fr_auto]">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Schedule type</Label>
+                            <Select
+                              value={schedule.employmentType}
+                              onValueChange={(value) =>
+                                updateScheduleType(sub, value as EmploymentType)
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {EMPLOYMENT_TYPES.map((type) => (
+                                  <SelectItem
+                                    key={type.value}
+                                    value={type.value}
+                                  >
+                                    {type.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Available days</Label>
+                            <div className="flex flex-wrap gap-2">
+                              {WORK_DAYS.map((day) => {
+                                const selected = schedule.availableDays.includes(
+                                  day.value,
+                                );
+                                return (
+                                  <Button
+                                    key={day.value}
+                                    type="button"
+                                    size="sm"
+                                    variant={selected ? "default" : "outline"}
+                                    className="h-9 min-w-12 px-3"
+                                    onClick={() =>
+                                      toggleScheduleDay(sub, day.value)
+                                    }
+                                    aria-pressed={selected}
+                                    title={day.label}
+                                  >
+                                    {day.short}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Full-time defaults to Monday-Friday if no days are
+                              selected.
+                            </p>
+                          </div>
+                          <div className="flex items-end lg:justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                updateScheduleMutation.mutate({
+                                  subId: sub.id,
+                                  schedule,
+                                })
+                              }
+                              disabled={updateScheduleMutation.isPending}
+                            >
+                              {updateScheduleMutation.isPending
+                                ? "Saving..."
+                                : "Save schedule"}
+                            </Button>
+                          </div>
+                          <div className="space-y-1 lg:col-span-3">
+                            <Label className="text-xs">Schedule notes</Label>
+                            <Textarea
+                              className="min-h-20 text-sm"
+                              value={schedule.scheduleNotes}
+                              onChange={(event) =>
+                                updateScheduleNotes(sub, event.target.value)
+                              }
+                              placeholder="Preferred days, blocked times, part-time hours, casual availability..."
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-md border bg-background px-3 py-2">
+                            <p className="text-xs text-muted-foreground">
+                              Schedule type
+                            </p>
+                            <p className="mt-1 text-lg font-semibold">
+                              {employmentLabel(savedSchedule.employmentType)}
+                            </p>
+                          </div>
+                          <div className="rounded-md border bg-background px-3 py-2">
+                            <p className="text-xs text-muted-foreground">
+                              Available days
+                            </p>
+                            <p className="mt-1 text-lg font-semibold">
+                              {displayAvailableDays(
+                                savedSchedule.employmentType,
+                                savedSchedule.availableDays,
+                              )}
+                            </p>
+                          </div>
+                          {savedSchedule.scheduleNotes ? (
+                            <div className="rounded-md border bg-background px-3 py-2 sm:col-span-2">
+                              <p className="text-xs text-muted-foreground">
+                                Notes
+                              </p>
+                              <p className="mt-1 whitespace-pre-wrap text-sm">
+                                {savedSchedule.scheduleNotes}
+                              </p>
+                            </div>
+                          ) : null}
                         </div>
                       )}
                     </div>

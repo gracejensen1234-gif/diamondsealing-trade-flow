@@ -870,6 +870,10 @@ export const ListSubcontractorsResponseItem = zod.object({
   abn: zod.string().nullish(),
   ratePerMetre: zod.number().nullish(),
   hourlyRate: zod.number().nullish(),
+  gstRegistered: zod.boolean().optional(),
+  employmentType: zod.enum(["full_time", "part_time", "casual"]).optional(),
+  availableDays: zod.array(zod.number()).nullish(),
+  scheduleNotes: zod.string().nullish(),
   active: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -885,6 +889,9 @@ export const CreateSubcontractorBody = zod.object({
   ratePerMetre: zod.number().optional(),
   hourlyRate: zod.number().optional(),
   gstRegistered: zod.boolean().optional(),
+  employmentType: zod.enum(["full_time", "part_time", "casual"]).optional(),
+  availableDays: zod.array(zod.number()).optional(),
+  scheduleNotes: zod.string().optional(),
   active: zod.boolean().optional(),
 });
 
@@ -901,6 +908,9 @@ export const GetSubcontractorResponse = zod.object({
   ratePerMetre: zod.number().nullish(),
   hourlyRate: zod.number().nullish(),
   gstRegistered: zod.boolean(),
+  employmentType: zod.enum(["full_time", "part_time", "casual"]).optional(),
+  availableDays: zod.array(zod.number()).nullish(),
+  scheduleNotes: zod.string().nullish(),
   active: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -917,6 +927,9 @@ export const UpdateSubcontractorBody = zod.object({
   ratePerMetre: zod.number().optional(),
   hourlyRate: zod.number().optional(),
   gstRegistered: zod.boolean().optional(),
+  employmentType: zod.enum(["full_time", "part_time", "casual"]).optional(),
+  availableDays: zod.array(zod.number()).optional(),
+  scheduleNotes: zod.string().optional(),
   active: zod.boolean().optional(),
 });
 
@@ -929,6 +942,9 @@ export const UpdateSubcontractorResponse = zod.object({
   ratePerMetre: zod.number().nullish(),
   hourlyRate: zod.number().nullish(),
   gstRegistered: zod.boolean(),
+  employmentType: zod.enum(["full_time", "part_time", "casual"]).optional(),
+  availableDays: zod.array(zod.number()).nullish(),
+  scheduleNotes: zod.string().nullish(),
   active: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
