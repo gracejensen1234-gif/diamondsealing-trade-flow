@@ -16,8 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/speech-textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { Mail, Phone, PhoneCall, MapPin, Building, Briefcase, Receipt } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Mail, Phone, PhoneCall, MapPin, Building, Building2, Briefcase, Receipt } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { phoneHref } from "@/lib/phone";
 
@@ -38,6 +38,17 @@ function optionalText(value: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+type BuilderProfile = {
+  id: number;
+  name: string;
+  customerId?: number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  qualityTier?: string | null;
+  active?: boolean;
+};
+
 export default function CustomerDetail() {
   const [, params] = useRoute("/customers/:id");
   const id = Number(params?.id);
@@ -49,6 +60,11 @@ export default function CustomerDetail() {
 
   const { data: jobs, isLoading: isLoadingJobs } = useListJobs({ customerId: id });
   const { data: invoices, isLoading: isLoadingInvoices } = useListInvoices({ customerId: id });
+  const { data: builderProfiles = [], isLoading: isLoadingBuilders } = useQuery<BuilderProfile[]>({
+    queryKey: ["builder-profiles"],
+    queryFn: () => fetch("/api/builder-profiles").then((response) => response.json()),
+  });
+  const linkedBuilders = builderProfiles.filter((builder) => builder.customerId === id);
 
   useEffect(() => {
     if (!customer) return;
@@ -280,6 +296,60 @@ export default function CustomerDetail() {
         </Card>
 
         <div className="col-span-2 space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Building2 className="h-5 w-5" /> Builder Contacts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingBuilders ? <Skeleton className="h-20" /> : (
+                <div className="space-y-3 mt-4">
+                  {linkedBuilders.map((builder) => (
+                    <div key={builder.id} className="rounded-lg border p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words font-medium">{builder.name}</p>
+                          {builder.contactName && (
+                            <p className="break-words text-sm text-muted-foreground">{builder.contactName}</p>
+                          )}
+                          {builder.contactEmail && (
+                            <p className="break-all text-sm text-muted-foreground">{builder.contactEmail}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {builder.qualityTier && (
+                            <Badge variant="outline">{builder.qualityTier.replace("_", " ")}</Badge>
+                          )}
+                          {builder.active === false && <Badge variant="secondary">Inactive</Badge>}
+                        </div>
+                      </div>
+                      {builder.contactPhone && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Phone className="h-4 w-4 shrink-0" />
+                            <span className="break-all">{builder.contactPhone}</span>
+                          </div>
+                          {phoneHref(builder.contactPhone) && (
+                            <Button asChild size="sm" variant="outline">
+                              <a href={phoneHref(builder.contactPhone) ?? undefined}>
+                                <PhoneCall className="mr-2 h-4 w-4" />
+                                Call
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {!linkedBuilders.length && (
+                    <p className="text-sm text-muted-foreground">No builder contacts linked to this client.</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg flex items-center gap-2">

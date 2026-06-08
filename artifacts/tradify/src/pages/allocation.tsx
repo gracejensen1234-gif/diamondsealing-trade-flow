@@ -1,3 +1,4 @@
+import { useListCustomers } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent, type ElementType } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +129,19 @@ type CreatedIntakeJob = {
   } | null;
 };
 
+type ClientOption = {
+  id: number;
+  name: string;
+  company?: string | null;
+};
+
+type BuilderOption = {
+  id: number;
+  name: string;
+  customerId?: number | null;
+  qualityTier?: string | null;
+};
+
 function optionalNumber(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -144,6 +158,13 @@ function splitColours(value: string) {
 
 function asText(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function clientLabel(client?: ClientOption | null) {
+  if (!client) return "";
+  return client.company && client.company !== client.name
+    ? `${client.name} (${client.company})`
+    : client.name;
 }
 
 function normalizeDraft(draft: any): IntakeDraft {
@@ -265,6 +286,7 @@ function triggerLabel(status?: string) {
 export default function Allocation() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: clients = [] } = useListCustomers();
   const [form, setForm] = useState({ ...emptyAllocationForm });
   const [result, setResult] = useState<any>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -285,6 +307,16 @@ export default function Allocation() {
     queryKey: ["builder-profiles"],
     queryFn: () => fetch("/api/builder-profiles").then((r) => r.json()),
   });
+  const clientsById = new Map(
+    (clients as ClientOption[]).map((client) => [client.id, client]),
+  );
+  const builderLabel = (builder: BuilderOption) => {
+    const linkedClient = builder.customerId ? clientsById.get(builder.customerId) : null;
+    const tier = builder.qualityTier ? ` (${builder.qualityTier})` : "";
+    return linkedClient
+      ? `${clientLabel(linkedClient)} / ${builder.name}${tier}`
+      : `${builder.name}${tier}`;
+  };
 
   const analyseIntakeMutation = useMutation({
     mutationFn: () =>
@@ -1083,9 +1115,9 @@ export default function Allocation() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No builder profile</SelectItem>
-                  {(builders as any[]).map((builder: any) => (
+                  {(builders as BuilderOption[]).map((builder) => (
                     <SelectItem key={builder.id} value={String(builder.id)}>
-                      {builder.name} ({builder.qualityTier})
+                      {builderLabel(builder)}
                     </SelectItem>
                   ))}
                 </SelectContent>

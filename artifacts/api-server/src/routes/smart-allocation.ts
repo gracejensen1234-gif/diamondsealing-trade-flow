@@ -561,11 +561,22 @@ router.post(
           `Customer ID ${customer.id}: ${customer.name}${customer.company ? ` / ${customer.company}` : ""}${customer.suburb ? `, ${customer.suburb}` : ""}`,
       )
       .join("\n");
+    const customerById = new Map(customers.map((customer) => [customer.id, customer]));
     const knownBuilders = builders
-      .map(
-        (builder) =>
-          `Builder ID ${builder.id}: ${builder.name}, tier ${builder.qualityTier}${builder.customerId ? `, customer ID ${builder.customerId}` : ""}`,
-      )
+      .map((builder) => {
+        const linkedClient = builder.customerId ? customerById.get(builder.customerId) : null;
+        return [
+          `Builder ID ${builder.id}: ${builder.name}`,
+          `tier ${builder.qualityTier}`,
+          linkedClient
+            ? `subcontracted through Customer ID ${linkedClient.id}: ${linkedClient.name}${linkedClient.company ? ` / ${linkedClient.company}` : ""}`
+            : "direct builder/no head contractor",
+          builder.contactName ? `contact ${builder.contactName}` : "",
+          builder.contactPhone ? `phone ${builder.contactPhone}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+      })
       .join("\n");
 
     const systemPrompt = `You extract joint sealing job details from builder emails, text messages, screenshots, and short notes.

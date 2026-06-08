@@ -1,5 +1,6 @@
+import { useListCustomers } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,13 @@ type BuilderProfile = {
   active?: boolean;
 };
 
+type ClientOption = {
+  id: number;
+  name: string;
+  company?: string | null;
+  phone?: string | null;
+};
+
 type EmployeeOption = {
   id: number;
   name: string;
@@ -53,6 +61,7 @@ type EmployeeOption = {
 
 type BuilderForm = {
   name: string;
+  customerId: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
@@ -72,6 +81,7 @@ type BuilderForm = {
 function emptyForm(): BuilderForm {
   return {
     name: "",
+    customerId: "none",
     contactName: "",
     contactPhone: "",
     contactEmail: "",
@@ -92,6 +102,7 @@ function emptyForm(): BuilderForm {
 function toBuilderForm(profile: BuilderProfile): BuilderForm {
   return {
     name: profile.name ?? "",
+    customerId: profile.customerId ? String(profile.customerId) : "none",
     contactName: profile.contactName ?? "",
     contactPhone: profile.contactPhone ?? "",
     contactEmail: profile.contactEmail ?? "",
@@ -114,9 +125,17 @@ function optionalText(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function clientLabel(client?: ClientOption | null): string {
+  if (!client) return "";
+  return client.company && client.company !== client.name
+    ? `${client.name} (${client.company})`
+    : client.name;
+}
+
 function formPayload(form: BuilderForm) {
   return {
     name: form.name.trim(),
+    customerId: form.customerId === "none" ? null : Number(form.customerId),
     contactName: optionalText(form.contactName),
     contactPhone: optionalText(form.contactPhone),
     contactEmail: optionalText(form.contactEmail),
@@ -143,11 +162,13 @@ function BuilderFormFields({
   form,
   onChange,
   employees,
+  clients,
   showActive = false,
 }: {
   form: BuilderForm;
   onChange: (updates: Partial<BuilderForm>) => void;
   employees: EmployeeOption[];
+  clients: ClientOption[];
   showActive?: boolean;
 }) {
   const updatePreferred = (employeeId: number, checked: boolean) => {
@@ -171,6 +192,31 @@ function BuilderFormFields({
   return (
     <div className="space-y-4 mt-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <Label>Billing client / head contractor</Label>
+          <Select
+            value={form.customerId}
+            onValueChange={(value) => onChange({ customerId: value })}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Select client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Direct builder / no head contractor</SelectItem>
+              {clients.length === 0 ? (
+                <SelectItem value="no-clients" disabled>
+                  Add a client first
+                </SelectItem>
+              ) : (
+                clients.map((client) => (
+                  <SelectItem key={client.id} value={String(client.id)}>
+                    {clientLabel(client)}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="sm:col-span-2">
           <Label>Builder / Company Name</Label>
           <Input
@@ -381,6 +427,12 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
     queryFn: () => fetch("/api/builder-profiles").then((r) => r.json()),
   });
 
+  const { data: clients = [] } = useListCustomers();
+  const clientMap = useMemo(
+    () => new Map((clients as ClientOption[]).map((client) => [client.id, client])),
+    [clients],
+  );
+
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ["subcontractors"],
     queryFn: () => fetch("/api/subcontractors").then((r) => r.json()),
@@ -464,6 +516,38 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
     setEditForm(toBuilderForm(profile));
   };
 
+  const profileGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { key: string; title: string; subtitle: string; profiles: BuilderProfile[] }
+    >();
+
+    for (const profile of profiles) {
+      const linkedClient = profile.customerId ? clientMap.get(profile.customerId) : null;
+      const key = linkedClient ? `client-${linkedClient.id}` : "direct";
+      const existing = groups.get(key);
+      if (existing) {
+        existing.profiles.push(profile);
+        continue;
+      }
+
+      groups.set(key, {
+        key,
+        title: linkedClient ? clientLabel(linkedClient) : "Direct builders",
+        subtitle: linkedClient
+          ? "Builders and site contacts under this client"
+          : "Builder profiles not linked to a head contractor",
+        profiles: [profile],
+      });
+    }
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.key === "direct") return 1;
+      if (b.key === "direct") return -1;
+      return a.title.localeCompare(b.title);
+    });
+  }, [clientMap, profiles]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -484,6 +568,7 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
             <BuilderFormFields
               form={form}
               employees={employees}
+              clients={clients as ClientOption[]}
               onChange={(updates) => setForm((current) => ({ ...current, ...updates }))}
             />
             <DialogFooter>
@@ -499,86 +584,109 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {profiles.map((p) => {
-          const tier = TIER_LABELS[p.qualityTier] ?? TIER_LABELS.standard;
-          const bRatings = ratingsMap.get(p.id) ?? [];
-          const avgRating = bRatings.length ? (bRatings.reduce((a: number, r: any) => a + r.rating, 0) / bRatings.length).toFixed(1) : null;
+      <div className="space-y-5">
+        {profileGroups.map((group) => (
+          <section key={group.key} className="space-y-3">
+            <div className="flex flex-col gap-1 border-b pb-2 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.title}
+                </h3>
+                <p className="text-xs text-muted-foreground">{group.subtitle}</p>
+              </div>
+              <Badge variant="outline" className="w-fit">
+                {group.profiles.length} builder{group.profiles.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {group.profiles.map((p) => {
+                const tier = TIER_LABELS[p.qualityTier] ?? TIER_LABELS.standard;
+                const bRatings = ratingsMap.get(p.id) ?? [];
+                const avgRating = bRatings.length ? (bRatings.reduce((a: number, r: any) => a + r.rating, 0) / bRatings.length).toFixed(1) : null;
+                const linkedClient = p.customerId ? clientMap.get(p.customerId) : null;
 
-          return (
-            <Card
-              key={p.id}
-              role="button"
-              tabIndex={0}
-              className="cursor-pointer transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => openProfile(p)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openProfile(p);
-                }
-              }}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="w-9 h-9 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-snug">{p.name}</p>
-                      {p.contactName && <p className="text-xs text-muted-foreground">{p.contactName}</p>}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-row flex-wrap items-center gap-1 sm:flex-col sm:items-end">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tier.color}`}>{tier.label}</span>
-                    {p.active === false && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {p.contactPhone && (
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Phone className="h-3 w-3 shrink-0" />
-                      <span className="break-all">{p.contactPhone}</span>
-                    </div>
-                    {phoneHref(p.contactPhone) && (
-                      <Button asChild size="sm" variant="outline" className="h-8 px-2 text-xs">
-                        <a
-                          href={phoneHref(p.contactPhone) ?? undefined}
-                          onClick={(event) => event.stopPropagation()}
-                          aria-label={`Call ${p.name}`}
-                        >
-                          <PhoneCall className="mr-1 h-3 w-3" />
-                          Call
-                        </a>
-                      </Button>
-                    )}
-                  </div>
-                )}
-                {p.finishExpectations && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Finish: </span>{p.finishExpectations}</p>}
-                {p.documentationRequirements && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Docs: </span>{p.documentationRequirements}</p>}
-                {p.siteNotes && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Site: </span>{p.siteNotes}</p>}
-                {p.specialInstructions && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Instructions: </span>{p.specialInstructions}</p>}
-                <div className="flex flex-wrap items-center gap-4 pt-1">
-                  {p.signOffRequired && <Badge variant="outline" className="text-xs">Sign-off required</Badge>}
-                  {avgRating && (
-                    <div className="flex items-center gap-1 text-amber-600 text-xs">
-                      <Star className="w-3 h-3" />
-                      <span className="font-semibold">{avgRating}</span>
-                      <span className="text-muted-foreground">({bRatings.length} ratings)</span>
-                    </div>
-                  )}
-                </div>
-                <div className="pt-2 text-xs font-medium text-primary inline-flex items-center gap-1">
-                  <Pencil className="w-3 h-3" />
-                  View / edit
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                return (
+                  <Card
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    className="cursor-pointer transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => openProfile(p)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openProfile(p);
+                      }
+                    }}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="w-9 h-9 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Building2 className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words font-semibold leading-snug">{p.name}</p>
+                            {linkedClient && (
+                              <p className="break-words text-xs text-muted-foreground">
+                                Through {clientLabel(linkedClient)}
+                              </p>
+                            )}
+                            {p.contactName && <p className="break-words text-xs text-muted-foreground">{p.contactName}</p>}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-row flex-wrap items-center gap-1 sm:flex-col sm:items-end">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tier.color}`}>{tier.label}</span>
+                          {p.active === false && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {p.contactPhone && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span className="break-all">{p.contactPhone}</span>
+                          </div>
+                          {phoneHref(p.contactPhone) && (
+                            <Button asChild size="sm" variant="outline" className="h-8 px-2 text-xs">
+                              <a
+                                href={phoneHref(p.contactPhone) ?? undefined}
+                                onClick={(event) => event.stopPropagation()}
+                                aria-label={`Call ${p.name}`}
+                              >
+                                <PhoneCall className="mr-1 h-3 w-3" />
+                                Call
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {p.finishExpectations && <p className="break-words text-xs text-muted-foreground"><span className="font-medium text-foreground">Finish: </span>{p.finishExpectations}</p>}
+                      {p.documentationRequirements && <p className="break-words text-xs text-muted-foreground"><span className="font-medium text-foreground">Docs: </span>{p.documentationRequirements}</p>}
+                      {p.siteNotes && <p className="break-words text-xs text-muted-foreground"><span className="font-medium text-foreground">Site: </span>{p.siteNotes}</p>}
+                      {p.specialInstructions && <p className="break-words text-xs text-muted-foreground"><span className="font-medium text-foreground">Instructions: </span>{p.specialInstructions}</p>}
+                      <div className="flex flex-wrap items-center gap-4 pt-1">
+                        {p.signOffRequired && <Badge variant="outline" className="text-xs">Sign-off required</Badge>}
+                        {avgRating && (
+                          <div className="flex items-center gap-1 text-amber-600 text-xs">
+                            <Star className="w-3 h-3" />
+                            <span className="font-semibold">{avgRating}</span>
+                            <span className="text-muted-foreground">({bRatings.length} ratings)</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="pt-2 text-xs font-medium text-primary inline-flex items-center gap-1">
+                        <Pencil className="w-3 h-3" />
+                        View / edit
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
       {profiles.length === 0 && (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No builder profiles yet. Add one to start managing quality tiers and preferences.</CardContent></Card>
@@ -597,6 +705,7 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
           <BuilderFormFields
             form={editForm}
             employees={employees}
+            clients={clients as ClientOption[]}
             showActive
             onChange={(updates) => setEditForm((current) => ({ ...current, ...updates }))}
           />

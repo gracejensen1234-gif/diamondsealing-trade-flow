@@ -52,6 +52,12 @@ type BuilderProfileOption = {
   active?: boolean;
 };
 
+type CustomerOption = {
+  id: number;
+  name: string;
+  company?: string | null;
+};
+
 type PreparedClientSelection = {
   customerId?: number;
   builder?: BuilderProfileOption;
@@ -73,6 +79,13 @@ function dueDateVariant(value: string | null | undefined, status: string): "outl
   const due = new Date(value);
   due.setHours(0, 0, 0, 0);
   return due < today ? "destructive" : "outline";
+}
+
+function customerLabel(customer?: CustomerOption | null): string {
+  if (!customer) return "";
+  return customer.company && customer.company !== customer.name
+    ? `${customer.name} (${customer.company})`
+    : customer.name;
 }
 
 export default function Jobs() {
@@ -112,6 +125,17 @@ export default function Jobs() {
   const updateForm = (field: keyof typeof emptyJobForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  const customersById = new Map(
+    ((customers ?? []) as CustomerOption[]).map((customer) => [customer.id, customer]),
+  );
+
+  function builderLabel(builder: BuilderProfileOption) {
+    const linkedClient = builder.customerId ? customersById.get(builder.customerId) : null;
+    return linkedClient
+      ? `${customerLabel(linkedClient)} / ${builder.name}`
+      : `Builder: ${builder.name}`;
+  }
 
   async function createClientFromBuilder(builder: BuilderProfileOption) {
     const response = await fetch("/api/customers", {
@@ -252,7 +276,7 @@ export default function Jobs() {
                               .filter((builder) => builder.active !== false)
                               .map((builder) => (
                                 <SelectItem key={`builder-${builder.id}`} value={`builder:${builder.id}`}>
-                                  Builder: {builder.name}
+                                  {builderLabel(builder)}
                                 </SelectItem>
                               ))}
                           </SelectGroup>
