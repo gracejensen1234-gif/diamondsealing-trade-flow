@@ -163,6 +163,7 @@ async function enrichAssignment(
   let jobDescription: string | null = null;
   let jobSuburb: string | null = null;
   let clientName: string | null = null;
+  let jobBuilderCompanyName: string | null = null;
   let jobBuilderContactName: string | null = null;
   let jobBuilderContactPhone: string | null = null;
   let jobRequiredColours: string[] = [];
@@ -190,6 +191,7 @@ async function enrichAssignment(
     jobDescription = j?.description ?? null;
     jobSuburb = row?.customerSuburb ?? deriveSuburb(j?.address) ?? null;
     clientName = row?.customerName ?? null;
+    jobBuilderCompanyName = j?.builderCompanyName ?? null;
     jobBuilderContactName = j?.builderContactName ?? null;
     jobBuilderContactPhone = j?.builderContactPhone ?? null;
     jobRequiredColours = Array.isArray(j?.requiredColours)
@@ -226,6 +228,7 @@ async function enrichAssignment(
     plannedStartTime: a.plannedStartTime,
     plannedEndTime: a.plannedEndTime,
     estimatedMetres: a.estimatedMetres ? Number(a.estimatedMetres) : null,
+    builderCompanyName: a.builderCompanyName ?? jobBuilderCompanyName,
     builderContactName: a.builderContactName ?? jobBuilderContactName,
     builderContactPhone: a.builderContactPhone ?? jobBuilderContactPhone,
     requiredColours:
@@ -279,6 +282,7 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
       plannedStartTime: a.plannedStartTime ?? null,
       plannedEndTime: a.plannedEndTime ?? null,
       estimatedMetres: a.estimatedMetres != null ? String(a.estimatedMetres) : null,
+      builderCompanyName: a.builderCompanyName ?? null,
       builderContactName: a.builderContactName ?? null,
       builderContactPhone: a.builderContactPhone ?? null,
       requiredColours: a.requiredColours ?? [],
@@ -297,7 +301,7 @@ router.post("/dispatch", requireAdmin, async (req, res) => {
           subcontractorId: assignment.subcontractorId,
           type: "new_job",
           title: "New job assigned",
-          body: `${assignment.jobTitle ?? "Job"}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${assignment.jobSuburb ? ` in ${assignment.jobSuburb}` : ""}`,
+          body: `${assignment.jobTitle ?? "Job"}${assignment.workArea ? ` - ${assignment.workArea}` : ""}${assignment.jobSuburb ? ` in ${assignment.jobSuburb}` : ""}${assignment.clientName ? ` · Through ${assignment.clientName}` : ""}`,
           priority: "high",
           actionUrl: "/field",
           linkedEntityType: "job_assignment",
@@ -352,6 +356,7 @@ router.patch("/dispatch/:id", async (req, res) => {
     updates.estimatedMetres = body.data.estimatedMetres != null ? String(body.data.estimatedMetres) : null;
   }
   if (body.data.requiredColours !== undefined) updates.requiredColours = body.data.requiredColours;
+  if (body.data.builderCompanyName !== undefined) updates.builderCompanyName = body.data.builderCompanyName;
   if (body.data.builderContactName !== undefined) updates.builderContactName = body.data.builderContactName;
   if (body.data.builderContactPhone !== undefined) updates.builderContactPhone = body.data.builderContactPhone;
   if (body.data.notes !== undefined) updates.notes = body.data.notes;

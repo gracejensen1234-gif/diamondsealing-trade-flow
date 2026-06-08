@@ -16,6 +16,7 @@ export const jobsTable = pgTable("jobs", {
   priority: text("priority").notNull().default("medium"),
   customerId: integer("customer_id").references(() => customersTable.id),
   address: text("address"),
+  builderCompanyName: text("builder_company_name"),
   builderContactName: text("builder_contact_name"),
   builderContactPhone: text("builder_contact_phone"),
   requiredColours: jsonb("required_colours").notNull().default([]),

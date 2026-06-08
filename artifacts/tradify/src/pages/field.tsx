@@ -424,6 +424,46 @@ function addressLockLabel(assignment?: JobAssignment | null) {
   return "Exact address not available yet.";
 }
 
+function AssignmentClientContext({ assignment }: { assignment: JobAssignment }) {
+  const hasHeadContractor = Boolean(assignment.clientName);
+  const hasBuilder =
+    Boolean(assignment.builderCompanyName) ||
+    Boolean(assignment.builderContactName) ||
+    Boolean(assignment.builderContactPhone);
+
+  if (!hasHeadContractor && !hasBuilder) return null;
+
+  return (
+    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+      {hasHeadContractor ? (
+        <p className="break-words">
+          <span className="font-semibold text-foreground">Head contractor:</span>{" "}
+          <span className="text-muted-foreground">{assignment.clientName}</span>
+        </p>
+      ) : null}
+      {hasBuilder ? (
+        <p className="mt-1 break-words">
+          <span className="font-semibold text-foreground">Builder/site contact:</span>{" "}
+          <span className="text-muted-foreground">
+            {assignment.builderCompanyName ?? "Builder"}
+            {assignment.builderContactName
+              ? ` · ${assignment.builderContactName}`
+              : ""}
+            {assignment.builderContactPhone
+              ? ` · ${assignment.builderContactPhone}`
+              : ""}
+          </span>
+        </p>
+      ) : null}
+      {hasHeadContractor && hasBuilder ? (
+        <p className="mt-1 text-xs font-medium text-primary">
+          This job is subcontracted through {assignment.clientName}.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function InAppDirectionsCard({
   assignment,
   origin,
@@ -514,22 +554,7 @@ function AssignmentQuickDetails({
           {lockedLabel}
         </p>
       ) : null}
-      {(assignment.clientName ||
-        assignment.builderContactName ||
-        assignment.builderContactPhone) && (
-        <div className="flex items-start gap-2 text-sm text-muted-foreground">
-          <UsersIcon className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            {assignment.clientName ? `${assignment.clientName}` : "Builder"}
-            {assignment.builderContactName
-              ? ` · ${assignment.builderContactName}`
-              : ""}
-            {assignment.builderContactPhone
-              ? ` · ${assignment.builderContactPhone}`
-              : ""}
-          </span>
-        </div>
-      )}
+      <AssignmentClientContext assignment={assignment} />
       <div className="flex flex-wrap gap-1.5">
         {showTiming ? (
           <Badge variant="outline" className="text-xs">

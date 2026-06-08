@@ -205,6 +205,7 @@ export default function Jobs() {
         title,
         customerId: selection.customerId,
         address: optionalText(form.address),
+        builderCompanyName: optionalText(selection.builder?.name ?? ""),
         builderContactName: optionalText(selection.builder?.contactName ?? ""),
         builderContactPhone: optionalText(selection.builder?.contactPhone ?? ""),
         scheduledDate: optionalText(form.scheduledDate),
@@ -391,6 +392,11 @@ export default function Jobs() {
                   <p className="text-muted-foreground text-sm mt-1">
                     {job.customerName || "No client"} &bull; {job.address || "No address"}
                   </p>
+                  {job.builderCompanyName && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Builder/site company: {job.builderCompanyName}
+                    </p>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="secondary">Scheduled: {formatDate(job.scheduledDate)}</Badge>
                     <Badge variant={dueDateVariant(job.dueDate, job.status)}>Due: {formatDate(job.dueDate)}</Badge>

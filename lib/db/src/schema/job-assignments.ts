@@ -15,6 +15,7 @@ export const jobAssignmentsTable = pgTable("job_assignments", {
   plannedStartTime: text("planned_start_time"),
   plannedEndTime: text("planned_end_time"),
   estimatedMetres: numeric("estimated_metres", { precision: 10, scale: 2 }),
+  builderCompanyName: text("builder_company_name"),
   builderContactName: text("builder_contact_name"),
   builderContactPhone: text("builder_contact_phone"),
   requiredColours: jsonb("required_colours").notNull().default([]),

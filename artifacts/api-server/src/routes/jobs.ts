@@ -104,6 +104,7 @@ router.post("/jobs", async (req, res) => {
     priority: parsed.data.priority ?? "medium",
     customerId: parsed.data.customerId ?? null,
     address: parsed.data.address ?? null,
+    builderCompanyName: parsed.data.builderCompanyName ?? null,
     builderContactName: parsed.data.builderContactName ?? null,
     builderContactPhone: parsed.data.builderContactPhone ?? null,
     requiredColours: parsed.data.requiredColours ?? [],
@@ -168,6 +169,7 @@ router.patch("/jobs/:id", async (req, res) => {
   if (body.data.priority !== undefined) updates.priority = body.data.priority;
   if (body.data.customerId !== undefined) updates.customerId = body.data.customerId;
   if (body.data.address !== undefined) updates.address = body.data.address;
+  if (body.data.builderCompanyName !== undefined) updates.builderCompanyName = body.data.builderCompanyName;
   if (body.data.builderContactName !== undefined) updates.builderContactName = body.data.builderContactName;
   if (body.data.builderContactPhone !== undefined) updates.builderContactPhone = body.data.builderContactPhone;
   if (body.data.requiredColours !== undefined) updates.requiredColours = body.data.requiredColours;
@@ -221,6 +223,7 @@ router.patch("/jobs/:id", async (req, res) => {
     "status",
     "customerId",
     "address",
+    "builderCompanyName",
     "builderContactName",
     "builderContactPhone",
     "requiredColours",

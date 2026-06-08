@@ -353,6 +353,40 @@ export default function FieldJobDetail() {
               <MapPin className="h-3 w-3" /> {assignment.jobAddress}
             </p>
           )}
+          {(assignment.clientName ||
+            assignment.builderCompanyName ||
+            assignment.builderContactName ||
+            assignment.builderContactPhone) && (
+            <div className="mt-3 rounded-md border bg-background px-3 py-2 text-sm">
+              {assignment.clientName && (
+                <p className="break-words">
+                  <span className="font-semibold">Head contractor:</span>{" "}
+                  <span className="text-muted-foreground">{assignment.clientName}</span>
+                </p>
+              )}
+              {(assignment.builderCompanyName ||
+                assignment.builderContactName ||
+                assignment.builderContactPhone) && (
+                <p className="mt-1 break-words">
+                  <span className="font-semibold">Builder/site contact:</span>{" "}
+                  <span className="text-muted-foreground">
+                    {assignment.builderCompanyName ?? "Builder"}
+                    {assignment.builderContactName
+                      ? ` · ${assignment.builderContactName}`
+                      : ""}
+                    {assignment.builderContactPhone
+                      ? ` · ${assignment.builderContactPhone}`
+                      : ""}
+                  </span>
+                </p>
+              )}
+              {assignment.clientName && assignment.builderCompanyName && (
+                <p className="mt-1 text-xs font-medium text-primary">
+                  This job is subcontracted through {assignment.clientName}.
+                </p>
+              )}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-4 space-y-6">
           <div className="rounded-md border bg-background px-3 py-2 text-sm">

@@ -152,6 +152,7 @@ export default function Dispatch() {
 
   const handleCreate = () => {
     if (!selectedJob) return;
+    const selectedJobInfo = jobs?.find((job) => job.id === parseInt(selectedJob));
     createDispatch.mutate({
       data: {
         dispatchDate: date,
@@ -166,6 +167,7 @@ export default function Dispatch() {
             plannedEndTime: optionalText(plannedEndTime),
             estimatedMetres: optionalNumber(estimatedMetres),
             requiredColours: colours ? colours.split(',').map(c => c.trim()) : [],
+            builderCompanyName: selectedJobInfo?.builderCompanyName ?? undefined,
             builderContactName: optionalText(contactName),
             builderContactPhone: optionalText(contactPhone),
             notes: optionalText(notes)
@@ -371,6 +373,13 @@ export default function Dispatch() {
                           <h4 className="font-semibold">{assignment.jobTitle}</h4>
                           {assignment.workArea && <p className="text-sm font-medium text-foreground">{assignment.workArea}</p>}
                           <p className="text-sm text-muted-foreground">{assignment.jobAddress}</p>
+                          {(assignment.clientName || assignment.builderCompanyName) && (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {assignment.clientName ? `Head contractor: ${assignment.clientName}` : ""}
+                              {assignment.clientName && assignment.builderCompanyName ? " · " : ""}
+                              {assignment.builderCompanyName ? `Builder/site company: ${assignment.builderCompanyName}` : ""}
+                            </p>
+                          )}
                         </div>
                         <Badge variant={
                           assignment.status === 'completed' ? 'secondary' :

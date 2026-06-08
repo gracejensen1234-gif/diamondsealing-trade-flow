@@ -388,6 +388,7 @@ async function syncExistingAssignment(
     .update(jobAssignmentsTable)
     .set({
       dispatchDate,
+      builderCompanyName: job.builderCompanyName ?? null,
       builderContactName: job.builderContactName ?? null,
       builderContactPhone: job.builderContactPhone ?? null,
       requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : [],
@@ -787,6 +788,7 @@ export async function runJobAssignmentTriggers({
         dispatchDate,
         scheduledOrder,
         subcontractorId: top.subcontractorId,
+        builderCompanyName: job.builderCompanyName ?? assignmentToReassign.builderCompanyName,
         builderContactName: job.builderContactName ?? assignmentToReassign.builderContactName,
         builderContactPhone: job.builderContactPhone ?? assignmentToReassign.builderContactPhone,
         requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : assignmentToReassign.requiredColours,
@@ -805,6 +807,7 @@ export async function runJobAssignmentTriggers({
         scheduledOrder,
         jobId: job.id,
         subcontractorId: top.subcontractorId,
+        builderCompanyName: job.builderCompanyName ?? null,
         builderContactName: job.builderContactName ?? null,
         builderContactPhone: job.builderContactPhone ?? null,
         requiredColours: Array.isArray(job.requiredColours) ? job.requiredColours : [],

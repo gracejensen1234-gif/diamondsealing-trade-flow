@@ -148,6 +148,8 @@ export interface Job {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  builderCompanyName?: string | null;
+  /** @nullable */
   builderContactName?: string | null;
   /** @nullable */
   builderContactPhone?: string | null;
@@ -192,6 +194,7 @@ export interface JobInput {
   status?: JobInputStatus;
   customerId?: number;
   address?: string;
+  builderCompanyName?: string;
   builderContactName?: string;
   builderContactPhone?: string;
   requiredColours?: string[];
@@ -227,6 +230,7 @@ export interface JobUpdate {
   status?: JobUpdateStatus;
   customerId?: number;
   address?: string;
+  builderCompanyName?: string;
   builderContactName?: string;
   builderContactPhone?: string;
   requiredColours?: string[];
@@ -591,6 +595,8 @@ export interface JobAssignment {
   /** @nullable */
   estimatedMetres?: number | null;
   /** @nullable */
+  builderCompanyName?: string | null;
+  /** @nullable */
   builderContactName?: string | null;
   /** @nullable */
   builderContactPhone?: string | null;
@@ -617,6 +623,7 @@ export type DispatchInputAssignmentsItem = {
   plannedEndTime?: string;
   estimatedMetres?: number;
   requiredColours?: string[];
+  builderCompanyName?: string;
   builderContactName?: string;
   builderContactPhone?: string;
   notes?: string;
@@ -646,6 +653,7 @@ export interface JobAssignmentUpdate {
   plannedEndTime?: string;
   estimatedMetres?: number | null;
   requiredColours?: string[];
+  builderCompanyName?: string;
   builderContactName?: string;
   builderContactPhone?: string;
   notes?: string;

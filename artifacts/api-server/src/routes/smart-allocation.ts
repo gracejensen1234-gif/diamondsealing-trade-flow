@@ -739,6 +739,7 @@ router.post(
           priority: "medium",
           customerId,
           address: draft.address ?? null,
+          builderCompanyName: draft.builderName ?? null,
           builderContactName: draft.builderContactName ?? null,
           builderContactPhone: draft.builderContactPhone ?? null,
           requiredColours: draft.requiredColours ?? [],
@@ -774,6 +775,7 @@ router.post(
               draft.estimatedMetres != null
                 ? String(draft.estimatedMetres)
                 : null,
+            builderCompanyName: draft.builderName ?? null,
             requiredColours: draft.requiredColours ?? [],
             notes: draft.notes ?? draft.sourceSummary ?? null,
           })
@@ -1181,6 +1183,7 @@ router.post("/allocation/confirm", async (req, res) => {
       estimatedMetres != null && Number.isFinite(Number(estimatedMetres))
         ? String(Number(estimatedMetres))
         : null,
+    builderCompanyName: job.builderCompanyName ?? null,
     builderContactName: job.builderContactName ?? null,
     builderContactPhone: job.builderContactPhone ?? null,
     requiredColours: blockColours,
@@ -1202,6 +1205,7 @@ router.post("/allocation/confirm", async (req, res) => {
         plannedStartTime: assignmentValues.plannedStartTime,
         plannedEndTime: assignmentValues.plannedEndTime,
         estimatedMetres: assignmentValues.estimatedMetres,
+        builderCompanyName: assignmentValues.builderCompanyName,
         builderContactName: assignmentValues.builderContactName,
         builderContactPhone: assignmentValues.builderContactPhone,
         requiredColours: assignmentValues.requiredColours,
@@ -1495,6 +1499,7 @@ router.patch("/weekly-planner/:id", async (req, res) => {
               Number.isFinite(Number(proposed.estimatedMetres))
                 ? String(Number(proposed.estimatedMetres))
                 : null,
+            builderCompanyName: job.builderCompanyName ?? null,
             builderContactName: job.builderContactName ?? null,
             builderContactPhone: job.builderContactPhone ?? null,
             requiredColours: Array.isArray(proposed.requiredColours)
