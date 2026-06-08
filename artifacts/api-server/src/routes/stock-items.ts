@@ -13,7 +13,11 @@ import { companyId, requireAdmin } from "../lib/auth.js";
 const router = Router();
 
 function serialize(item: typeof stockItemsTable.$inferSelect) {
-  return { ...item, currentStock: item.currentStock ? Number(item.currentStock) : null };
+  return {
+    ...item,
+    barcode: item.barcode ?? null,
+    currentStock: item.currentStock ? Number(item.currentStock) : null,
+  };
 }
 
 router.get("/stock-items", async (req, res) => {
@@ -33,6 +37,7 @@ router.post("/stock-items", requireAdmin, async (req, res) => {
     name: parsed.data.name,
     unit: parsed.data.unit,
     colour: parsed.data.colour ?? null,
+    barcode: parsed.data.barcode?.trim() || null,
     currentStock: parsed.data.currentStock != null ? String(parsed.data.currentStock) : null,
   }).returning();
   return res.status(201).json(serialize(item));
@@ -46,6 +51,7 @@ router.patch("/stock-items/:id", requireAdmin, async (req, res) => {
   if (body.data.name !== undefined) updates.name = body.data.name;
   if (body.data.unit !== undefined) updates.unit = body.data.unit;
   if (body.data.colour !== undefined) updates.colour = body.data.colour;
+  if (body.data.barcode !== undefined) updates.barcode = body.data.barcode?.trim() || null;
   if (body.data.currentStock !== undefined) updates.currentStock = String(body.data.currentStock);
   const [item] = await db
     .update(stockItemsTable)

@@ -1587,6 +1587,7 @@ export const ListStockItemsResponseItem = zod.object({
   name: zod.string(),
   unit: zod.string(),
   colour: zod.string().nullish(),
+  barcode: zod.string().nullish(),
   currentStock: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
@@ -1596,6 +1597,7 @@ export const CreateStockItemBody = zod.object({
   name: zod.string().min(1),
   unit: zod.string(),
   colour: zod.string().optional(),
+  barcode: zod.string().optional(),
   currentStock: zod.number().optional(),
 });
 
@@ -1607,6 +1609,7 @@ export const UpdateStockItemBody = zod.object({
   name: zod.string().optional(),
   unit: zod.string().optional(),
   colour: zod.string().optional(),
+  barcode: zod.string().optional(),
   currentStock: zod.number().optional(),
 });
 
@@ -1615,6 +1618,7 @@ export const UpdateStockItemResponse = zod.object({
   name: zod.string(),
   unit: zod.string(),
   colour: zod.string().nullish(),
+  barcode: zod.string().nullish(),
   currentStock: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });

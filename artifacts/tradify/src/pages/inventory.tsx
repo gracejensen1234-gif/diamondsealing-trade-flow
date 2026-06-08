@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, type ChangeEvent } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,20 +30,50 @@ import {
   Pencil,
   Camera,
   Sparkles,
+  ScanBarcode,
   Trash2,
 } from "lucide-react";
 
-const emptyProductForm = { name: "", unit: "tube", colour: "" };
+type BarcodeDetectorResult = {
+  rawValue: string;
+  format?: string;
+};
+
+type BarcodeDetectorInstance = {
+  detect: (
+    imageSource: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  ) => Promise<BarcodeDetectorResult[]>;
+};
+
+type BarcodeDetectorConstructor = {
+  new (options?: { formats?: string[] }): BarcodeDetectorInstance;
+  getSupportedFormats?: () => Promise<string[]>;
+};
+
+declare global {
+  interface Window {
+    BarcodeDetector?: BarcodeDetectorConstructor;
+  }
+}
+
+const emptyProductForm = { name: "", unit: "tube", colour: "", barcode: "" };
 const emptyIntakeForm = {
   subcontractorId: "",
   notes: "",
-  imageData: "",
+  imageDataList: [] as string[],
   fileName: "",
 };
 const emptyAdjustmentForm = {
   subcontractorId: "",
   stockItemId: "",
   currentQuantity: "",
+  notes: "",
+};
+const emptyBarcodeForm = {
+  subcontractorId: "",
+  stockItemId: "",
+  barcode: "",
+  quantity: "1",
   notes: "",
 };
 
@@ -59,6 +89,7 @@ type IntakeSuggestion = {
   stockItemId: number | null;
   productName: string;
   colour: string | null;
+  barcode?: string | null;
   unit: string;
   quantity: number | string;
   confidence?: number;
@@ -67,7 +98,13 @@ type IntakeSuggestion = {
 };
 
 function stockItemLabel(item: any) {
-  return `${item.name}${item.colour ? ` - ${item.colour}` : ""} (${item.unit})`;
+  return `${item.name}${item.colour ? ` - ${item.colour}` : ""} (${item.unit})${item.barcode ? ` · ${item.barcode}` : ""}`;
+}
+
+function normalizeBarcode(value: unknown) {
+  return String(value ?? "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .trim();
 }
 
 function readFileAsDataUrl(file: File) {
@@ -106,11 +143,16 @@ async function readStockIntakeImage(file: File) {
 export default function Inventory() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const barcodeVideoRef = useRef<HTMLVideoElement | null>(null);
+  const barcodeStreamRef = useRef<MediaStream | null>(null);
   const [txOpen, setTxOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [barcodeOpen, setBarcodeOpen] = useState(false);
+  const [barcodeCameraActive, setBarcodeCameraActive] = useState(false);
   const [intakeFileLoading, setIntakeFileLoading] = useState(false);
+  const [barcodeFileLoading, setBarcodeFileLoading] = useState(false);
   const [txForm, setTxForm] = useState({
     subcontractorId: "",
     stockItemId: "",
@@ -121,10 +163,54 @@ export default function Inventory() {
   const [productForm, setProductForm] = useState({ ...emptyProductForm });
   const [adjustForm, setAdjustForm] = useState({ ...emptyAdjustmentForm });
   const [intakeForm, setIntakeForm] = useState({ ...emptyIntakeForm });
+  const [barcodeForm, setBarcodeForm] = useState({ ...emptyBarcodeForm });
   const [intakeSuggestions, setIntakeSuggestions] = useState<
     IntakeSuggestion[]
   >([]);
   const [filterSub, setFilterSub] = useState("all");
+
+  useEffect(() => {
+    if (!barcodeOpen) stopBarcodeScanner();
+  }, [barcodeOpen]);
+
+  useEffect(() => {
+    if (!barcodeCameraActive || !window.BarcodeDetector) return;
+    let cancelled = false;
+    const detector = new window.BarcodeDetector({
+      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39"],
+    });
+
+    async function scanFrame() {
+      const video = barcodeVideoRef.current;
+      if (!cancelled && video && video.readyState >= 2) {
+        try {
+          const results = await detector.detect(video);
+          const scanned = results[0]?.rawValue;
+          if (scanned) {
+            handleScannedBarcode(scanned);
+            stopBarcodeScanner();
+            toast({ title: "Barcode scanned" });
+            return;
+          }
+        } catch {
+          stopBarcodeScanner();
+          toast({
+            title: "Barcode scanner stopped",
+            description: "Try taking a barcode photo or enter it manually.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      if (!cancelled) window.requestAnimationFrame(scanFrame);
+    }
+
+    const frameId = window.requestAnimationFrame(scanFrame);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [barcodeCameraActive]);
 
   const { data: items = [] } = useQuery({
     queryKey: ["sub-inventory"],
@@ -199,6 +285,7 @@ export default function Inventory() {
           name: data.name,
           unit: data.unit,
           colour: data.colour || undefined,
+          barcode: data.barcode || undefined,
           currentStock: 0,
         }),
       });
@@ -230,7 +317,7 @@ export default function Inventory() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageData: intakeForm.imageData,
+          imageDataList: intakeForm.imageDataList,
           notes: intakeForm.notes || undefined,
         }),
       });
@@ -270,6 +357,7 @@ export default function Inventory() {
           lines: intakeSuggestions.map((line) => ({
             ...line,
             quantity: Number(line.quantity),
+            barcode: line.barcode || undefined,
           })),
         }),
       });
@@ -334,6 +422,68 @@ export default function Inventory() {
     },
   });
 
+  const barcodeStockMutation = useMutation({
+    mutationFn: async (data: typeof barcodeForm) => {
+      const barcode = normalizeBarcode(data.barcode);
+      const stockItemId = Number(data.stockItemId);
+      const selectedItem = (stockItems as any[]).find(
+        (item: any) => item.id === stockItemId,
+      );
+      if (!barcode) throw new Error("Scan or enter a barcode first");
+      if (!selectedItem) throw new Error("Select the product this barcode is for");
+
+      if (normalizeBarcode(selectedItem.barcode) !== barcode) {
+        const linkResponse = await fetch(`/api/stock-items/${stockItemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode }),
+        });
+        if (!linkResponse.ok) {
+          throw new Error(
+            (await linkResponse.json().catch(() => null))?.error ??
+              "Could not link barcode to product",
+          );
+        }
+      }
+
+      const response = await fetch("/api/inventory-transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subcontractorId: Number(data.subcontractorId),
+          stockItemId,
+          quantity: Number(data.quantity),
+          transactionType: "issued",
+          referenceNote:
+            data.notes ||
+            `Barcode stock count ${barcode}${selectedItem.name ? ` - ${selectedItem.name}` : ""}`,
+          recordedBy: "admin-barcode-scan",
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not record barcode stock",
+        );
+      return response.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sub-inventory"] });
+      qc.invalidateQueries({ queryKey: ["sub-inventory-transactions"] });
+      qc.invalidateQueries({ queryKey: ["stock-items"] });
+      setBarcodeForm({ ...emptyBarcodeForm });
+      setBarcodeOpen(false);
+      toast({ title: "Barcode stock recorded" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not record barcode stock",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const approveRestockMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       fetch(`/api/restock-requests/${id}`, {
@@ -365,6 +515,22 @@ export default function Inventory() {
   const selectedAdjustmentProduct = (stockItems as any[]).find(
     (item: any) => String(item.id) === adjustForm.stockItemId,
   );
+  const scannedBarcode = normalizeBarcode(barcodeForm.barcode);
+  const barcodeMatchedProduct = scannedBarcode
+    ? (stockItems as any[]).find(
+        (item: any) => normalizeBarcode(item.barcode) === scannedBarcode,
+      )
+    : null;
+  const barcodeSelectedProduct = (stockItems as any[]).find(
+    (item: any) => String(item.id) === barcodeForm.stockItemId,
+  );
+  const barcodeDetectorAvailable =
+    typeof window !== "undefined" && Boolean(window.BarcodeDetector);
+  const barcodeCanApply =
+    Boolean(barcodeForm.subcontractorId) &&
+    Boolean(barcodeForm.stockItemId) &&
+    Boolean(scannedBarcode) &&
+    Number(barcodeForm.quantity) > 0;
   const intakeCanApply =
     Boolean(intakeForm.subcontractorId) &&
     intakeSuggestions.length > 0 &&
@@ -376,16 +542,21 @@ export default function Inventory() {
     );
 
   async function handleStockIntakeFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.currentTarget.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
     setIntakeFileLoading(true);
     try {
-      const imageData = await readStockIntakeImage(file);
+      const imageDataList = await Promise.all(
+        files.slice(0, 8).map(readStockIntakeImage),
+      );
       setIntakeForm((form) => ({
         ...form,
-        imageData,
-        fileName: file.name,
+        imageDataList: [...form.imageDataList, ...imageDataList].slice(0, 8),
+        fileName:
+          files.length === 1
+            ? files[0].name
+            : `${files.length} stock photos selected`,
       }));
       setIntakeSuggestions([]);
     } catch (error) {
@@ -396,6 +567,104 @@ export default function Inventory() {
       });
     } finally {
       setIntakeFileLoading(false);
+    }
+  }
+
+  function handleScannedBarcode(rawValue: string) {
+    const barcode = normalizeBarcode(rawValue);
+    if (!barcode) return;
+    const matched = (stockItems as any[]).find(
+      (item: any) => normalizeBarcode(item.barcode) === barcode,
+    );
+    setBarcodeForm((form) => ({
+      ...form,
+      barcode,
+      stockItemId: matched ? String(matched.id) : form.stockItemId,
+    }));
+  }
+
+  function stopBarcodeScanner() {
+    barcodeStreamRef.current?.getTracks().forEach((track) => track.stop());
+    barcodeStreamRef.current = null;
+    if (barcodeVideoRef.current) barcodeVideoRef.current.srcObject = null;
+    setBarcodeCameraActive(false);
+  }
+
+  async function startBarcodeScanner() {
+    if (!window.BarcodeDetector) {
+      toast({
+        title: "Barcode scanning unavailable",
+        description: "Take a barcode photo or enter the barcode manually.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast({
+        title: "Camera unavailable",
+        description: "Use barcode photo upload or manual entry.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      stopBarcodeScanner();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      barcodeStreamRef.current = stream;
+      if (barcodeVideoRef.current) {
+        barcodeVideoRef.current.srcObject = stream;
+        await barcodeVideoRef.current.play();
+      }
+      setBarcodeCameraActive(true);
+    } catch (error) {
+      toast({
+        title: "Could not start camera",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleBarcodePhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    if (!window.BarcodeDetector) {
+      toast({
+        title: "Barcode photo scanning unavailable",
+        description: "Enter the barcode manually on this device.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBarcodeFileLoading(true);
+    try {
+      const imageData = await readStockIntakeImage(file);
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Could not read barcode photo"));
+        image.src = imageData;
+      });
+      const detector = new window.BarcodeDetector({
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39"],
+      });
+      const results = await detector.detect(image);
+      const scanned = results[0]?.rawValue;
+      if (!scanned) throw new Error("No barcode detected in that photo");
+      handleScannedBarcode(scanned);
+      toast({ title: "Barcode read from photo" });
+    } catch (error) {
+      toast({
+        title: "Could not read barcode photo",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBarcodeFileLoading(false);
     }
   }
 
@@ -423,6 +692,7 @@ export default function Inventory() {
       stockItemId: item.id,
       productName: item.name,
       colour: item.colour ?? null,
+      barcode: item.barcode ?? null,
       unit: item.unit,
       needsReview: false,
     });
@@ -498,6 +768,20 @@ export default function Inventory() {
                       placeholder="e.g. White"
                     />
                   </div>
+                </div>
+                <div>
+                  <Label>Barcode</Label>
+                  <Input
+                    className="mt-1"
+                    value={productForm.barcode}
+                    onChange={(e) =>
+                      setProductForm((p) => ({
+                        ...p,
+                        barcode: normalizeBarcode(e.target.value),
+                      }))
+                    }
+                    placeholder="Optional barcode number"
+                  />
                 </div>
                 <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                   This creates a product type only. Stock quantity is recorded
@@ -643,6 +927,180 @@ export default function Inventory() {
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog open={barcodeOpen} onOpenChange={setBarcodeOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <ScanBarcode className="w-4 h-4 mr-2" />
+                Scan Barcode
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Barcode Stock Count</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div>
+                  <Label>Employee/Subcontractor</Label>
+                  <Select
+                    value={barcodeForm.subcontractorId}
+                    onValueChange={(v) =>
+                      setBarcodeForm((p) => ({ ...p, subcontractorId: v }))
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select employee/subcontractor..." />
+                    </SelectTrigger>
+                    <SelectContent className="z-[100] max-h-72">
+                      {activeSubs.map((s: any) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <video
+                    ref={barcodeVideoRef}
+                    className="aspect-video w-full rounded-md bg-black object-cover"
+                    muted
+                    playsInline
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant={barcodeCameraActive ? "secondary" : "default"}
+                      onClick={
+                        barcodeCameraActive
+                          ? stopBarcodeScanner
+                          : startBarcodeScanner
+                      }
+                    >
+                      <ScanBarcode className="w-4 h-4 mr-2" />
+                      {barcodeCameraActive ? "Stop scanner" : "Start scanner"}
+                    </Button>
+                    <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                      <Camera className="h-4 w-4" />
+                      {barcodeFileLoading ? "Reading..." : "Barcode photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleBarcodePhoto}
+                        disabled={barcodeFileLoading}
+                      />
+                    </label>
+                  </div>
+                  {!barcodeDetectorAvailable ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      This browser does not support automatic barcode detection.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+                  <div>
+                    <Label>Barcode</Label>
+                    <Input
+                      className="mt-1"
+                      value={barcodeForm.barcode}
+                      onChange={(e) => handleScannedBarcode(e.target.value)}
+                      placeholder="Scan or enter barcode"
+                    />
+                  </div>
+                  <div>
+                    <Label>Quantity</Label>
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      className="mt-1"
+                      value={barcodeForm.quantity}
+                      onChange={(e) =>
+                        setBarcodeForm((p) => ({
+                          ...p,
+                          quantity: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {barcodeMatchedProduct ? (
+                  <div className="rounded-md border bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950/20 dark:text-green-300">
+                    Matched product: {stockItemLabel(barcodeMatchedProduct)}
+                  </div>
+                ) : scannedBarcode ? (
+                  <div className="rounded-md border bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                    Barcode not linked yet. Select the matching product below.
+                  </div>
+                ) : null}
+
+                <div>
+                  <Label>Product</Label>
+                  <Select
+                    value={barcodeForm.stockItemId}
+                    onValueChange={(v) =>
+                      setBarcodeForm((p) => ({ ...p, stockItemId: v }))
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select product..." />
+                    </SelectTrigger>
+                    <SelectContent className="z-[100] max-h-72">
+                      {(stockItems as any[]).map((item: any) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {stockItemLabel(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {barcodeSelectedProduct &&
+                  scannedBarcode &&
+                  normalizeBarcode(barcodeSelectedProduct.barcode) !==
+                    scannedBarcode ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Saving will link this barcode to the selected product.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <Label>Notes</Label>
+                  <Input
+                    className="mt-1"
+                    value={barcodeForm.notes}
+                    onChange={(e) =>
+                      setBarcodeForm((p) => ({ ...p, notes: e.target.value }))
+                    }
+                    placeholder="Supplier pickup, stocktake count..."
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="flex-1"
+                    onClick={() => barcodeStockMutation.mutate(barcodeForm)}
+                    disabled={
+                      !barcodeCanApply || barcodeStockMutation.isPending
+                    }
+                  >
+                    {barcodeStockMutation.isPending
+                      ? "Recording..."
+                      : "Add Stock from Barcode"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setBarcodeOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={intakeOpen} onOpenChange={setIntakeOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -681,11 +1139,12 @@ export default function Inventory() {
                     <Camera className="h-4 w-4" />
                     {intakeFileLoading
                       ? "Loading photo..."
-                      : intakeForm.fileName || "Take photo / upload receipt"}
+                      : intakeForm.fileName || "Take photos / upload receipt"}
                     <input
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      multiple
                       className="hidden"
                       onChange={handleStockIntakeFile}
                     />
@@ -694,7 +1153,7 @@ export default function Inventory() {
                     type="button"
                     onClick={() => analyseStockIntakeMutation.mutate()}
                     disabled={
-                      !intakeForm.imageData ||
+                      intakeForm.imageDataList.length === 0 ||
                       intakeFileLoading ||
                       analyseStockIntakeMutation.isPending
                     }
@@ -706,12 +1165,39 @@ export default function Inventory() {
                   </Button>
                 </div>
 
-                {intakeForm.imageData ? (
-                  <img
-                    src={intakeForm.imageData}
-                    alt="Stock intake preview"
-                    className="max-h-44 w-full rounded-md border object-contain"
-                  />
+                {intakeForm.imageDataList.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {intakeForm.imageDataList.map((imageData, index) => (
+                      <div key={`${imageData.slice(0, 24)}-${index}`} className="relative">
+                        <img
+                          src={imageData}
+                          alt={`Stock intake preview ${index + 1}`}
+                          className="h-32 w-full rounded-md border object-contain"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="absolute right-2 top-2 h-7 px-2 text-xs"
+                          onClick={() => {
+                            setIntakeForm((form) => ({
+                              ...form,
+                              imageDataList: form.imageDataList.filter(
+                                (_image, imageIndex) => imageIndex !== index,
+                              ),
+                              fileName:
+                                form.imageDataList.length <= 1
+                                  ? ""
+                                  : `${form.imageDataList.length - 1} stock photos selected`,
+                            }));
+                            setIntakeSuggestions([]);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
 
                 <div>
@@ -848,29 +1334,44 @@ export default function Inventory() {
                           </div>
                         </div>
 
-                        <div>
-                          <Label className="text-xs">Unit</Label>
-                          <Select
-                            value={line.unit}
-                            onValueChange={(value) =>
-                              updateIntakeSuggestion(index, {
-                                unit: value,
-                                stockItemId: null,
-                              })
-                            }
-                          >
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="z-[100] max-h-72">
-                              <SelectItem value="tube">Tube</SelectItem>
-                              <SelectItem value="sausage">Sausage</SelectItem>
-                              <SelectItem value="box">Box</SelectItem>
-                              <SelectItem value="roll">Roll</SelectItem>
-                              <SelectItem value="litre">Litre</SelectItem>
-                              <SelectItem value="each">Each</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
+                          <div>
+                            <Label className="text-xs">Barcode</Label>
+                            <Input
+                              className="mt-1"
+                              value={line.barcode ?? ""}
+                              onChange={(e) =>
+                                updateIntakeSuggestion(index, {
+                                  barcode: normalizeBarcode(e.target.value),
+                                })
+                              }
+                              placeholder="Optional barcode"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Unit</Label>
+                            <Select
+                              value={line.unit}
+                              onValueChange={(value) =>
+                                updateIntakeSuggestion(index, {
+                                  unit: value,
+                                  stockItemId: null,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="z-[100] max-h-72">
+                                <SelectItem value="tube">Tube</SelectItem>
+                                <SelectItem value="sausage">Sausage</SelectItem>
+                                <SelectItem value="box">Box</SelectItem>
+                                <SelectItem value="roll">Roll</SelectItem>
+                                <SelectItem value="litre">Litre</SelectItem>
+                                <SelectItem value="each">Each</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                       </div>
                     ))}

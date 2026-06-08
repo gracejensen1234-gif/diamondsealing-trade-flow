@@ -35,6 +35,7 @@ type StockIntakeSuggestion = {
   stockItemId: number | null;
   productName: string;
   colour: string | null;
+  barcode: string | null;
   unit: string;
   quantity: number;
   confidence: number;
@@ -46,6 +47,12 @@ function normalizeStockText(value: unknown) {
   return String(value ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeBarcode(value: unknown) {
+  return String(value ?? "")
+    .replace(/[^a-zA-Z0-9]/g, "")
     .trim();
 }
 
@@ -72,7 +79,16 @@ function findMatchingStockItem(
   productName: string,
   colour: string | null,
   unit?: string,
+  barcode?: string | null,
 ) {
+  const barcodeText = normalizeBarcode(barcode);
+  if (barcodeText) {
+    const byBarcode = stockItems.find(
+      (item) => normalizeBarcode(item.barcode) === barcodeText,
+    );
+    if (byBarcode) return byBarcode;
+  }
+
   const nameText = normalizeStockText(productName);
   const colourText = normalizeStockText(colour);
   const unitText = normalizeStockText(unit);
@@ -106,6 +122,7 @@ function sanitizeStockIntakeSuggestion(
   const raw = rawLine as Record<string, unknown>;
   const productName = String(raw.productName ?? raw.name ?? "").trim();
   const colour = String(raw.colour ?? raw.color ?? "").trim() || null;
+  const barcode = normalizeBarcode(raw.barcode);
   const quantity = Number(raw.quantity);
   if (!productName || !Number.isFinite(quantity) || quantity <= 0) return null;
 
@@ -120,6 +137,7 @@ function sanitizeStockIntakeSuggestion(
       productName,
       colour,
       cleanStockUnit(raw.unit),
+      barcode,
     );
   const unit = matchedStockItem?.unit ?? cleanStockUnit(raw.unit);
   const confidence = clampConfidence(raw.confidence);
@@ -128,6 +146,7 @@ function sanitizeStockIntakeSuggestion(
     stockItemId: matchedStockItem?.id ?? null,
     productName: matchedStockItem?.name ?? productName,
     colour: matchedStockItem?.colour ?? colour,
+    barcode: matchedStockItem?.barcode ?? (barcode || null),
     unit,
     quantity,
     confidence,
@@ -572,14 +591,25 @@ router.post(
   "/inventory-stock-intake/analyse",
   requireAdmin,
   async (req, res) => {
-    const imageData =
-      typeof req.body?.imageData === "string" ? req.body.imageData.trim() : "";
+    const imageDataList = [
+      ...(Array.isArray(req.body?.imageDataList)
+        ? req.body.imageDataList
+        : []),
+      req.body?.imageData,
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 8);
     const notes =
       typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
-    if (!imageData.startsWith("data:image/")) {
+    if (
+      imageDataList.length === 0 ||
+      imageDataList.some((imageData) => !imageData.startsWith("data:image/"))
+    ) {
       return res
         .status(400)
-        .json({ error: "Upload a stock or receipt photo image" });
+        .json({ error: "Upload at least one stock or receipt photo image" });
     }
 
     const openai = getOpenAIClient();
@@ -600,7 +630,7 @@ router.post(
     const knownProducts = stockItems
       .map(
         (item) =>
-          `ID ${item.id}: ${item.name}${item.colour ? `, ${item.colour}` : ""}, unit ${item.unit}`,
+          `ID ${item.id}: ${item.name}${item.colour ? `, ${item.colour}` : ""}, unit ${item.unit}${item.barcode ? `, barcode ${item.barcode}` : ""}`,
       )
       .join("\n");
 
@@ -611,9 +641,11 @@ Match lines to known stock item IDs when possible.
 
 Rules:
 - Return JSON only with key "items".
-- Each item must contain: stockItemId (number or null), productName, colour, unit, quantity, confidence, evidence, needsReview.
+- Read all uploaded images together as one stock count.
+- Each item must contain: stockItemId (number or null), productName, colour, barcode (string or null), unit, quantity, confidence, evidence, needsReview.
 - Use unit values only: tube, sausage, box, roll, litre, each.
 - If a box quantity is visible, convert to the actual unit quantity. Example: 4 boxes x 12 tubes = quantity 48, unit tube.
+- If a barcode is visible on a product, include it exactly.
 - If quantity is unclear, use the visible package count and set needsReview true.
 - Do not invent products or quantities.`;
 
@@ -628,11 +660,14 @@ Rules:
           .filter(Boolean)
           .join("\n"),
       },
-      {
+    ];
+
+    for (const imageData of imageDataList) {
+      userContent.push({
         type: "image_url",
         image_url: { url: imageData, detail: "high" },
-      },
-    ];
+      });
+    }
 
     try {
       const response = await openai.chat.completions.create({
@@ -715,6 +750,7 @@ router.post("/inventory-stock-intake/apply", requireAdmin, async (req, res) => {
       stockItemId: number;
       productName: string;
       colour: string | null;
+      barcode: string | null;
       unit: string;
       quantity: number;
     }> = [];
@@ -729,6 +765,7 @@ router.post("/inventory-stock-intake/apply", requireAdmin, async (req, res) => {
           line.productName,
           line.colour,
           line.unit,
+          line.barcode,
         );
 
       if (!stockItem) {
@@ -739,10 +776,28 @@ router.post("/inventory-stock-intake/apply", requireAdmin, async (req, res) => {
             name: line.productName,
             unit: line.unit,
             colour: line.colour,
+            barcode: line.barcode,
             currentStock: "0",
           })
           .returning();
         stockItems = [...stockItems, stockItem];
+      } else if (line.barcode && !stockItem.barcode) {
+        const [updatedStockItem] = await tx
+          .update(stockItemsTable)
+          .set({ barcode: line.barcode })
+          .where(
+            and(
+              eq(stockItemsTable.id, stockItem.id),
+              eq(stockItemsTable.companyId, tenantId),
+            ),
+          )
+          .returning();
+        if (updatedStockItem) {
+          stockItem = updatedStockItem;
+          stockItems = stockItems.map((item) =>
+            item.id === updatedStockItem.id ? updatedStockItem : item,
+          );
+        }
       }
 
       const [existing] = await tx
@@ -797,6 +852,7 @@ router.post("/inventory-stock-intake/apply", requireAdmin, async (req, res) => {
         stockItemId: stockItem.id,
         productName: stockItem.name,
         colour: stockItem.colour,
+        barcode: stockItem.barcode,
         unit: stockItem.unit,
         quantity: line.quantity,
       });

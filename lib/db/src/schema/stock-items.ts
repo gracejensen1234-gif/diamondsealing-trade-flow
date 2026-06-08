@@ -8,6 +8,7 @@ export const stockItemsTable = pgTable("stock_items", {
   name: text("name").notNull(),
   unit: text("unit").notNull().default("tube"),
   colour: text("colour"),
+  barcode: text("barcode"),
   currentStock: numeric("current_stock", { precision: 8, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
