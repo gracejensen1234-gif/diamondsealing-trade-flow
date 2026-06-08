@@ -2,6 +2,7 @@ import "./lib/load-local-env";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startJobPhotoRetentionSchedule } from "./lib/photoRetention.js";
+import { startWeeklyInvoiceReminderSchedule } from "./lib/weeklyInvoiceReminders.js";
 
 const rawPort = process.env["PORT"];
 
@@ -25,4 +26,5 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startJobPhotoRetentionSchedule();
+  startWeeklyInvoiceReminderSchedule();
 });
