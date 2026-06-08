@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +25,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Truck,
   Plus,
-  CheckCircle,
   Package,
   MapPin,
   Navigation,
+  Pencil,
 } from "lucide-react";
 
 const ORDER_STATUS_CFG: Record<
@@ -74,11 +74,44 @@ function mapsSearchUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+function supplierFormFromSupplier(supplier: any) {
+  return {
+    name: supplier?.name ?? "",
+    contactName: supplier?.contactName ?? "",
+    contactPhone: supplier?.contactPhone ?? "",
+    contactEmail: supplier?.contactEmail ?? "",
+    address: supplier?.address ?? "",
+    suburb: supplier?.suburb ?? "",
+    website: supplier?.website ?? "",
+    leadTimeDays:
+      supplier?.leadTimeDays !== null && supplier?.leadTimeDays !== undefined
+        ? String(supplier.leadTimeDays)
+        : "",
+    notes: supplier?.notes ?? "",
+  };
+}
+
+function supplierPayloadFromForm(form: typeof emptySupplier) {
+  return {
+    ...form,
+    name: form.name.trim(),
+    contactName: form.contactName.trim() || null,
+    contactPhone: form.contactPhone.trim() || null,
+    contactEmail: form.contactEmail.trim() || null,
+    address: form.address.trim() || null,
+    suburb: form.suburb.trim() || null,
+    website: form.website.trim() || null,
+    leadTimeDays: form.leadTimeDays ? Number(form.leadTimeDays) : null,
+    notes: form.notes.trim() || null,
+  };
+}
+
 export default function Suppliers() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [sf, setSf] = useState({ ...emptySupplier });
   const [of, setOf] = useState({ ...emptyOrder });
 
@@ -91,18 +124,53 @@ export default function Suppliers() {
     queryFn: () => fetch("/api/supplier-orders").then((r) => r.json()),
   });
 
-  const createSupplierMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch("/api/supplier-profiles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).then((r) => r.json()),
+  function openSupplierDialog(supplier?: any) {
+    setEditingSupplier(supplier ?? null);
+    setSf(supplier ? supplierFormFromSupplier(supplier) : { ...emptySupplier });
+    setSupplierOpen(true);
+  }
+
+  function closeSupplierDialog() {
+    setSupplierOpen(false);
+    setEditingSupplier(null);
+    setSf({ ...emptySupplier });
+  }
+
+  const saveSupplierMutation = useMutation({
+    mutationFn: async (data: typeof emptySupplier) => {
+      const payload = supplierPayloadFromForm(data);
+      const response = await fetch(
+        editingSupplier
+          ? `/api/supplier-profiles/${editingSupplier.id}`
+          : "/api/supplier-profiles",
+        {
+          method: editingSupplier ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          (await response.json().catch(() => null))?.error ??
+            "Could not save supplier",
+        );
+      }
+      return response.json();
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
-      setSupplierOpen(false);
-      setSf({ ...emptySupplier });
-      toast({ title: "Supplier added" });
+      qc.invalidateQueries({ queryKey: ["supplier-orders"] });
+      closeSupplierDialog();
+      toast({
+        title: editingSupplier ? "Supplier updated" : "Supplier added",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not save supplier",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -267,16 +335,22 @@ export default function Suppliers() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={supplierOpen} onOpenChange={setSupplierOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Supplier
-              </Button>
-            </DialogTrigger>
+          <Button onClick={() => openSupplierDialog()}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Supplier
+          </Button>
+          <Dialog
+            open={supplierOpen}
+            onOpenChange={(open) => {
+              if (open) setSupplierOpen(true);
+              else closeSupplierDialog();
+            }}
+          >
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>New Supplier</DialogTitle>
+                <DialogTitle>
+                  {editingSupplier ? "Edit Supplier" : "New Supplier"}
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div>
@@ -345,6 +419,8 @@ export default function Suppliers() {
                     <Label>Lead Time (days)</Label>
                     <Input
                       type="number"
+                      min="0"
+                      step="1"
                       className="mt-1"
                       value={sf.leadTimeDays}
                       onChange={(e) =>
@@ -352,6 +428,17 @@ export default function Suppliers() {
                       }
                     />
                   </div>
+                </div>
+                <div>
+                  <Label>Website</Label>
+                  <Input
+                    className="mt-1"
+                    value={sf.website}
+                    onChange={(e) =>
+                      setSf((p) => ({ ...p, website: e.target.value }))
+                    }
+                    placeholder="https://supplier.com.au"
+                  />
                 </div>
                 <div>
                   <Label>Notes</Label>
@@ -367,21 +454,24 @@ export default function Suppliers() {
                 <div className="flex gap-2 pt-2">
                   <Button
                     className="flex-1"
-                    onClick={() =>
-                      createSupplierMutation.mutate({
-                        ...sf,
-                        leadTimeDays: sf.leadTimeDays
-                          ? Number(sf.leadTimeDays)
-                          : undefined,
-                      })
+                    onClick={() => saveSupplierMutation.mutate(sf)}
+                    disabled={
+                      !sf.name.trim() ||
+                      saveSupplierMutation.isPending ||
+                      (sf.leadTimeDays !== "" &&
+                        (!Number.isFinite(Number(sf.leadTimeDays)) ||
+                          Number(sf.leadTimeDays) < 0))
                     }
-                    disabled={!sf.name}
                   >
-                    Add Supplier
+                    {saveSupplierMutation.isPending
+                      ? "Saving..."
+                      : editingSupplier
+                        ? "Save Supplier"
+                        : "Add Supplier"}
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setSupplierOpen(false)}
+                    onClick={closeSupplierDialog}
                   >
                     Cancel
                   </Button>
@@ -501,14 +591,33 @@ export default function Suppliers() {
           {(suppliers as any[]).map((s: any) => {
             const address = supplierAddressLine(s);
             return (
-              <Card key={s.id}>
+              <Card
+                key={s.id}
+                className="cursor-pointer transition-colors hover:bg-muted/30"
+                onClick={() => openSupplierDialog(s)}
+              >
                 <CardContent className="pt-4">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <Truck className="w-5 h-5 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{s.name}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold">{s.name}</p>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0 text-muted-foreground"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openSupplierDialog(s);
+                          }}
+                          title="Edit supplier"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
                       {address && (
                         <div className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
                           <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
@@ -524,6 +633,11 @@ export default function Suppliers() {
                       {s.contactEmail && (
                         <p className="text-xs text-muted-foreground">
                           {s.contactEmail}
+                        </p>
+                      )}
+                      {s.website && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {s.website}
                         </p>
                       )}
                       {s.leadTimeDays && (
@@ -542,6 +656,7 @@ export default function Suppliers() {
                           size="sm"
                           variant="outline"
                           className="mt-3 h-8"
+                          onClick={(event) => event.stopPropagation()}
                         >
                           <a
                             href={mapsSearchUrl(address)}

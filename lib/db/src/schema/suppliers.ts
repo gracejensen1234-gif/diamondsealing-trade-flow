@@ -10,6 +10,8 @@ export const supplierProfilesTable = pgTable("supplier_profiles", {
   contactEmail: text("contact_email"),
   address: text("address"),
   suburb: text("suburb"),
+  website: text("website"),
+  leadTimeDays: integer("lead_time_days"),
   preferredProducts: jsonb("preferred_products").default("[]"),
   preferredColours: jsonb("preferred_colours").default("[]"),
   notes: text("notes"),

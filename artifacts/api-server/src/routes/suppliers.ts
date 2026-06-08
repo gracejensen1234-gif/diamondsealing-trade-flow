@@ -17,6 +17,13 @@ type SupplierOrderStatus = (typeof supplierOrdersTable.$inferSelect)["status"];
 
 // ── Supplier Profiles ──────────────────────────────────────────────────────
 
+function parseLeadTimeDays(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return undefined;
+  return Math.round(numeric);
+}
+
 router.get("/supplier-profiles", async (req, res) => {
   const rows = await db
     .select()
@@ -44,11 +51,17 @@ router.post("/supplier-profiles", async (req, res) => {
     contactEmail,
     address,
     suburb,
+    website,
+    leadTimeDays,
     preferredProducts,
     preferredColours,
     notes,
   } = req.body;
   if (!name) return res.status(400).json({ error: "name required" });
+  const parsedLeadTimeDays = parseLeadTimeDays(leadTimeDays);
+  if (parsedLeadTimeDays === undefined) {
+    return res.status(400).json({ error: "Lead time must be zero or higher" });
+  }
   const [row] = await db
     .insert(supplierProfilesTable)
     .values({
@@ -59,6 +72,8 @@ router.post("/supplier-profiles", async (req, res) => {
       contactEmail,
       address,
       suburb,
+      website,
+      leadTimeDays: parsedLeadTimeDays,
       preferredProducts: preferredProducts ?? [],
       preferredColours: preferredColours ?? [],
       notes,
@@ -75,14 +90,28 @@ router.patch("/supplier-profiles/:id", async (req, res) => {
     "contactEmail",
     "address",
     "suburb",
+    "website",
+    "leadTimeDays",
     "preferredProducts",
     "preferredColours",
     "notes",
     "active",
   ];
   const updates: Record<string, unknown> = {};
-  for (const f of fields)
-    if (req.body[f] !== undefined) updates[f] = req.body[f];
+  for (const f of fields) {
+    if (req.body[f] === undefined) continue;
+    if (f === "leadTimeDays") {
+      const parsedLeadTimeDays = parseLeadTimeDays(req.body[f]);
+      if (parsedLeadTimeDays === undefined) {
+        return res
+          .status(400)
+          .json({ error: "Lead time must be zero or higher" });
+      }
+      updates[f] = parsedLeadTimeDays;
+    } else {
+      updates[f] = req.body[f];
+    }
+  }
   const [row] = await db
     .update(supplierProfilesTable)
     .set(updates)
