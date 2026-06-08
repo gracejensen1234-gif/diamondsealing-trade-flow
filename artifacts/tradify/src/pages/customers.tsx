@@ -1,5 +1,5 @@
 import { getListCustomersQueryKey, useCreateCustomer, useListCustomers } from "@workspace/api-client-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Mail, Phone } from "lucide-react";
+import { Plus, Search, Mail, Phone, PhoneCall } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { phoneHref } from "@/lib/phone";
 
 const emptyCustomerForm = {
   name: "",
@@ -41,6 +42,7 @@ type CustomersProps = {
 };
 
 export default function Customers({ embedded = false }: CustomersProps = {}) {
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyCustomerForm);
@@ -238,27 +240,53 @@ export default function Customers({ embedded = false }: CustomersProps = {}) {
         {isLoading ? (
           [1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full" />)
         ) : customers?.map(customer => (
-          <Link key={customer.id} href={`/customers/${customer.id}`}>
-            <Card className="hover:border-primary transition-colors cursor-pointer h-full">
-              <CardContent className="p-6">
-                <h3 className="font-semibold text-lg">{customer.name}</h3>
-                {customer.company && <p className="text-sm text-muted-foreground">{customer.company}</p>}
-                
-                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                  {customer.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-3 w-3" /> {customer.phone}
+          <Card
+            key={customer.id}
+            role="button"
+            tabIndex={0}
+            className="hover:border-primary transition-colors cursor-pointer h-full"
+            onClick={() => setLocation(`/customers/${customer.id}`)}
+            onKeyDown={(event) => {
+              if (event.currentTarget !== event.target) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setLocation(`/customers/${customer.id}`);
+              }
+            }}
+          >
+            <CardContent className="p-6">
+              <h3 className="font-semibold text-lg">{customer.name}</h3>
+              {customer.company && <p className="text-sm text-muted-foreground">{customer.company}</p>}
+
+              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                {customer.phone && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Phone className="h-3 w-3 shrink-0" />
+                      <span className="break-all">{customer.phone}</span>
                     </div>
-                  )}
-                  {customer.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-3 w-3" /> {customer.email}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+                    {phoneHref(customer.phone) && (
+                      <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                        <a
+                          href={phoneHref(customer.phone) ?? undefined}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Call ${customer.name}`}
+                        >
+                          <PhoneCall className="mr-1 h-3 w-3" />
+                          Call
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {customer.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3 w-3 shrink-0" /> <span className="break-all">{customer.email}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         ))}
         {!isLoading && customers?.length === 0 && (
            <div className="col-span-full text-center py-12 text-muted-foreground border rounded-lg border-dashed">

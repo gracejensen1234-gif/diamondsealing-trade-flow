@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Pencil, Plus, Star } from "lucide-react";
+import { Building2, Pencil, Phone, PhoneCall, Plus, Star } from "lucide-react";
+import { phoneHref } from "@/lib/phone";
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   premium: { label: "Premium", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
@@ -187,7 +188,17 @@ function BuilderFormFields({
           />
         </div>
         <div>
-          <Label>Contact Phone</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Contact Phone</Label>
+            {phoneHref(form.contactPhone) && (
+              <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                <a href={phoneHref(form.contactPhone) ?? undefined}>
+                  <PhoneCall className="mr-1 h-3 w-3" />
+                  Call
+                </a>
+              </Button>
+            )}
+          </div>
           <Input
             className="mt-1"
             value={form.contactPhone}
@@ -516,7 +527,7 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-snug">{p.name}</p>
-                      {p.contactName && <p className="text-xs text-muted-foreground">{p.contactName}{p.contactPhone ? ` · ${p.contactPhone}` : ""}</p>}
+                      {p.contactName && <p className="text-xs text-muted-foreground">{p.contactName}</p>}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-row flex-wrap items-center gap-1 sm:flex-col sm:items-end">
@@ -526,6 +537,26 @@ export default function BuilderProfiles({ embedded = false }: BuilderProfilesPro
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
+                {p.contactPhone && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Phone className="h-3 w-3 shrink-0" />
+                      <span className="break-all">{p.contactPhone}</span>
+                    </div>
+                    {phoneHref(p.contactPhone) && (
+                      <Button asChild size="sm" variant="outline" className="h-8 px-2 text-xs">
+                        <a
+                          href={phoneHref(p.contactPhone) ?? undefined}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Call ${p.name}`}
+                        >
+                          <PhoneCall className="mr-1 h-3 w-3" />
+                          Call
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
                 {p.finishExpectations && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Finish: </span>{p.finishExpectations}</p>}
                 {p.documentationRequirements && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Docs: </span>{p.documentationRequirements}</p>}
                 {p.siteNotes && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Site: </span>{p.siteNotes}</p>}

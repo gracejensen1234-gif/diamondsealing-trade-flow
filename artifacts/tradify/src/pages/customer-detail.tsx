@@ -17,8 +17,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/speech-textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Mail, Phone, MapPin, Building, Briefcase, Receipt } from "lucide-react";
+import { Mail, Phone, PhoneCall, MapPin, Building, Briefcase, Receipt } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { phoneHref } from "@/lib/phone";
 
 const emptyClientForm = {
   name: "",
@@ -243,9 +244,19 @@ export default function CustomerDetail() {
               </div>
             )}
             {customer.phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{customer.phone}</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="break-all">{customer.phone}</span>
+                </div>
+                {phoneHref(customer.phone) && (
+                  <Button asChild size="sm" variant="outline">
+                    <a href={phoneHref(customer.phone) ?? undefined}>
+                      <PhoneCall className="mr-2 h-4 w-4" />
+                      Call
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
             {customer.address && (
